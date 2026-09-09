@@ -17,7 +17,7 @@ describe('same-origin capture coordination', () => {
       second?.release();
     } finally {
       if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
-      else delete (navigator as Navigator & { locks?: unknown }).locks;
+      else Reflect.deleteProperty(navigator, 'locks');
     }
   });
 });
