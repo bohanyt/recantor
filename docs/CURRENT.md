@@ -70,6 +70,8 @@ Non-optional recording guardrails:
 - Live Intelligence must gain authentication/ownership before production exposure;
 - recording deletion/retention and visible recording state are part of the production privacy baseline.
 
+Several of these guardrails are stated as intent but are **not currently upheld by the implementation**. See "Validated Phase 1 blockers" below before relying on any of them.
+
 ## Repository state
 
 ### Phase 0 — complete
@@ -134,7 +136,9 @@ The browser recorder includes:
 - explicit wall-clock gap evidence for uncertain intervals;
 - responsive durability/pending/sync/recovery UI.
 
-### Phase 1C — implemented and final-review CI proven on PR #9
+### Phase 1C — merged capture-generation fencing
+
+PR #9 is merged to `main` at `e277535fca7bfcf5c046d79e07681b822e839398`.
 
 PR #9 implements the ownership distinction required by ADR 0002 between **uploading old recovery evidence** and **owning a newly started live capture generation**.
 
@@ -176,15 +180,67 @@ Automated evidence now covers, among other cases:
 - API process restart after durable ACK -> idempotent retry with filesystem/PostgreSQL evidence intact;
 - bounded Chromium background-tab capture while the browser process remains awake.
 
-The automated background-tab test is **not** evidence that an operating-system-minimized Chrome/Edge window, sleeping laptop, closed browser, or mobile-backgrounded browser is universally reliable.
+### What the automated background-tab test does not prove
+
+This is an observation about the tooling **as currently pinned and as executed in one validation run**, not a timeless property of Playwright.
+
+`apps/web/pnpm-lock.yaml` currently pins `@playwright/test` **1.63.0**. In an executed validation run using that pinned version, the launched browser process was inspected via `/proc/<pid>/cmdline` and its argument list included:
+
+```text
+--disable-background-timer-throttling
+--disable-backgrounding-occluded-windows
+--disable-renderer-backgrounding
+--headless
+```
+
+In that run those flags came from Playwright's own default launch arguments, not from `apps/web/playwright.config.ts`, which contributes only the fake-media flags. (The run drove a Chromium 141 build via an `executablePath` override because the CI-pinned browser download was unavailable in the review environment; the flags above originate from the Playwright launcher rather than from the browser build.)
+
+Consequently, in the tooling as pinned today, the `continues through a bounded Chromium background-tab interval` test runs headless in a browser where the three throttling mechanisms it would need to exercise are switched off, and it backgrounds a tab with `bringToFront()` rather than minimizing an operating-system window.
+
+If the pinned Playwright version changes, re-inspect the launch arguments rather than assuming this still holds. Note also that the flags being absent would not by itself turn this test into a valid witness: it would still be headless and still be occluding a tab rather than minimizing a window.
+
+As it stands, it is **not** evidence about real Chrome/Edge throttling, an OS-minimized window, a sleeping laptop, a closed browser, or a mobile-backgrounded browser. Do not cite it as such.
+
+## Validated Phase 1 blockers
+
+An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` reproduced five defects at runtime, using the repository's own toolchain (backend `pytest`, `vitest`, and Playwright with retries disabled) against a real API, PostgreSQL, and Chromium. The repository's existing suites were green before and after; these are gaps in coverage, not regressions.
+
+**Phase 1 cannot close until these are fixed.**
+
+| Issue | Defect | Executed evidence |
+| --- | --- | --- |
+| #10 | Liveness interruption is detected only when something reads the session, and `interrupted_at` is never cleared on heartbeat restore | a 10-minute stall left `state: recording`, `interrupted_at: None`, no gaps; a stall that was read left `interrupted_at` populated permanently through restore |
+| #11 | A fenced writer keeps capturing audio the server will never accept, and the UI presents it optimistically | after an external takeover the page stayed in `phase: recording` with `pending: 3 fragments`, message `capture continues into the recovery spool` |
+| #12 | Reconciliation deletes local audio on accepted-sequence membership alone | a real 32,860-byte local fragment was deleted because another generation had accepted that sequence number with different bytes |
+| #13 | When an expected middle fragment is absent from the local spool, the session is stranded in `FINALIZING` with no user path out | with one middle spool fragment **deliberately removed** so it was absent at finalization: Resume refused (`session in state finalizing cannot be claimed`), Finish looped identically 4x, every finalize sent `gap_sequences: []`, and each retry appended another wall-clock gap |
+| #14 | A stalled chunk upload hangs Stop in `FINALIZING` permanently | after 30s: `phase: finalizing`, controls `{start:0, stop:0, resume:0, finish:0, syncDisabled:true}`, server `final_sequence: null` |
+
+On #13, note carefully what is and is not established. The **product behavior** is proven: given a spool that is missing an expected middle sequence at finalization, the recorder cannot reach any terminal state. The **cause** of such partial spool loss is not established — the fragment in the repro was removed deliberately to create the precondition. Do not read #13 as evidence that browsers evict individual IndexedDB records, or as a characterization of any specific browser storage behavior.
+
+Consequences for statements elsewhere in this file:
+
+- "Browser disappearance without a clean Stop creates an interruption" is only true if something reads the session during the interruption (#10).
+- "Already-spooled evidence remains recoverable after ownership rotates" does not currently hold for evidence produced by a fenced generation (#11, #12).
+- "A session may become complete only after every expected sequence is either durably present or explicitly represented as a gap" is upheld by the server, but the browser has no path to declare the gap, so affected sessions never reach a terminal state at all (#13).
+
+Dependency order for the fixes: #14 first (self-contained, unblocks testing of the rest), then #11 with #12 landing alongside it, then #13, then #10. Fixes belong in separate bounded PRs.
+
+## Phase 2 / downstream gate
+
+Issue #15 records that a terminal `COMPLETE` session carries no classification distinguishing fully durable audio, partially gapped audio, and no audio at all. A session with zero durable fragments and zero gaps is `COMPLETE` today, and the recorder reports that every expected sequence was durably acknowledged.
+
+This is **not a current runtime failure**: no STT, diarization, summary, or Celery consumer exists yet, so nothing is presently making a wrong decision on this data. It is a contract gap that must be closed before the first downstream consumer is written, and it gates the start of Phase 2 rather than the close of Phase 1.
 
 ## Remaining Phase 1 work before closing Issue #5
 
-Phase 1 is not complete yet, but only one bounded exit item remains:
+Two things remain, in order:
 
-**Real desktop background/minimized witness.** Run Chrome and/or Edge on an awake desktop/laptop, start a real microphone recording, background/minimize the browser while switching among ordinary applications for a bounded interval, then return and Stop. Record the exact OS, browser/version, duration, and final continuity/ACK evidence.
+1. **Fix the five validated blockers** (#10, #11, #12, #13, #14), each with regression coverage that the executed repro no longer reproduces.
+2. **Real desktop background/minimized witness.** Run Chrome and/or Edge on an awake desktop/laptop, start a real microphone recording, background/minimize the browser while switching among ordinary applications for a bounded interval, then return and Stop. Record the exact OS, browser/version, duration, and final continuity/ACK evidence.
 
-CI cannot substitute for that platform/lifecycle witness. Until it is recorded, describe automated background behavior only as the tested Chromium background-tab case.
+The witness remains a required Phase 1 exit item, but it should be recorded **after** the blockers are fixed — a witness taken against the current recorder would be measuring a code path that is about to change, and the fenced-writer and stalled-upload defects can both corrupt what the witness appears to show.
+
+CI cannot substitute for that platform/lifecycle witness. Until it is recorded, describe automated background behavior only as the tested headless Chromium background-tab case, with the tooling caveat above.
 
 Cross-device capture takeover remains intentionally out of scope for the initial web slice. Future authenticated/native clients can add a stronger device/user ownership model on top of the same session/ingest contracts.
 
@@ -205,9 +261,9 @@ Do not describe those as working until repository evidence proves them.
 
 ## Immediate next delivery
 
-GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**.
+GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**. Issues #10-#14 are its blocking sub-issues.
 
-After PR #9 merges, the immediate next action is the bounded real Chrome/Edge background/minimized witness on an awake desktop/laptop. If that witness passes and its evidence is recorded, Phase 1 can be closed before starting downstream STT work.
+The immediate next action is #14 (bounded upload deadline and an always-escapable finalization state), because it is self-contained and makes the remaining repros testable.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
@@ -224,13 +280,20 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 - exact queue concurrency/routing values;
 - exact VAD/utterance timing after benchmark;
 - exact mobile native framework;
-- downstream organization-specific branding and infrastructure.
+- downstream organization-specific branding and infrastructure;
+- **whether a server-side liveness stall implies audio discontinuity.** Liveness interruption and proven audio discontinuity are not the same claim; a client may hold the audio for a stalled interval locally and later prove continuity by delivering it. Do not assume a heartbeat stall should create an audio gap (#10);
+- **how a fenced or offline client may deliver a backlog under a new capture generation.** Any per-epoch sequence-space partition or equivalent cross-device backlog scheme is a multi-device ownership contract change and needs its own ADR before native/multi-device clients (#11);
+- **the multi-client reconciliation identity contract** — what per-sequence acceptance identity `/recording-state` should expose, and how that interacts with range compression. The Phase 1 fix for #12 is an interim epoch guard, not this contract;
+- **the terminal-state vocabulary for completeness classification**, including whether a zero-audio session belongs in `COMPLETE` at all (#15);
+- **which real-world mechanisms can leave an expected middle fragment absent from the local spool.** #13 proves the product dead-end given that precondition, but does not establish how the precondition arises. Characterizing browser storage eviction, partial corruption, or other causes needs its own investigation before any claim is made about likelihood.
 
 ## Known design boundaries
 
 - Browser background/minimized recording on an awake desktop is a core web use case still requiring a real-platform witness.
+- With the currently pinned Playwright version, the launched Chromium disables background throttling, so the automated background-tab test cannot stand in for that witness. Re-inspect if the pin changes.
 - Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
 - Browser local storage may be best-effort unless persistent storage is granted; UI must reflect degraded/unsafe recovery state.
+- If an expected middle fragment is absent from the local spool at finalization, the product currently has no path to any terminal state (#13). That product behavior is proven; the browser-specific mechanisms by which such partial spool loss might naturally occur are not established and were not observed.
 - A currently open MediaRecorder fragment is not yet a durable IndexedDB/server chunk; abrupt process/device loss can lose an un-emitted bounded tail even when all earlier emitted fragments are safe.
 - A server ACK is the strong durability boundary.
 - WebSocket is for realtime updates, not durable state.
@@ -238,9 +301,15 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 - Raw audio is not stored as database blobs.
 - Multiple simultaneous sessions are a normal operating condition.
 - A single live session has one active capture generation at a time; each resumed generation is fenced by fresh writer identity + incremented epoch.
+- Fencing is enforced server-side, but the fenced client does not currently stop capturing (#11).
 - Old already-spooled/accepted evidence remains recoverable without granting authority to create new stale-writer evidence.
 - Cross-device takeover is not yet claimed.
 - Public upstream must remain free of deployment secrets and organization-private data.
+
+## Local development notes
+
+- `apps/api/tests/conftest.py` drops the entire schema on teardown. Point `DATABASE_URL` at a dedicated test database; running `pytest` against a database an API process is using destroys `recording_sessions`, `recording_chunks`, and `recording_gaps` while leaving `alembic_version` at head, so a subsequent `alembic upgrade head` is a no-op and the API 500s.
+- `apps/web/openapi-ts.config.ts` defaults to `http://localhost:8000`. On IPv6-first hosts this fails against an API bound to `127.0.0.1`; set `OPENAPI_INPUT` explicitly.
 
 ## Handoff rule
 
