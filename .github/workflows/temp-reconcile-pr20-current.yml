@@ -1,0 +1,64 @@
+name: temp-reconcile-pr20-current
+
+on:
+  push:
+    branches:
+      - phase1/fenced-capture-orphan-safety
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: phase1/fenced-capture-orphan-safety
+      - name: Reconcile CURRENT for PR 20
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/CURRENT.md')
+          text = path.read_text()
+
+          replacements = {
+              '| #11 | **open blocker** | A fenced writer keeps capturing audio the server will never accept, while the UI presents that local evidence optimistically. |': '| #11 | **remediation in PR #20; not merged yet** | A fenced writer currently keeps capturing after takeover; PR #20 stops the stale generation, releases capture ownership, retains emitted local evidence as explicitly orphaned, and withholds stale recovery/sync actions. |',
+              '| #12 | **open blocker** | Reconciliation can delete local audio on accepted-sequence membership alone; an executed composition deleted a different 32,860-byte local fragment because another generation had accepted the same sequence number. |': '| #12 | **interim remediation in PR #20; not merged yet** | Sequence-only reconciliation can delete non-matching local audio; PR #20 adds the bounded Phase 1 rule that compact accepted ranges may delete only local chunks from the server session\'s current capture epoch. |',
+              '| #18 | **remediation in PR #19; not merged yet** | Stop can reuse a pre-Stop single-flight sync snapshot and miss the final persisted fragment in the pass it awaits, causing an unnecessary recoverable result rather than a deterministic clean Stop. |': '| #18 | **fixed / closed by PR #19** | Stop could reuse a pre-Stop single-flight sync snapshot and miss the final persisted fragment. PR #19 forces one fresh bounded sync over the stable stopped spool before finalization. |',
+              'This is **PR evidence until PR #19 merges**. Do not describe #18 as closed or the fresh stopped-spool sync as merged into `main` before then.': 'PR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18. Post-merge `main` CI run `34355423171` completed successfully.',
+              '- PR #19 provides evidence that the clean-Stop single-flight race is fixed without weakening #14 behavior, pending merge.': '- The clean-Stop single-flight race is fixed on `main` by PR #19 without weakening #14 behavior.',
+              'Remaining blocker order after PR #19: **#11 + #12**, then **#13**, then **#10**. Keep those as bounded work items unless executed evidence requires otherwise.': 'Remaining blocker order after PR #20: **#13**, then **#10**, then the required real Chrome/Edge desktop witness. Keep those as bounded work items unless executed evidence requires otherwise.',
+              '1. Review and merge the proven #18 remediation in PR #19.\n2. Fix #11 and the #12 interim reconciliation safety requirement as the next coordinated area, while keeping their issue-level responsibilities distinct.\n3. Fix #13\'s explicit missing-sequence resolution and gap-amplification behavior.\n4. Fix #10\'s liveness/interruption semantics without automatically equating a heartbeat stall with audio loss.\n5. Run the required real desktop Chrome/Edge background/minimized witness only after the blockers above are fixed.': '1. Review and merge the proven #11/#12 safety remediation in PR #20.\n2. Fix #13\'s explicit missing-sequence resolution and gap-amplification behavior.\n3. Fix #10\'s liveness/interruption semantics without automatically equating a heartbeat stall with audio loss.\n4. Run the required real desktop Chrome/Edge background/minimized witness only after the blockers above are fixed.',
+              'PR #19 is the current bounded #18 remediation. It must remain unmerged until final review and CI on the final documentation head are complete. After #19 merges, the immediate implementation area is #11 plus the #12 interim reconciliation safety guard.': 'PR #20 is the current coordinated-but-bounded #11/#12 safety remediation. It must remain unmerged until final review and CI on the final documentation head are complete. After #20 merges, #13 is the immediate implementation blocker.',
+              '- Fencing is enforced server-side, but the fenced client does not currently stop capturing (#11).\n- Sequence-only reconciliation can still delete non-matching local evidence (#12).': '- PR #20 proves a terminal fenced-client path and honest orphaned-evidence UI for #11, but that behavior is not `main` truth until the PR merges.\n- PR #20 proves an interim same-epoch deletion guard for #12, but the proper multi-client reconciliation identity contract remains deliberately deferred.',
+              '- PR #19 proves a bounded fresh stopped-spool sync for #18, but that behavior is not `main` truth until the PR merges.': '- PR #19\'s bounded fresh stopped-spool sync for #18 is merged on `main` at `50eaf450d4746569160876d81beb2f97c432c288`.',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing expected CURRENT text: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          phase1d_marker = 'The final PR-head CI run `34349870348` was green across backend, frontend, Chromium e2e, and Compose smoke with 17/17 E2E tests passing. Post-merge `main` CI run `34351060513` also completed successfully.\n\n'
+          phase1e = '''### Phase 1E — merged deterministic clean Stop sync\n\nPR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18. After `MediaRecorder` stops and local persistence drains, Stop now cancels/settles any pre-Stop sync and runs exactly one fresh bounded sync over the stable stopped spool before finalization.\n\nThe retries-disabled regression first reproduced the stale-snapshot failure, then passed after the fix. PR-head CI run `34353847749` and post-merge `main` CI run `34355423171` both completed successfully.\n\n'''
+          if phase1d_marker not in text:
+              raise SystemExit('missing Phase 1D marker')
+          text = text.replace(phase1d_marker, phase1d_marker + phase1e, 1)
+
+          insert_after = 'PR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18. Post-merge `main` CI run `34355423171` completed successfully.\n\n'
+          pr20_section = '''### #11/#12 executed remediation evidence\n\nPR #20 is a coordinated Phase 1 safety slice because the executed B2→B3 composition can currently destroy local audio: a stale generation keeps emitting evidence, a newer generation accepts the same sequence with different bytes, and sequence-only reconciliation can delete the older local fragment. The two issue responsibilities remain distinct.\n\nFor #11, a server-authoritative stale-writer conflict from either heartbeat or chunk upload now fences the browser generation. The browser uses the already-bounded Stop path to stop `MediaRecorder`/microphone capture, releases the capture lock, retains emitted local evidence, labels it **orphaned local evidence — not safely syncable**, and withholds Resume / Finish recovered / Sync actions that the stale ownership would make invalid. Reload also re-derives fencing from server epoch/writer truth. The existing lost-successful-claim exception is preserved. No heartbeat stall is converted into an audio gap.\n\nFor #12, compact accepted ranges may delete a local chunk only when that chunk belongs to the server session's current `capture_epoch`. This is explicitly an **interim Phase 1 safety guard**. It does not define the future per-sequence multi-client reconciliation identity contract, which remains ADR-gated before native/multi-device semantics harden.\n\nThe retries-disabled Playwright suite exercises both heartbeat-triggered and chunk-triggered fencing. Its B2→B3 composition then has a newer epoch accept the victim sequence with a different SHA, completes that newer generation, reloads the page, and proves the exact older local fragment (sequence + epoch + SHA + byte length) still survives as orphaned evidence.\n\nCode witness before this documentation reconciliation: `8194fe65e2b2597594f973b729d378ff80403236`. GitHub Actions run `34359040563` completed successfully across backend, frontend, Chromium E2E, and Compose smoke. E2E was clean: **20/20 passed** on the first attempt; the new fenced-capture suite explicitly sets `retries: 0`.\n\nThis is **PR evidence until PR #20 merges**. Do not describe #11/#12 as fixed on `main` before then.\n\n'''
+          if insert_after not in text:
+              raise SystemExit('missing #18 merged marker')
+          text = text.replace(insert_after, insert_after + pr20_section, 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit CURRENT reconciliation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CURRENT.md
+          git diff --cached --quiet && exit 0
+          git commit -m "docs: reconcile Phase 1 fenced capture safety"
+          git push origin HEAD:phase1/fenced-capture-orphan-safety
