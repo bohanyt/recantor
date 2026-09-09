@@ -19,9 +19,15 @@ function bytesLabel(bytes: number | null): string {
 
 function durabilityLabel(snapshot: RecorderSnapshot): string {
   if (snapshot.localWriteFailed) return 'Unsafe — local spool failed';
-  if (snapshot.pendingChunks === 0 && snapshot.sessionId) return 'Server synced';
+  if (snapshot.phase === 'complete' && snapshot.sessionId) return 'Server synced';
   if (snapshot.pendingChunks > 0 && snapshot.storage?.persisted) return 'Locally recoverable';
   if (snapshot.pendingChunks > 0) return 'Pending locally (best effort)';
+  if (snapshot.phase === 'recording' && snapshot.sessionId) return 'Emitted audio synced';
+  if (snapshot.phase === 'recoverable' && snapshot.sessionId) {
+    return 'Server synced; continuity pending';
+  }
+  if (snapshot.phase === 'finalizing' && snapshot.sessionId) return 'Finalization pending';
+  if (snapshot.sessionId) return 'Session active';
   return 'Ready';
 }
 
@@ -53,8 +59,9 @@ export function RecorderPanel() {
             Capture first, intelligence later.
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            Unacknowledged audio is spooled in this browser, sequenced, and deleted locally only
-            after the server returns a durable ACK.
+            Unacknowledged emitted audio is spooled in this browser, sequenced, and deleted locally
+            only after the server returns a durable ACK. The currently open MediaRecorder fragment
+            is not locally durable until the browser emits it.
           </p>
         </div>
         <div className="rounded-2xl border border-[var(--border)] px-4 py-3 text-right">
