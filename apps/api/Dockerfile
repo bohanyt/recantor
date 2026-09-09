@@ -6,12 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN pip install --no-cache-dir uv==0.10.0
 
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 COPY src ./src
 COPY alembic.ini ./
 COPY alembic ./alembic
 
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
