@@ -160,9 +160,7 @@ async def create_live_session(
         if existing.recovery_token_hash is None or not hmac.compare_digest(
             existing.recovery_token_hash, token_hash
         ):
-            raise RecordingConflict(
-                "idempotency key recovery capability does not match"
-            ) from None
+            raise RecordingConflict("idempotency key recovery capability does not match") from None
         return existing
     await db.refresh(session)
     return session

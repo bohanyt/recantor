@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test';
 test('records microphone audio through durable ACK and clean finalization', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   await page.waitForTimeout(2_600);
   await page.getByTestId('stop-recording').click();
@@ -63,7 +65,9 @@ test('keeps recording locally through temporary chunk-upload loss and catches up
   await page.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   await expect
     .poll(async () => page.getByTestId('pending-chunks').textContent(), { timeout: 10_000 })
@@ -87,7 +91,9 @@ test('recovers IndexedDB audio after refresh when chunk uploads were unavailable
   await page.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   await expect
     .poll(async () => page.getByTestId('pending-chunks').textContent(), { timeout: 10_000 })
@@ -228,7 +234,9 @@ test('a second same-origin tab cannot silently become the active recorder', asyn
 }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   const secondPage = await context.newPage();
   await secondPage.goto('/');
@@ -248,7 +256,9 @@ test('continues through a bounded Chromium background-tab interval while the bro
 }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   const foregroundPage = await context.newPage();
   await foregroundPage.goto('/');
@@ -279,7 +289,9 @@ test('stops and surfaces an explicit unsafe state when the IndexedDB chunk appen
 
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
 
   await expect(page.getByTestId('durability-state')).toContainText('Unsafe', { timeout: 10_000 });
   await expect(page.getByTestId('recorder-message')).toContainText('Capture stopped', {
@@ -311,11 +323,14 @@ test('turns an unexpected microphone-track end into visible recoverable gap evid
 
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
   await page.waitForTimeout(2_600);
 
   await page.evaluate(() => {
-    const stream = (window as unknown as { __recantorTestStream?: MediaStream }).__recantorTestStream;
+    const stream = (window as unknown as { __recantorTestStream?: MediaStream })
+      .__recantorTestStream;
     const track = stream?.getAudioTracks()[0];
     if (!track) throw new Error('test microphone track unavailable');
     track.dispatchEvent(new Event('ended'));

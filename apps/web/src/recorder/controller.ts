@@ -33,13 +33,7 @@ import { inspectStorageSafety, type StorageSafety } from './storageSafety';
 import { acquireCaptureTabLock, type CaptureTabLock } from './tabCoordinator';
 
 export type RecorderPhase =
-  | 'idle'
-  | 'requesting'
-  | 'recording'
-  | 'recoverable'
-  | 'finalizing'
-  | 'complete'
-  | 'error';
+  'idle' | 'requesting' | 'recording' | 'recoverable' | 'finalizing' | 'complete' | 'error';
 
 export type RecorderSnapshot = {
   phase: RecorderPhase;
@@ -81,12 +75,7 @@ function defaultSnapshot(): RecorderSnapshot {
 }
 
 function chooseMimeType(): string {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
-  ];
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
 }
 
@@ -100,7 +89,9 @@ function sleep(ms: number): Promise<void> {
 
 function isRetryableUpload(error: unknown): boolean {
   if (!(error instanceof RecordingApiError)) return false;
-  return error.status === null || error.status === 408 || error.status === 429 || error.status >= 500;
+  return (
+    error.status === null || error.status === 408 || error.status === 429 || error.status >= 500
+  );
 }
 
 export class RecorderController {
