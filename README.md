@@ -4,8 +4,8 @@ Recantor is a self-hosted recording and meeting-intelligence platform focused on
 
 The project is designed for two primary workflows:
 
-- **Live Intelligence** — record from the browser, stream live transcript updates, track speakers, and maintain a rolling meeting summary.
-- **Transcribe Recording** — upload an existing recording or record in the browser, then produce a durable transcript and exports.
+- **Live Intelligence** — authenticated browser recording, live transcript updates, speaker processing, and rolling meeting intelligence.
+- **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then produce a durable transcript and exports. A bounded guest path may operate without login.
 
 ## Core principles
 
@@ -18,11 +18,12 @@ The project is designed for two primary workflows:
 
 ## Planned stack
 
-- Web: React + TypeScript + Vite
+- Web: React + TypeScript + Vite + Tailwind CSS
+- Server state: TanStack Query
+- Browser recovery spool: IndexedDB via Dexie
 - API: Python + FastAPI + Pydantic
 - Database: PostgreSQL + SQLAlchemy 2 + Alembic
 - Jobs: Celery + Redis
-- Browser durability: IndexedDB via Dexie
 - Realtime delivery: WebSocket where appropriate
 - Resumable guest uploads: Uppy + tus/tusd
 - Primary STT: Groq Whisper API
@@ -32,9 +33,17 @@ The project is designed for two primary workflows:
 
 The public upstream stays deployment-agnostic. Organization-specific branding, domains, authentication policy, infrastructure, and secrets belong in deployment configuration or downstream forks/overlays.
 
+## Reliability boundary
+
+Browser live recording uses a local recovery spool plus sequenced server ingestion. A server ACK is the durable boundary; browser IndexedDB may still be subject to browser persistence/quota behavior.
+
+A clean Stop declares a final sequence/high-water mark so completion can be proven rather than inferred from silence.
+
+Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains useful while active, while future Android/iOS recorder clients provide the stronger background/lock-screen capture path.
+
 ## Project status
 
-**Foundation / pre-implementation.** Architecture and product contracts are being established before application code is scaffolded.
+**Foundation / pre-implementation.** Product and architecture contracts are established and audited; the next bounded step is the runnable application scaffold in Issue #2.
 
 Start here:
 
@@ -43,6 +52,7 @@ Start here:
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture and reliability contracts
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased delivery plan
 - [`docs/decisions/0001-foundation-stack.md`](docs/decisions/0001-foundation-stack.md) — initial stack decision
+- [`docs/decisions/0002-recording-access-guardrails.md`](docs/decisions/0002-recording-access-guardrails.md) — browser recording/access guardrails
 - [`AGENTS.md`](AGENTS.md) — working contract for humans and coding agents
 
 ## License
