@@ -1,0 +1,38 @@
+name: temp-format-pr20
+
+on:
+  push:
+    branches:
+      - phase1/fenced-capture-orphan-safety
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: phase1/fenced-capture-orphan-safety
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.7.0
+          run_install: false
+      - name: Install web dependencies
+        run: pnpm --dir apps/web install --frozen-lockfile
+      - name: Format web sources
+        run: pnpm --dir apps/web format
+      - name: Commit formatter output
+        run: |
+          if git diff --quiet -- apps/web; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web
+          git commit -m "style(web): apply Prettier"
+          git push origin HEAD:phase1/fenced-capture-orphan-safety
