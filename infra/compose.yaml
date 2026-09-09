@@ -27,6 +27,19 @@ services:
       timeout: 3s
       retries: 20
 
+  migrate:
+    build:
+      context: ../apps/api
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: ../apps/api
@@ -38,8 +51,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
