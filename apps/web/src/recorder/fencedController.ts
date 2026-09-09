@@ -59,11 +59,7 @@ export class FencedRecorderController {
 
   private readonly handleInnerUpdate = (): void => {
     const raw = this.inner.getSnapshot();
-    if (
-      raw.sessionId &&
-      isStaleActiveGenerationError(raw.error) &&
-      !this.captureFenced
-    ) {
+    if (raw.sessionId && isStaleActiveGenerationError(raw.error) && !this.captureFenced) {
       this.captureFenced = true;
     }
     this.publish(raw);

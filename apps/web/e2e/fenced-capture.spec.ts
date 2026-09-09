@@ -138,7 +138,9 @@ test('heartbeat fencing stops capture and labels retained audio as orphaned evid
     .toBeGreaterThan(0);
 });
 
-test('chunk fencing retains conflicting old-epoch audio through reconciliation', async ({ page }) => {
+test('chunk fencing retains conflicting old-epoch audio through reconciliation', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
   await expect(page.getByTestId('recorder-message')).toContainText(
@@ -160,9 +162,8 @@ test('chunk fencing retains conflicting old-epoch audio through reconciliation',
       async () => {
         const state = await readRecorderState(page);
         return (
-          state.chunks.find(
-            (chunk) => chunk.captureEpoch === beforeClaim.session!.captureEpoch,
-          ) ?? null
+          state.chunks.find((chunk) => chunk.captureEpoch === beforeClaim.session!.captureEpoch) ??
+          null
         );
       },
       { timeout: 10_000 },

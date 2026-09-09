@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
-import {
-  FencedRecorderController,
-  type FencedRecorderSnapshot,
-} from './recorder/fencedController';
+import { FencedRecorderController, type FencedRecorderSnapshot } from './recorder/fencedController';
 
 function durationLabel(milliseconds: number): string {
   const totalSeconds = Math.floor(milliseconds / 1_000);
   const hours = Math.floor(totalSeconds / 3_600);
   const minutes = Math.floor((totalSeconds % 3_600) / 60);
   const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds]
-    .map((value) => String(value).padStart(2, '0'))
-    .join(':');
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
 function bytesLabel(bytes: number | null): string {
@@ -62,9 +57,7 @@ export function RecorderPanel() {
 
   const canStart =
     !snapshot.captureFenced &&
-    (snapshot.phase === 'idle' ||
-      snapshot.phase === 'complete' ||
-      snapshot.phase === 'error');
+    (snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error');
   const recoverable = snapshot.phase === 'recoverable' && !snapshot.captureFenced;
   const busy = snapshot.phase === 'requesting' || snapshot.phase === 'finalizing';
 
