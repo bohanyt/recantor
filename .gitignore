@@ -22,6 +22,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Generated API client / schema scratch
+openapi.json
+apps/web/src/api/generated/
+
 # Playwright
 playwright-report/
 test-results/
