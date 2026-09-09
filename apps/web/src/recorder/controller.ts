@@ -14,6 +14,7 @@ import {
   uploadRecordingChunk,
 } from './api';
 import {
+  appendCapturedChunk,
   chunkKey,
   countSpoolChunks,
   deleteLocalSession,
@@ -21,7 +22,6 @@ import {
   getLatestLocalSession,
   listSpoolChunks,
   putLocalSession,
-  putSpoolChunk,
   type LocalRecordingSession,
   type SpoolChunk,
 } from './db';
@@ -112,10 +112,13 @@ export class RecorderController {
   private captureBaseMonotonicMs = 0;
   private chunkChain: Promise<void> = Promise.resolve();
   private syncPromise: Promise<void> | null = null;
+  private spoolFailurePromise: Promise<void> | null = null;
   private heartbeatTimer: number | null = null;
   private clockTimer: number | null = null;
   private storageTimer: number | null = null;
   private initialized = false;
+  private lifecycleVersion = 0;
+  private captureFaulted = false;
 
   readonly subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -127,6 +130,10 @@ export class RecorderController {
   private patch(update: Partial<RecorderSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...update };
     for (const listener of this.listeners) listener();
+  }
+
+  private lifecycleCurrent(version: number): boolean {
+    return this.initialized && this.lifecycleVersion === version;
   }
 
   private readonly handleOnline = (): void => {
@@ -141,24 +148,30 @@ export class RecorderController {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     this.initialized = true;
+    const lifecycleVersion = ++this.lifecycleVersion;
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
     await this.refreshStorage(false);
+    if (!this.lifecycleCurrent(lifecycleVersion)) return;
 
     const local = await getLatestLocalSession();
-    if (!local) return;
+    if (!this.lifecycleCurrent(lifecycleVersion) || !local) return;
 
     this.localSession = local;
     try {
       const state = await fetchRecordingState(local.sessionId);
+      if (!this.lifecycleCurrent(lifecycleVersion)) return;
       await reconcileLocalSpool(local.sessionId, state);
+      if (!this.lifecycleCurrent(lifecycleVersion)) return;
       if (state.session.state === 'complete') {
         await deleteLocalSession(local.sessionId);
+        if (!this.lifecycleCurrent(lifecycleVersion)) return;
         this.localSession = null;
         this.patch({ phase: 'idle', message: 'Previous recording was already complete.' });
         return;
       }
       const pendingChunks = await countSpoolChunks(local.sessionId);
+      if (!this.lifecycleCurrent(lifecycleVersion)) return;
       this.patch({
         phase: 'recoverable',
         sessionId: local.sessionId,
@@ -169,7 +182,9 @@ export class RecorderController {
         message: 'Interrupted recording found. Resume it or finish the recovered audio.',
       });
     } catch (error) {
+      if (!this.lifecycleCurrent(lifecycleVersion)) return;
       const pendingChunks = await countSpoolChunks(local.sessionId);
+      if (!this.lifecycleCurrent(lifecycleVersion)) return;
       this.patch({
         phase: 'recoverable',
         sessionId: local.sessionId,
@@ -184,12 +199,20 @@ export class RecorderController {
   dispose(): void {
     window.removeEventListener('online', this.handleOnline);
     window.removeEventListener('offline', this.handleOffline);
-    this.stopTimers();
+    this.initialized = false;
+    this.lifecycleVersion += 1;
+    if (!this.recorder) this.stopTimers();
   }
 
   async start(): Promise<void> {
     if (this.snapshot.phase !== 'idle' && this.snapshot.phase !== 'complete') return;
-    this.patch({ phase: 'requesting', error: null, message: 'Requesting microphone access…' });
+    this.captureFaulted = false;
+    this.patch({
+      phase: 'requesting',
+      error: null,
+      localWriteFailed: false,
+      message: 'Requesting microphone access…',
+    });
     await this.refreshStorage(true);
 
     let stream: MediaStream | null = null;
@@ -226,6 +249,28 @@ export class RecorderController {
       stream = null;
     } catch (error) {
       stopStream(stream);
+      this.releaseCaptureLock();
+      const local = this.localSession;
+      if (local) {
+        const interrupted: LocalRecordingSession = {
+          ...local,
+          state: 'interrupted',
+          updatedAt: Date.now(),
+        };
+        try {
+          await putLocalSession(interrupted);
+          this.localSession = interrupted;
+        } catch {
+          // The original local session may still be recoverable even when this update fails.
+        }
+        this.patch({
+          phase: 'recoverable',
+          sessionId: local.sessionId,
+          error: error instanceof Error ? error.message : 'Failed to start recording.',
+          message: 'Capture did not start cleanly; recovery state was kept.',
+        });
+        return;
+      }
       this.patch({
         phase: 'error',
         error: error instanceof Error ? error.message : 'Failed to start recording.',
@@ -248,20 +293,26 @@ export class RecorderController {
 
       const state = await fetchRecordingState(local.sessionId);
       await reconcileLocalSpool(local.sessionId, state);
+      await this.syncNow();
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const remote = await claimCapture(local.sessionId, {
         writer_id: local.writerId,
         expected_epoch: local.captureEpoch,
       });
-      local.captureEpoch = remote.capture_epoch;
-      local.state = 'recording';
-      local.updatedAt = Date.now();
-      await putLocalSession(local);
-      this.localSession = local;
+      const resumed: LocalRecordingSession = {
+        ...local,
+        captureEpoch: remote.capture_epoch,
+        state: 'recording',
+        updatedAt: Date.now(),
+      };
+      await putLocalSession(resumed);
+      this.localSession = resumed;
 
-      await this.recordRecoveryGap(local);
-      await this.syncNow();
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.beginMediaRecorder(stream, local);
+      await this.recordRecoveryGap(resumed);
+      this.captureFaulted = false;
+      this.patch({ localWriteFailed: false });
+      this.beginMediaRecorder(stream, resumed);
       stream = null;
     } catch (error) {
       stopStream(stream);
@@ -293,11 +344,16 @@ export class RecorderController {
       await this.stopMediaRecorder();
       await this.chunkChain;
       await this.syncNow();
-      const pending = await countSpoolChunks(local.sessionId);
+      const current = this.localSession ?? local;
+      const pending = await countSpoolChunks(current.sessionId);
       if (pending > 0) {
-        local.state = 'interrupted';
-        local.updatedAt = Date.now();
-        await putLocalSession(local);
+        const interrupted: LocalRecordingSession = {
+          ...current,
+          state: 'interrupted',
+          updatedAt: Date.now(),
+        };
+        await putLocalSession(interrupted);
+        this.localSession = interrupted;
         this.releaseCaptureLock();
         this.patch({
           phase: 'recoverable',
@@ -306,11 +362,20 @@ export class RecorderController {
         });
         return;
       }
-      await this.finalizeLocalSession(local);
+      await this.finalizeLocalSession(current);
     } catch (error) {
-      local.state = 'interrupted';
-      local.updatedAt = Date.now();
-      await putLocalSession(local);
+      const current = this.localSession ?? local;
+      const interrupted: LocalRecordingSession = {
+        ...current,
+        state: 'interrupted',
+        updatedAt: Date.now(),
+      };
+      try {
+        await putLocalSession(interrupted);
+        this.localSession = interrupted;
+      } catch {
+        // Keep the in-memory recovery state and surface the failure instead of claiming completion.
+      }
       this.releaseCaptureLock();
       this.patch({
         phase: 'recoverable',
@@ -330,15 +395,22 @@ export class RecorderController {
       this.patch({ lockKind: this.captureLock.kind });
       const state = await fetchRecordingState(local.sessionId);
       await reconcileLocalSpool(local.sessionId, state);
-      await claimCapture(local.sessionId, {
+      const remote = await claimCapture(local.sessionId, {
         writer_id: local.writerId,
         expected_epoch: local.captureEpoch,
       });
-      await this.recordRecoveryGap(local);
+      const claimed: LocalRecordingSession = {
+        ...local,
+        captureEpoch: remote.capture_epoch,
+        updatedAt: Date.now(),
+      };
+      await putLocalSession(claimed);
+      this.localSession = claimed;
+      await this.recordRecoveryGap(claimed);
       await this.syncNow();
-      const pending = await countSpoolChunks(local.sessionId);
+      const pending = await countSpoolChunks(claimed.sessionId);
       if (pending > 0) throw new Error(`${pending} local audio fragment(s) still lack a durable ACK.`);
-      await this.finalizeLocalSession(local);
+      await this.finalizeLocalSession(claimed);
     } catch (error) {
       this.releaseCaptureLock();
       this.patch({
@@ -355,23 +427,20 @@ export class RecorderController {
       : new MediaRecorder(stream);
     this.stream = stream;
     this.recorder = recorder;
+    this.captureFaulted = false;
+    this.chunkChain = Promise.resolve();
     this.captureStartedPerformance = performance.now();
     this.captureBaseMonotonicMs = local.lastMonotonicEndMs;
 
     recorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size === 0) return;
+      if (event.data.size === 0 || this.captureFaulted) return;
       const capturedPerformance = performance.now();
       const wallEndMs = Date.now();
       this.chunkChain = this.chunkChain
         .then(() => this.persistCapturedBlob(event.data, capturedPerformance, wallEndMs))
         .catch((error) => {
-          this.patch({
-            localWriteFailed: true,
-            error: error instanceof Error ? error.message : 'Browser recovery spool write failed.',
-            message: navigator.onLine
-              ? 'Local recovery write failed. Server sync is required for safety.'
-              : 'Unsafe: browser recovery write failed while offline.',
-          });
+          this.captureFaulted = true;
+          void this.failCaptureBecauseSpoolIsUnsafe(error);
         });
     });
     recorder.addEventListener('error', () => {
@@ -418,18 +487,69 @@ export class RecorderController {
       blob,
       createdAt: Date.now(),
     };
+    const advanced: LocalRecordingSession = {
+      ...local,
+      lastSequence: sequence,
+      lastMonotonicEndMs: monotonicEndMs,
+      lastWallEndMs: wallEndMs,
+      updatedAt: Date.now(),
+    };
 
-    await putSpoolChunk(chunk);
-    local.lastSequence = sequence;
-    local.lastMonotonicEndMs = monotonicEndMs;
-    local.lastWallEndMs = wallEndMs;
-    local.updatedAt = Date.now();
-    await putLocalSession(local);
-    this.patch({
-      pendingChunks: await countSpoolChunks(local.sessionId),
-      localWriteFailed: false,
-    });
+    await appendCapturedChunk(chunk, advanced);
+    this.localSession = advanced;
+    this.patch({ pendingChunks: await countSpoolChunks(local.sessionId) });
     void this.syncNow();
+  }
+
+  private async failCaptureBecauseSpoolIsUnsafe(error: unknown): Promise<void> {
+    if (this.spoolFailurePromise) return this.spoolFailurePromise;
+    this.spoolFailurePromise = (async () => {
+      this.captureFaulted = true;
+      this.stopTimers();
+      try {
+        await this.stopMediaRecorder();
+      } catch {
+        stopStream(this.stream);
+        this.stream = null;
+        this.recorder = null;
+      }
+
+      const local = this.localSession;
+      if (local) {
+        const interrupted: LocalRecordingSession = {
+          ...local,
+          state: 'interrupted',
+          updatedAt: Date.now(),
+        };
+        try {
+          await putLocalSession(interrupted);
+          this.localSession = interrupted;
+        } catch {
+          // If IndexedDB itself is unavailable, the UI must remain explicitly unsafe.
+        }
+      }
+      this.releaseCaptureLock();
+
+      let pendingChunks = this.snapshot.pendingChunks;
+      if (local) {
+        try {
+          pendingChunks = await countSpoolChunks(local.sessionId);
+        } catch {
+          // Preserve the last known count when IndexedDB cannot be read.
+        }
+      }
+      this.patch({
+        phase: 'recoverable',
+        pendingChunks,
+        localWriteFailed: true,
+        error: error instanceof Error ? error.message : 'Browser recovery spool write failed.',
+        message:
+          'Capture stopped because local recovery storage became unsafe. The uncertain interval must be preserved as an explicit gap before completion.',
+      });
+    })().finally(() => {
+      this.spoolFailurePromise = null;
+    });
+    return this.spoolFailurePromise;
   }
 
   private async syncPending(): Promise<void> {
@@ -456,7 +576,10 @@ export class RecorderController {
           highestAckedSequence: Math.max(this.snapshot.highestAckedSequence, ack.sequence),
           pendingChunks: await countSpoolChunks(local.sessionId),
           online: true,
-          message: this.snapshot.phase === 'recording' ? 'Recording — server sync is current.' : this.snapshot.message,
+          message:
+            this.snapshot.phase === 'recording'
+              ? 'Recording — server sync is current.'
+              : this.snapshot.message,
         });
       }
     } catch (error) {
@@ -484,44 +607,51 @@ export class RecorderController {
   }
 
   private async recordRecoveryGap(local: LocalRecordingSession): Promise<void> {
-    if (local.lastWallEndMs === null) return;
+    const gapStartedWallMs = local.lastWallEndMs ?? local.recordingStartedWallMs;
     const wallEndMs = Date.now();
-    if (wallEndMs - local.lastWallEndMs < 1_000) return;
+    if (wallEndMs - gapStartedWallMs < 1_000) return;
     const body: GapDeclarationRequest = {
       client_gap_id: crypto.randomUUID(),
       writer_id: local.writerId,
       capture_epoch: local.captureEpoch,
-      wall_started_at: new Date(local.lastWallEndMs).toISOString(),
+      wall_started_at: new Date(gapStartedWallMs).toISOString(),
       wall_ended_at: new Date(wallEndMs).toISOString(),
-      reason: 'browser_interruption_before_recovery',
+      reason: this.snapshot.localWriteFailed
+        ? 'browser_local_spool_failure'
+        : 'browser_interruption_before_recovery',
     };
     await declareRecordingGap(local.sessionId, body);
     const state = await fetchRecordingState(local.sessionId);
-    this.patch({ gapCount: state.gaps.length });
+    this.patch({ gapCount: state.gaps.length, localWriteFailed: false });
   }
 
   private async finalizeLocalSession(local: LocalRecordingSession): Promise<void> {
-    local.state = 'finalizing';
-    local.updatedAt = Date.now();
-    await putLocalSession(local);
+    const finalizing: LocalRecordingSession = {
+      ...local,
+      state: 'finalizing',
+      updatedAt: Date.now(),
+    };
+    await putLocalSession(finalizing);
+    this.localSession = finalizing;
     const body: FinalizeSessionRequest = {
-      writer_id: local.writerId,
-      capture_epoch: local.captureEpoch,
-      final_sequence: local.lastSequence,
-      final_monotonic_end_ms: local.lastMonotonicEndMs,
+      writer_id: finalizing.writerId,
+      capture_epoch: finalizing.captureEpoch,
+      final_sequence: finalizing.lastSequence,
+      final_monotonic_end_ms: finalizing.lastMonotonicEndMs,
       gap_sequences: [],
     };
-    const final = await finalizeRecording(local.sessionId, body);
+    const final = await finalizeRecording(finalizing.sessionId, body);
     if (!final.complete) {
       throw new Error(`Server still expects sequence(s): ${final.missing_sequences.join(', ')}`);
     }
-    await deleteLocalSession(local.sessionId);
+    await deleteLocalSession(finalizing.sessionId);
     this.localSession = null;
     this.releaseCaptureLock();
     this.patch({
       phase: 'complete',
       pendingChunks: 0,
       gapCount: final.gaps.length,
+      localWriteFailed: false,
       message: final.gaps.length
         ? 'Recording finalized. Explicit interruption evidence is attached.'
         : 'Recording finalized with every expected audio sequence durably acknowledged.',
