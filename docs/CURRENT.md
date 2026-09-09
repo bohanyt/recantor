@@ -19,29 +19,28 @@ Future Android/iOS recorder clients will reuse the same server session/ingest pr
 
 ## Current architecture truth
 
-The selected foundation stack is:
+Selected foundation:
 
 - React + TypeScript + Vite + Tailwind CSS web SPA;
 - TanStack Query for server state;
 - Python + FastAPI + Pydantic API;
 - PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
 - Celery + Redis background processing;
-- Dexie/IndexedDB local browser recovery spool;
+- Dexie/IndexedDB browser recovery spool;
 - Uppy + tus/tusd resumable existing-recording upload;
-- Groq Whisper API as primary STT;
-- faster-whisper/CTranslate2 as local STT fallback;
+- Groq Whisper API as primary STT and faster-whisper/CTranslate2 as local fallback later;
 - FFmpeg for media normalization;
 - Docker Compose deployment baseline;
-- Caddy as the default/simple production reverse proxy, replaceable downstream;
-- Node.js 24 LTS for web/tooling and Python 3.13 for the main API.
+- Caddy as the default/simple production reverse proxy;
+- Node.js 24 LTS and Python 3.13.
 
-Not every selected component is implemented yet. Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
+Not every selected component is implemented. Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
 
 Most important:
 
 > Capture is infrastructure. Intelligence is downstream.
 
-The implemented browser/server durability path is:
+Implemented durability path:
 
 ```text
 MediaRecorder
@@ -58,157 +57,79 @@ Non-optional recording guardrails:
 
 - browser IndexedDB is a recovery spool, not the final durability boundary;
 - only one active capture writer may own a live session at once;
-- a resumed `MediaRecorder` instance is a new capture generation with a fresh writer and fenced epoch;
+- a resumed `MediaRecorder` is a new capture generation with a fresh writer and fenced epoch;
 - already-spooled evidence must not be silently destroyed when ownership rotates;
-- Stop/finalize declares a final sequence/high-water mark;
+- Stop/finalize declares a final sequence/high-water boundary;
+- every expected sequence through that boundary must be durably present or explicitly represented as loss before completion;
 - a server ACK requires durable audio plus durable acceptance metadata;
 - raw MediaRecorder chunks are ordered media fragments and must not be assumed independently decodable;
-- product API routes start under `/api/v1`;
-- `/healthz` is process liveness and `/readyz` is dependency readiness;
-- Live Intelligence must gain authentication/ownership before production exposure;
-- recording deletion/retention and visible recording state are part of the production privacy baseline.
+- WebSocket/Redis are not durable source of truth;
+- raw audio is not stored as PostgreSQL blobs.
 
 ## Repository state
 
-Canonical `main` at this checkpoint: `3bdcc60a70b819166a4fb72eadefd636f558c4f9`.
+Canonical `main` at this checkpoint: `791d6492a9d484c3e144748a74b9c92a31199d1b`.
 
-CI run `34413554794` on that SHA completed successfully across the repository CI matrix. The last merged implementation remains PR #20 at `f989d88ec9765ae9678941ded11789ae810f6711`; later `main` commits through this checkpoint are control-tower documentation/handoff updates rather than new recorder implementation.
+PR #27 was deliberately squash-merged into `main` on 2026-09-10, closing Issue #13. Post-merge CI run `34416444878` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
 
-### Phase 0 — complete
+### Merged Phase 1 deliveries
 
-The runnable application foundation is implemented and CI-proven: React/TypeScript/Vite/Tailwind web shell, FastAPI/Pydantic API, PostgreSQL/SQLAlchemy/Alembic, Redis development/CI service, versioned `/api/v1`, generated OpenAPI client, frozen dependency installs, Docker Compose, and baseline browser/Compose smoke coverage.
-
-### Phase 1A — merged server durability core
-
-PR #6 is merged to `main` at `40053821aa470728083b5235070ad626d1c76be2`.
-
-Implemented server behavior includes durable live-session lifecycle, capture writer/epoch fencing, sequenced binary ingestion, per-chunk timing/content/hash evidence, strict idempotent duplicate semantics, crash-safe filesystem media commit, PostgreSQL acceptance metadata before ACK, accepted-range/highest-contiguous reconciliation, explicit gaps, final high-water boundaries, and incomplete-finalization refusal while evidence is missing.
-
-### Phase 1B — merged browser recovery recorder
-
-PR #7 is merged to `main` at `7480fd203aba381896d7bd7cf4a3b41f5f40d144`.
-
-Implemented browser behavior includes `MediaRecorder` capture, Dexie/IndexedDB recovery spool, atomic fragment + local sequence/timing high-water persistence, SHA-256 evidence, delete-local-only-after-durable-ACK behavior, bounded upload retry/backoff, reconnect/manual sync, storage safety reporting, same-origin capture coordination, recovery UX, final fragment flush on Stop, and explicit recoverable/unsafe states.
-
-### Phase 1C — merged capture-generation fencing
-
-PR #9 is merged to `main` at `e277535fca7bfcf5c046d79e07681b822e839398`.
-
-The server/client contract distinguishes uploading old recovery evidence from ownership of a new capture generation. Recovery capabilities are high-entropy and stored server-side only as hashes. Each resumed generation uses a fresh writer and incremented epoch; claim retries are idempotent; old writers are fenced; pending claim intent is persisted; failed initial create identity is reusable; unexpected recorder/track failure retains emitted recovery evidence.
-
-### Phase 1D — merged bounded recorder requests and escapable finalization
-
-PR #17 is merged to `main` at `11221961f91a3db6681a5970becacb4ad62fa9f5`, closing #14.
-
-Recorder HTTP requests now have configurable per-attempt deadlines (`VITE_RECORDING_REQUEST_TIMEOUT_MS`, default 5000 ms), explicit timeout/network/HTTP/caller-cancelled classification, bounded idempotent-safe upload retries, retained local evidence after exhausted retries, an enabled **Keep locally and finish later** action in `FINALIZING`, and convergence when the server committed `COMPLETE` but the browser lost the finalize response.
-
-PR-head CI `34349870348` and post-merge `main` CI `34351060513` completed successfully.
-
-### Phase 1E — merged deterministic clean Stop sync
-
-PR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18.
-
-After `MediaRecorder` stops and local persistence drains, Stop cancels/settles any pre-Stop single-flight sync and runs exactly one fresh bounded sync over the stable stopped spool before finalization. The retries-disabled regression first reproduced the stale-snapshot failure and then passed after the fix.
-
-PR-head CI `34353847749` and post-merge `main` CI `34355423171` completed successfully.
-
-### Phase 1F — merged fenced-capture orphan safety
-
-PR #20 is merged to `main` at `f989d88ec9765ae9678941ded11789ae810f6711`, closing #11. Issue #12 was closed as completed after the merge because its bounded Phase 1 interim mitigation landed in the same PR.
-
-Merged behavior:
-
-- a server-authoritative stale-writer conflict from either heartbeat or chunk ingestion terminally fences the active browser generation;
-- the browser stops `MediaRecorder`/microphone capture and releases the same-origin capture lock;
-- emitted old-generation evidence is retained and surfaced as **orphaned local evidence — not safely syncable** rather than pending/retryable audio;
-- stale Resume / Finish recovered / Sync / Start actions are withheld;
-- reload checks server ownership truth before ordinary recovery reconciliation, including when the newer generation is already `COMPLETE`, so old-epoch orphan evidence is not erased;
-- compact `accepted_ranges` may delete a local fragment only when the fragment's `captureEpoch` matches the server session's current `capture_epoch` in addition to sequence membership.
-
-The last rule is explicitly an **interim Phase 1 safety mitigation**, not the final multi-client reconciliation identity contract. Hash-per-sequence responses, sequence-space partitioning, cross-device backlog semantics, and automatic reacquisition remain deferred.
-
-The retries-disabled fenced-capture Playwright suite exercises heartbeat fencing, chunk fencing, capture/lock release, honest orphaned UI, and the executed B2→B3 composition where a newer generation accepts the same sequence with different bytes. The exact older local fragment survives completed takeover + reload. CI run `34359040563` passed with 20/20 E2E tests; final PR-head CI `34359711581` passed across backend, frontend, Chromium E2E, and Compose smoke. Post-merge `main` CI `34410387405` also completed successfully.
-
-### Phase 1G — Issue #13 implementation candidate, not merged
-
-PR #27 is open on `phase1/missing-sequence-resolution` as the bounded candidate for Issue #13. It is **not** delivered on `main` and must not be merged without explicit user instruction.
-
-Candidate behavior:
-
-- incomplete finalization surfaces the server's unresolved `missing_sequences` as recorder state and visible UI, including after reload of an already-`FINALIZING` session;
-- retry/recovery remains the non-destructive default, and Resume is withheld while the established finalization boundary still has missing sequence evidence;
-- declaring missing audio as permanently lost is a separate explicit user action that forwards only the currently confirmed missing sequence numbers as finalize-time gaps;
-- repeated failed Finish attempts on an already-`FINALIZING` session do not append another wall-clock recovery gap;
-- a late local fragment still uses the normal upload path and can complete the same finalization without declaring that sequence lost;
-- deterministic retries-disabled Playwright coverage exercises declared-gap completion, late-fill completion, and stable gap count across repeated failed finalization attempts.
-
-The candidate deliberately does not change `claim_capture` semantics for `FINALIZING`, does not generalize browser-eviction theory, and does not pull #10, #15, STT, diarization, Groq, Whisper, or LLM work into #13. Final PR-head CI after documentation/workflow cleanup remains the merge-readiness authority.
+- **PR #6** — server durability core: durable live-session lifecycle, writer/epoch fencing, sequenced binary ingest, crash-safe filesystem commit, PostgreSQL acceptance metadata, accepted-range reconciliation, explicit gaps, and final high-water enforcement.
+- **PR #7** — browser recovery recorder: MediaRecorder capture, Dexie/IndexedDB spool, atomic local high-water persistence, SHA-256 evidence, bounded retry/backoff, reconnect/manual sync, storage-safety reporting, recovery UX, and final-fragment flush.
+- **PR #9** — capture-generation fencing: recovery capability, fresh writer/epoch on resume, stale-writer rejection, persisted pending claim intent, and unexpected-capture-failure recovery.
+- **PR #17 / Issue #14** — bounded recorder requests and escapable finalization.
+- **PR #19 / Issue #18** — deterministic clean Stop sync over a stable stopped spool.
+- **PR #20 / Issues #11 and #12** — terminal browser fencing for stale writers plus the bounded same-epoch reconciliation safety guard. The final multi-client identity contract remains deferred.
+- **PR #27 / Issue #13** — explicit missing-sequence resolution: unresolved sequences are visible, retry remains non-destructive, permanent loss requires an explicit user action, repeated failed Finish attempts do not amplify wall-clock gaps, and a late local fragment can still fill the hole normally. Deterministic E2E covers declared-gap completion, late-fill completion, and stable gap count.
 
 ## Validated Phase 1 blocker status
 
-An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` originally reproduced five defects; final review later found #18. Their current status is:
-
 | Issue | Status | Current truth |
 | --- | --- | --- |
-| #10 | **open blocker** | Liveness interruption is read-triggered and `interrupted_at` survives heartbeat restore. A stall can disappear if the next event is a heartbeat before any read observes it. |
-| #11 | **fixed / closed by PR #20** | Fenced capture now stops, releases mic/lock, retains emitted evidence, and surfaces it as orphaned rather than safely retryable. |
-| #12 | **fixed for Phase 1 / closed by PR #20** | Reconciliation now has the interim same-capture-epoch deletion guard; the final multi-client identity contract remains deferred. |
-| #13 | **open blocker — PR #27 candidate, unmerged** | PR #27 supplies an explicit missing-sequence resolution path and deterministic declared-gap/late-fill/stable-retry coverage, but #13 remains open until the implementation is deliberately merged. |
-| #14 | **fixed / closed by PR #17** | Recorder requests are bounded and `FINALIZING` has a recoverable escape. |
-| #18 | **fixed / closed by PR #19** | Clean Stop runs a fresh stable-spool sync instead of reusing a stale pre-Stop snapshot. |
+| #10 | **open blocker — next** | Liveness interruption is read-triggered and `interrupted_at` survives heartbeat restore. A stall can disappear if the next event is a heartbeat before any read observes it. |
+| #11 | **fixed / closed** | Stale-writer conflicts terminally fence active browser capture and retain orphaned evidence honestly. |
+| #12 | **fixed for Phase 1 / closed** | Reconciliation has the interim same-capture-epoch deletion guard; final multi-client identity remains deferred. |
+| #13 | **fixed / closed by PR #27** | Missing-sequence finalization now has explicit declared-gap and late-fill exits with stable retry accounting. |
+| #14 | **fixed / closed** | Recorder requests are bounded and finalization can be deferred safely. |
+| #18 | **fixed / closed** | Clean Stop performs a fresh stable-spool sync before finalization. |
 
-Detailed executed evidence remains in the corresponding issues, PRs, and Issue #5 control-tower comments. Do not infer a natural browser cause for #13: the executed repro deliberately removed a middle IndexedDB record only to establish the missing-fragment precondition.
+Issue #5 remains open as the umbrella for **Phase 1: reliable desktop browser recording and recovery**.
 
 ## Immediate Phase 1 order
 
-GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**.
+1. **Issue #10 — liveness/interruption semantics.**
+2. **Real desktop Chrome/Edge witness** on an awake Windows/desktop machine using a real microphone, with the browser backgrounded/minimized for a bounded interval, then returned and stopped. Record exact OS/browser/version/test duration plus final ACK/continuity evidence.
+3. Reconcile Issue #5 against its acceptance matrix and close it only when #10 and the real-platform witness are satisfied.
+4. After Phase 1 closes, resolve **Issue #15** before writing the first downstream STT/summary consumer.
 
-Work in this order unless fresh evidence requires a change:
+Do not pull Groq, Whisper, diarization, or LLM summaries into Phase 1.
 
-1. **#13 / PR #27** — finish review and CI reconciliation for explicit missing-sequence resolution; do not treat it as delivered until an explicitly authorized merge.
-2. **#10** — liveness/interruption semantics, without automatically converting a heartbeat/liveness hole into an audio gap.
-3. **Real desktop Chrome/Edge witness** — awake Windows/desktop machine, real microphone capture, browser backgrounded/minimized for a bounded interval, return and Stop, then record exact OS/browser/version/duration plus final ACK/continuity evidence.
-4. Close Issue #5 only after the code blockers and real-platform witness are satisfied.
+## Issue #10 bounded contract
 
-Do not pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
+Current code has one `interrupted_at` field, while `_mark_interrupted_if_stale()` only runs on selected read/claim paths. `heartbeat()` overwrites `last_heartbeat_at` before preserving evidence of a stall and restores `INTERRUPTED -> RECORDING` without clearing `interrupted_at`.
 
-### #13 guardrails
+The bounded fix must:
 
-Issue #13 is the current implementation/review item until PR #27 is deliberately merged or rejected. Required behavior includes:
+- detect a heartbeat stall exceeding `recording_heartbeat_timeout_seconds` before the next valid heartbeat overwrites the old timestamp;
+- preserve unambiguous distinction between **currently interrupted** and **has experienced a liveness interruption historically**;
+- ensure a restored session no longer reports itself as currently interrupted;
+- make heartbeat and claim semantics consistent, with any intentional difference documented;
+- cover stall → read → heartbeat, stall → heartbeat with no intervening read, and stall → claim;
+- update `docs/CURRENT.md` with the resulting guarantee.
 
-- surface `missing_sequences` returned by incomplete finalize in recorder state/UI;
-- offer an explicit, informed user action to declare the unresolved sequence(s) as gaps only **after retry/recovery has been offered**;
-- never automatically turn a transient missing sequence into permanent declared loss;
-- repeated failed Finish attempts must not keep appending wall-clock gaps;
-- if the missing local fragment is available again, retry should upload it and complete normally without declaring a gap;
-- add deterministic E2E coverage for declared-gap completion, late-fill completion, and stable gap count across repeated failure.
+Important boundary:
 
-Do not broaden #13 into allowing `claim_capture` from `FINALIZING`; that lifecycle change remains explicitly undecided.
+> A liveness interruption is not automatically an audio gap.
 
-### #10 guardrails
-
-Issue #10 follows #13. The bounded requirement is to detect a heartbeat stall before overwriting the old heartbeat timestamp, preserve unambiguous current-vs-historical liveness evidence, and make heartbeat/claim semantics consistent. **Liveness interruption is not automatically audio discontinuity.** Locally retained audio may later prove continuity.
+The browser may still hold that interval in its local recovery spool and later prove continuity. Do not manufacture `RecordingGap` evidence merely because heartbeat delivery stalled. A background sweep/job is also not required by #10 if write-path detection satisfies the contract.
 
 ## What automated background-tab tests do not prove
 
-The currently pinned Playwright environment uses `@playwright/test` 1.63.0. In an executed validation run, the browser launch included:
-
-```text
---disable-background-timer-throttling
---disable-backgrounding-occluded-windows
---disable-renderer-backgrounding
---headless
-```
-
-Therefore automated background-tab coverage is not evidence for real OS-minimized Chrome/Edge behavior, laptop sleep, browser termination, or mobile background suspension. The manual/real desktop witness remains a Phase 1 exit requirement.
+The pinned Playwright environment disables normal background throttling and runs headless. Automated browser tests therefore do **not** prove real OS-minimized Chrome/Edge behavior, laptop sleep, browser termination, or mobile background suspension. The real desktop witness remains a Phase 1 exit requirement.
 
 ## Phase 2 / downstream gate
 
-Issue #15 is **not a Phase 1 blocker**. It is the gate before the first downstream STT/summary consumer.
-
-Today `COMPLETE` does not distinguish, from the session resource alone, among fully durable audio, partial/gapped audio, and zero-audio completion. #15 requires a persisted terminal completeness/continuity classification before downstream consumers are written. #13 should settle first or concurrently because its declared-gap completion path defines the partial/gapped case.
-
-After Phase 1 closes, resolve #15 before implementing the first actual STT consumer.
+Issue #15 is not a Phase 1 blocker, but it must land before the first actual STT/summary consumer. Today `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 must persist a terminal completeness/continuity classification so downstream intelligence does not infer more than capture evidence proves.
 
 ## Not implemented yet
 
@@ -229,47 +150,38 @@ Do not describe those as working until repository evidence proves them.
 
 Resolve these by evidence/ADR when their implementation phase begins:
 
-- exact authentication implementation / OIDC or local-account strategy;
+- exact authentication implementation;
 - exact LLM provider(s) for rolling summaries;
-- final live/offline diarization backends;
-- speaker embedding model and confidence calibration;
-- production object-storage backend;
-- exact queue concurrency/routing values;
-- exact VAD/utterance timing after benchmark;
-- exact mobile native framework;
-- downstream organization-specific branding and infrastructure;
-- whether a server-side liveness stall implies any audio discontinuity (#10);
-- how a fenced or offline client may deliver a backlog under a new generation (#11 follow-on / future ADR);
-- the proper multi-client reconciliation identity contract beyond #12's interim epoch guard;
+- final live/offline diarization backends and speaker embedding model;
+- production object storage and queue concurrency/routing;
+- exact VAD/utterance timing;
+- exact native mobile framework;
+- whether a server-side liveness stall implies any audio discontinuity (#10; currently explicitly **not assumed**);
+- how a fenced/offline client may deliver backlog under a new generation;
+- the final multi-client reconciliation identity contract beyond #12's interim epoch guard;
 - terminal-state vocabulary for clean / partial-gapped / empty results (#15);
-- which real-world mechanisms can leave an expected middle fragment absent from the local spool (#13 does not establish one);
+- which real-world mechanisms can leave an expected middle fragment absent from the local spool;
 - whether `claim_capture` should ever accept a non-complete `FINALIZING` session.
 
 ## Known design boundaries
 
-- Browser background/minimized recording on an awake desktop remains a core web use case requiring a real-platform witness.
+- Browser background/minimized recording on an awake desktop is a core web use case requiring a real-platform witness.
 - Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
 - Browser local storage may be best-effort unless persistent storage is granted; UI must reflect degraded/unsafe recovery state.
-- A currently open MediaRecorder fragment is not yet durable IndexedDB/server evidence; abrupt process/device loss can lose an un-emitted bounded tail even when earlier emitted fragments are safe.
-- A server ACK is the strong durability boundary.
-- WebSocket is for realtime updates, not durable truth.
-- Redis is not durable source of truth.
-- Raw audio is not stored as database blobs.
-- Multiple simultaneous sessions are normal.
-- A single live session has one active capture generation at a time, fenced by writer identity + epoch.
-- Fenced old-generation evidence is retained locally but currently has no operator recovery/export/expiry flow; #11 intentionally did not decide one.
-- #12's same-epoch reconciliation rule is an interim safety guard, not a future multi-device contract.
+- An open MediaRecorder fragment is not yet durable IndexedDB/server evidence; abrupt process/device loss can lose an un-emitted bounded tail even when earlier emitted fragments are safe.
+- Multiple simultaneous sessions are normal; one live session has one active capture generation at a time.
+- Fenced old-generation evidence is retained locally but currently has no operator recovery/export/expiry flow.
 - Cross-device takeover/backlog semantics are not claimed.
 - Public upstream must remain free of deployment secrets and organization-private data.
 
 ## Local development notes
 
-- `apps/api/tests/conftest.py` drops the entire schema on teardown. Point `DATABASE_URL` at a dedicated test database; running `pytest` against a database an API process is using destroys recording tables while leaving `alembic_version` at head, so a subsequent `alembic upgrade head` is a no-op and the API 500s.
-- `apps/web/openapi-ts.config.ts` defaults to `http://localhost:8000`. On IPv6-first hosts this can fail against an API bound to `127.0.0.1`; set `OPENAPI_INPUT` explicitly.
+- `apps/api/tests/conftest.py` drops the entire schema on teardown. Use a dedicated test database; do not point pytest at a database an API process is using.
+- `apps/web/openapi-ts.config.ts` defaults to `http://localhost:8000`. On IPv6-first hosts, set `OPENAPI_INPUT` explicitly if the API is bound only to `127.0.0.1`.
 
 ## Handoff rule
 
-Control-tower work is intentionally transferable between chats. GitHub is the technical source of truth; chat history is convenience only.
+Control-tower work is intentionally transferable between chats. GitHub is technical source of truth; chat history is convenience only.
 
 For a new control-tower chat:
 
