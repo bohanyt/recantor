@@ -48,8 +48,13 @@ services:
       DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5173
+      AUDIO_STORAGE_PATH: /data/audio
+      RECORDING_HEARTBEAT_TIMEOUT_SECONDS: 20
+      RECORDING_MAX_CHUNK_BYTES: 16777216
     ports:
       - "8000:8000"
+    volumes:
+      - recantor-audio:/data/audio
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -80,3 +85,4 @@ services:
 
 volumes:
   recantor-postgres:
+  recantor-audio:

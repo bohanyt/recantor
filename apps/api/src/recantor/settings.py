@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://recantor:recantor@localhost:5432/recantor"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:5173"
+    audio_storage_path: str = "./data/audio"
+    recording_heartbeat_timeout_seconds: int = 20
+    recording_max_chunk_bytes: int = 16 * 1024 * 1024
     log_level: str = "INFO"
 
     @property

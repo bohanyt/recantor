@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from recantor import models  # noqa: F401
 from recantor.db import Base
 from recantor.settings import get_settings
 
