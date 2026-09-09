@@ -114,6 +114,34 @@ Why they are relevant:
 
 Recantor expects local STT to run behind a separate resource boundary so GPU runtime concerns do not leak into the main API process.
 
+## Browser platform reliability references
+
+Official/reference documentation:
+
+- StorageManager persistent storage: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
+- StorageManager quota/usage estimate: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate
+- Storage quotas and eviction criteria: https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+- Web Locks API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
+- MediaRecorder `dataavailable` timing caveats: https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event
+
+Important consequences for Recantor:
+
+- ordinary browser storage is best-effort unless persistent storage is granted;
+- the browser can expose approximate origin usage/quota, which Recantor should monitor while locally buffering unacknowledged audio;
+- Web Locks can coordinate same-origin tabs, but server capture ownership is still required across tabs/devices;
+- MediaRecorder `timeslice` is not an exact clock, and mobile/background behaviors can delay `dataavailable` events.
+
+These facts inform ADR 0002. Browser behavior still needs real-device validation; documentation is not a substitute for the Phase 1 test matrix.
+
+## Runtime references
+
+The initial application scaffold uses maintained mainstream runtime lines:
+
+- Node.js release status: https://nodejs.org/en/about/previous-releases
+- Python active release status: https://www.python.org/downloads/
+
+ADR 0001 currently selects Node.js 24 LTS for web/tooling and Python 3.13 for the main API. ML/GPU services may use a different supported Python minor if their selected dependency stack requires it.
+
 ## Speaker diarization research
 
 Candidates to benchmark rather than preselect permanently:
