@@ -39,6 +39,7 @@ class RecordingSession(Base):
     )
     active_writer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     capture_epoch: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recovery_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
