@@ -348,3 +348,33 @@ test('turns an unexpected microphone-track end into visible recoverable gap evid
     { timeout: 20_000 },
   );
 });
+
+test('allows retry after an initial start request failure', async ({ page }) => {
+  let createCalls = 0;
+  await page.route('**/api/v1/sessions/live', async (route) => {
+    createCalls += 1;
+    if (createCalls === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('start-recording')).toBeVisible();
+
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+    { timeout: 10_000 },
+  );
+  expect(createCalls).toBe(2);
+
+  await page.waitForTimeout(2_200);
+  await page.getByTestId('stop-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
