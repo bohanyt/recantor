@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { fetchHealth, fetchReadiness } from './api';
 import { env } from './env';
+import { RecorderPanel } from './RecorderPanel';
 
 type StatusCardProps = {
   title: string;
@@ -57,19 +58,21 @@ export default function App() {
       : 'offline';
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8 sm:px-8 sm:py-12">
-      <header className="max-w-2xl">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-8 sm:px-8 sm:py-12">
+      <header className="max-w-3xl">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-          Phase 0 foundation
+          Phase 1 reliable capture
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">{env.appName}</h1>
         <p className="mt-4 text-base leading-7 text-[var(--muted)] sm:text-lg">
-          Reliable capture comes first. This shell currently proves the browser-to-API, PostgreSQL,
-          generated-contract, and deployment foundations before recording code is introduced.
+          Record meetings without making transcription responsible for the audio. The browser keeps
+          every unacknowledged fragment in a recovery spool and the server owns the durable session.
         </p>
       </header>
 
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
+      <RecorderPanel />
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         <StatusCard
           title="API process"
           label="Liveness"
@@ -95,7 +98,8 @@ export default function App() {
       </div>
 
       <footer className="mt-auto pt-12 text-sm text-[var(--muted)]">
-        No recording, STT, diarization, or LLM capability is claimed in this phase.
+        This phase proves recording durability and recovery. STT, diarization, and meeting summaries
+        remain downstream work.
       </footer>
     </main>
   );

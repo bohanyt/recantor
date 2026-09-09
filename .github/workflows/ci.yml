@@ -178,6 +178,7 @@ jobs:
       - name: Start API
         run: |
           uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-api.log 2>&1 &
+          echo $! > /tmp/recantor-api.pid
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:8000/readyz >/dev/null; then exit 0; fi
             sleep 1
@@ -201,6 +202,54 @@ jobs:
           exit 1
       - name: Browser smoke
         run: pnpm --dir apps/web test:e2e
+      - name: API restart preserves durable recording ledger and audio
+        run: |
+          request_id=$(python -c 'import uuid; print(uuid.uuid4())')
+          writer_id="ci-restart-writer-0001"
+          session_json=$(curl -fsS -X POST http://127.0.0.1:8000/api/v1/sessions/live \
+            -H 'content-type: application/json' \
+            -d "{\"client_request_id\":\"$request_id\",\"writer_id\":\"$writer_id\"}")
+          session_id=$(SESSION_JSON="$session_json" python -c 'import json, os; print(json.loads(os.environ["SESSION_JSON"])["id"])')
+
+          printf 'recantor-api-restart-durable-audio' > /tmp/restart-audio.webm
+          sha=$(sha256sum /tmp/restart-audio.webm | awk '{print $1}')
+          chunk_url="http://127.0.0.1:8000/api/v1/sessions/$session_id/chunks/1?writer_id=$writer_id&capture_epoch=1&monotonic_start_ms=0&monotonic_end_ms=1000&sha256=$sha&content_type=audio%2Fwebm"
+          curl -fsS -X PUT "$chunk_url" \
+            -H 'content-type: application/octet-stream' \
+            --data-binary @/tmp/restart-audio.webm > /tmp/restart-first-ack.json
+
+          kill "$(cat /tmp/recantor-api.pid)"
+          for i in {1..30}; do
+            if ! curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+
+          uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-api-restarted.log 2>&1 &
+          echo $! > /tmp/recantor-api.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/readyz >/dev/null || {
+            cat /tmp/recantor-api-restarted.log
+            exit 1
+          }
+
+          retry_json=$(curl -fsS -X PUT "$chunk_url" \
+            -H 'content-type: application/octet-stream' \
+            --data-binary @/tmp/restart-audio.webm)
+          state_json=$(curl -fsS "http://127.0.0.1:8000/api/v1/sessions/$session_id/recording-state")
+          RETRY_JSON="$retry_json" STATE_JSON="$state_json" python - <<'PY'
+          import json
+          import os
+
+          retry = json.loads(os.environ["RETRY_JSON"])
+          state = json.loads(os.environ["STATE_JSON"])
+          assert retry["idempotent"] is True, retry
+          assert state["accepted_count"] == 1, state
+          assert state["highest_contiguous_sequence"] == 1, state
+          assert state["accepted_ranges"] == [{"start": 1, "end": 1}], state
+          PY
 
   compose-smoke:
     runs-on: ubuntu-latest
