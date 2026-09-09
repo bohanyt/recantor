@@ -4,7 +4,9 @@ const CHUNK_ROUTE = '**/api/v1/sessions/*/chunks/*';
 
 test.describe.configure({ retries: 0 });
 
-test('clean Stop flushes a fresh stable spool after cancelling a pre-Stop sync', async ({ page }) => {
+test('clean Stop flushes a fresh stable spool after cancelling a pre-Stop sync', async ({
+  page,
+}) => {
   test.setTimeout(30_000);
   let chunkRequests = 0;
 
