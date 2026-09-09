@@ -74,6 +74,18 @@ jobs:
           if reply != b"+PONG\r\n":
               raise SystemExit(f"unexpected Redis response: {reply!r}")
           PY
+      - name: Readiness fails honestly when PostgreSQL is unavailable
+        run: |
+          DATABASE_URL=postgresql+psycopg://recantor:recantor@127.0.0.1:1/recantor \
+            uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8001 \
+            > /tmp/recantor-api-unready.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8001/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          code=$(curl -sS -o /tmp/recantor-unready.json -w "%{http_code}" http://127.0.0.1:8001/readyz)
+          cat /tmp/recantor-unready.json
+          test "$code" = "503"
 
   frontend:
     runs-on: ubuntu-latest
@@ -110,10 +122,8 @@ jobs:
         run: pnpm --dir apps/web generate:api
       - name: Frontend lint
         run: pnpm --dir apps/web lint
-      - name: Frontend formatter preview
-        run: |
-          pnpm --dir apps/web format
-          git diff -- apps/web
+      - name: Frontend format
+        run: pnpm --dir apps/web format:check
       - name: Frontend typecheck
         run: pnpm --dir apps/web typecheck
       - name: Frontend tests
@@ -192,10 +202,18 @@ jobs:
       - name: Browser smoke
         run: pnpm --dir apps/web test:e2e
 
-  resolve-lockfiles:
+  bootstrap-lockfiles:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -209,14 +227,18 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
-      - name: Resolve lockfiles
+      - name: Resolve dependency lockfiles
         run: |
           uv lock --project apps/api
           pnpm --dir apps/web install --lockfile-only --no-frozen-lockfile
-      - uses: actions/upload-artifact@v4
-        with:
-          name: resolved-lockfiles
-          path: |
-            apps/api/uv.lock
-            apps/web/pnpm-lock.yaml
-          if-no-files-found: error
+      - name: Commit resolved lockfiles when changed
+        run: |
+          if [ -z "$(git status --porcelain -- apps/api/uv.lock apps/web/pnpm-lock.yaml)" ]; then
+            echo "Lockfiles already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/uv.lock apps/web/pnpm-lock.yaml
+          git commit -m "Commit resolved dependency lockfiles"
+          git push origin "HEAD:${{ github.head_ref }}"
