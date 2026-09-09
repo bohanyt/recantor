@@ -206,9 +206,10 @@ jobs:
         run: |
           request_id=$(python -c 'import uuid; print(uuid.uuid4())')
           writer_id="ci-restart-writer-0001"
+          recovery_token="ci-restart-recovery-capability-0001"
           session_json=$(curl -fsS -X POST http://127.0.0.1:8000/api/v1/sessions/live \
             -H 'content-type: application/json' \
-            -d "{\"client_request_id\":\"$request_id\",\"writer_id\":\"$writer_id\"}")
+            -d "{\"client_request_id\":\"$request_id\",\"writer_id\":\"$writer_id\",\"recovery_token\":\"$recovery_token\"}")
           session_id=$(SESSION_JSON="$session_json" python -c 'import json, os; print(json.loads(os.environ["SESSION_JSON"])["id"])')
 
           printf 'recantor-api-restart-durable-audio' > /tmp/restart-audio.webm
