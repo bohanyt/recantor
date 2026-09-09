@@ -13,9 +13,7 @@ class Settings(BaseSettings):
 
     recantor_env: str = "development"
     recantor_app_name: str = "Recantor API"
-    database_url: str = (
-        "postgresql+psycopg://recantor:recantor@localhost:5432/recantor"
-    )
+    database_url: str = "postgresql+psycopg://recantor:recantor@localhost:5432/recantor"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:5173"
     log_level: str = "INFO"
