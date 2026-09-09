@@ -27,12 +27,16 @@ Goal: prove the durability-critical path on desktop Chrome/Edge.
 Deliverables:
 
 - session create/resume/finalize API;
+- explicit live/upload/session kinds;
 - responsive web recorder UI;
-- browser local spool via IndexedDB/Dexie;
+- browser local recovery spool via IndexedDB/Dexie;
+- persistent-storage request/status and local quota monitoring;
+- one active capture writer per live session, with same-origin coordination and server-authoritative capture ownership;
 - numbered/idempotent chunk upload;
 - durable server ACK;
 - PostgreSQL session/chunk metadata;
-- filesystem `AudioStorage` implementation;
+- filesystem `AudioStorage` implementation with crash-safe acceptance semantics;
+- finalization high-water mark / expected final sequence;
 - heartbeats and interruption state;
 - reconnect and missing-sequence reconciliation;
 - explicit gap reporting;
@@ -40,17 +44,43 @@ Deliverables:
 
 Validation scenarios:
 
-- two or more simultaneous browser sessions;
+- two or more simultaneous independent browser sessions;
+- a second tab attempts to take over the same live session;
 - temporary Wi-Fi/network loss then recovery;
+- local spool persistence/quota failure becomes visible instead of pretending recording is safe;
 - refresh and resume;
 - duplicate chunk retry;
 - API restart after acknowledged chunks;
+- finalize with all expected sequences present;
+- finalize with an expected sequence missing, producing a bounded gap/failure rather than false completeness;
 - browser tab close and later recovery/finalization;
+- desktop sleep/suspend or other unprovable continuity is represented as an interruption/gap after resume;
 - long desktop recording with Chrome/Edge in the background/minimized while the computer remains awake.
 
 Exit condition:
 
-Recantor can make a bounded, evidence-backed claim that acknowledged desktop-browser audio survives ordinary network/app interruptions.
+Recantor can make a bounded, evidence-backed claim that acknowledged desktop-browser audio survives ordinary network/app interruptions, and that continuity it cannot prove is reported explicitly.
+
+## Phase 1.5 — Access, ownership, and privacy baseline
+
+Goal: make the live workflow safe to expose beyond a trusted development environment.
+
+Deliverables:
+
+- authentication implementation ADR;
+- authenticated ownership for Live Intelligence sessions;
+- authorization on audio/session/transcript access;
+- secure session/cookie/token handling appropriate to the chosen design;
+- user-visible recording deletion;
+- explicit default retention behavior;
+- CORS/CSRF/access-control behavior tested for the chosen deployment model;
+- guest capability-token access kept separate from authenticated ownership.
+
+The public upstream must not hard-code one organization's identity provider. Organization-wide roles, SSO policy, and enterprise identity integrations may mature later.
+
+Exit condition:
+
+The live recorder can be exposed to authenticated users without relying on obscurity or unguessable URLs as its authorization model.
 
 ## Phase 2 — Live transcription
 
@@ -187,9 +217,9 @@ Known-speaker naming works as an optional convenience feature without being trea
 
 Possible future capabilities:
 
-- organization accounts and roles;
-- SSO/OIDC;
-- configurable retention policies;
+- organization accounts, teams, and roles;
+- SSO/OIDC integrations and organization policy;
+- configurable organization retention policies;
 - S3-compatible/object storage;
 - semantic transcript search;
 - meeting templates;
@@ -212,6 +242,7 @@ In particular:
 
 - summaries do not gate transcription;
 - transcription does not gate recording durability;
+- authentication does not need to block a trusted local durability proof, but it must land before production Live Intelligence exposure;
 - diarization does not gate canonical raw transcript storage;
 - speaker identification does not gate diarization;
 - native mobile apps do not require a second backend.
