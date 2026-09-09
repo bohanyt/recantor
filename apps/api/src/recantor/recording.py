@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from uuid import UUID, uuid4
@@ -55,6 +56,17 @@ def _as_aware(value: datetime | None) -> datetime | None:
     return value
 
 
+def _recovery_token_hash(recovery_token: str) -> str:
+    return hashlib.sha256(recovery_token.encode("utf-8")).hexdigest()
+
+
+def _validate_recovery_token(session: RecordingSession, recovery_token: str) -> None:
+    expected = session.recovery_token_hash
+    actual = _recovery_token_hash(recovery_token)
+    if expected is None or not hmac.compare_digest(expected, actual):
+        raise StaleWriter("recording recovery capability is invalid")
+
+
 async def _locked_session(db: AsyncSession, session_id: UUID) -> RecordingSession:
     result = await db.execute(
         select(RecordingSession).where(RecordingSession.id == session_id).with_for_update()
@@ -100,14 +112,23 @@ def _mark_interrupted_if_stale(session: RecordingSession) -> bool:
 
 
 async def create_live_session(
-    db: AsyncSession, *, client_request_id: UUID, writer_id: str
+    db: AsyncSession,
+    *,
+    client_request_id: UUID,
+    writer_id: str,
+    recovery_token: str,
 ) -> RecordingSession:
+    token_hash = _recovery_token_hash(recovery_token)
     existing = await db.scalar(
         select(RecordingSession).where(RecordingSession.client_request_id == client_request_id)
     )
     if existing is not None:
         if existing.active_writer_id != writer_id:
             raise RecordingConflict("idempotency key already belongs to a different writer")
+        if existing.recovery_token_hash is None or not hmac.compare_digest(
+            existing.recovery_token_hash, token_hash
+        ):
+            raise RecordingConflict("idempotency key recovery capability does not match")
         return existing
 
     now = utcnow()
@@ -117,6 +138,7 @@ async def create_live_session(
         state=SessionState.RECORDING.value,
         active_writer_id=writer_id,
         capture_epoch=1,
+        recovery_token_hash=token_hash,
         last_heartbeat_at=now,
         created_at=now,
         updated_at=now,
@@ -135,6 +157,12 @@ async def create_live_session(
             raise RecordingConflict(
                 "idempotency key already belongs to a different writer"
             ) from None
+        if existing.recovery_token_hash is None or not hmac.compare_digest(
+            existing.recovery_token_hash, token_hash
+        ):
+            raise RecordingConflict(
+                "idempotency key recovery capability does not match"
+            ) from None
         return existing
     await db.refresh(session)
     return session
@@ -152,7 +180,8 @@ async def claim_capture(
     *,
     session_id: UUID,
     writer_id: str,
-    expected_epoch: int | None,
+    expected_epoch: int,
+    recovery_token: str,
 ) -> RecordingSession:
     async with db.begin():
         session = await _locked_session(db, session_id)
@@ -163,15 +192,22 @@ async def claim_capture(
             SessionState.FAILED.value,
         }:
             raise RecordingConflict(f"session in state {session.state} cannot be claimed")
-        if session.active_writer_id not in {None, writer_id}:
-            raise StaleWriter("another capture writer owns this session")
-        if expected_epoch is not None and session.capture_epoch != expected_epoch:
+        _validate_recovery_token(session, recovery_token)
+
+        # A retry after a successful claim may arrive because the first response was lost.
+        # The new writer plus expected prior epoch is the idempotency identity for that claim.
+        if session.capture_epoch == expected_epoch + 1:
+            if session.active_writer_id != writer_id:
+                raise StaleWriter("capture epoch was already advanced by another writer")
+            return session
+        if session.capture_epoch != expected_epoch:
             raise StaleWriter("capture epoch changed")
-        if session.active_writer_id is None:
-            session.active_writer_id = writer_id
-            session.capture_epoch += 1
+
+        session.active_writer_id = writer_id
+        session.capture_epoch = expected_epoch + 1
         session.state = SessionState.RECORDING.value
         session.last_heartbeat_at = utcnow()
+        session.interrupted_at = None
         session.updated_at = utcnow()
     return session
 
