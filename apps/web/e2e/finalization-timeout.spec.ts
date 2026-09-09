@@ -93,7 +93,9 @@ test('lets the user defer a stalled finalization without discarding local audio'
     .not.toContain('0 fragments');
 });
 
-test('reconciles remote COMPLETE after a successful finalize response is lost', async ({ page }) => {
+test('reconciles remote COMPLETE after a successful finalize response is lost', async ({
+  page,
+}) => {
   test.setTimeout(30_000);
   let resolveCommitted: ((complete: boolean) => void) | null = null;
   const serverCommitted = new Promise<boolean>((resolve) => {
