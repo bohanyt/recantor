@@ -1,0 +1,73 @@
+name: Phase 1C fixup
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  phase1c-fixup:
+    if: >-
+      github.head_ref == 'phase1/capture-generation-fencing' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.10.0"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "11.7.0"
+          run_install: false
+      - name: Install dependencies
+        run: |
+          uv sync --project apps/api --frozen --dev
+          pnpm --dir apps/web install --frozen-lockfile
+      - name: Patch restart witness for recovery capability
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/ci.yml')
+          text = path.read_text()
+          writer_line = '          writer_id="ci-restart-writer-0001"\n'
+          token_line = '          recovery_token="ci-restart-recovery-capability-0001"\n'
+          if token_line not in text:
+              if writer_line not in text:
+                  raise SystemExit('restart witness writer line not found')
+              text = text.replace(writer_line, writer_line + token_line, 1)
+          old = r'\"writer_id\":\"$writer_id\"}'
+          new = r'\"writer_id\":\"$writer_id\",\"recovery_token\":\"$recovery_token\"}'
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('restart witness request body not found')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Format backend and web
+        run: |
+          uv run --project apps/api ruff check --fix apps/api
+          uv run --project apps/api ruff format apps/api
+          pnpm --dir apps/web format
+      - name: Commit fixups
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/ci.yml apps/api apps/web
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "Format and reconcile Phase 1C CI witnesses"
+          git push origin "HEAD:${{ github.head_ref }}"
