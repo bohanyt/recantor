@@ -45,6 +45,7 @@ export type RecorderSnapshot = {
   storage: StorageSafety | null;
   localWriteFailed: boolean;
   gapCount: number;
+  missingSequences: number[];
   lockKind: CaptureTabLock['kind'] | null;
   message: string;
   error: string | null;
@@ -68,6 +69,7 @@ function defaultSnapshot(): RecorderSnapshot {
     storage: null,
     localWriteFailed: false,
     gapCount: 0,
+    missingSequences: [],
     lockKind: null,
     message: 'Ready to record.',
     error: null,
@@ -114,6 +116,35 @@ function isRetryableUpload(error: unknown): boolean {
   if (error.kind === 'aborted') return false;
   if (error.kind === 'network' || error.kind === 'timeout') return true;
   return error.status === 408 || error.status === 429 || (error.status ?? 0) >= 500;
+}
+
+function missingSequencesFromState(state: RecordingStateResponse): number[] {
+  const finalSequence = state.session.final_sequence;
+  if (state.session.state !== 'finalizing' || finalSequence === null || finalSequence < 1) return [];
+
+  const accounted = new Set<number>();
+  for (const range of state.accepted_ranges) {
+    const start = Math.max(1, range.start);
+    const end = Math.min(finalSequence, range.end);
+    for (let sequence = start; sequence <= end; sequence += 1) accounted.add(sequence);
+  }
+  for (const gap of state.gaps) {
+    if (gap.sequence_start === null || gap.sequence_end === null) continue;
+    const start = Math.max(1, gap.sequence_start);
+    const end = Math.min(finalSequence, gap.sequence_end);
+    for (let sequence = start; sequence <= end; sequence += 1) accounted.add(sequence);
+  }
+
+  const missing: number[] = [];
+  for (let sequence = 1; sequence <= finalSequence; sequence += 1) {
+    if (!accounted.has(sequence)) missing.push(sequence);
+  }
+  return missing;
+}
+
+function missingSequenceMessage(missingSequences: number[]): string {
+  if (missingSequences.length === 0) return 'Recovered audio remains available locally.';
+  return `Server still expects sequence(s): ${missingSequences.join(', ')}. Retry recovery if those fragments may still be available, or explicitly declare the confirmed missing audio as gaps.`;
 }
 
 export class RecorderController {
@@ -189,22 +220,31 @@ export class RecorderController {
         await deleteLocalSession(local.sessionId);
         if (!this.lifecycleCurrent(lifecycleVersion)) return;
         this.localSession = null;
-        this.patch({ phase: 'idle', message: 'Previous recording was already complete.' });
+        this.patch({
+          phase: 'idle',
+          missingSequences: [],
+          message: 'Previous recording was already complete.',
+        });
         return;
       }
       const pendingChunks = await countSpoolChunks(local.sessionId);
       if (!this.lifecycleCurrent(lifecycleVersion)) return;
       const legacy = !local.recoveryToken;
+      const missingSequences = missingSequencesFromState(state);
       this.patch({
         phase: 'recoverable',
         sessionId: local.sessionId,
         pendingChunks,
         highestAckedSequence: state.highest_contiguous_sequence,
         gapCount: state.gaps.length,
+        missingSequences,
         elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
-        message: legacy
-          ? 'Legacy recovery found. Existing audio can be finished, but a new capture generation cannot be started.'
-          : 'Interrupted recording found. Resume it or finish the recovered audio.',
+        message:
+          missingSequences.length > 0
+            ? missingSequenceMessage(missingSequences)
+            : legacy
+              ? 'Legacy recovery found. Existing audio can be finished, but a new capture generation cannot be started.'
+              : 'Interrupted recording found. Resume it or finish the recovered audio.',
       });
     } catch (error) {
       if (!this.lifecycleCurrent(lifecycleVersion)) return;
@@ -243,6 +283,7 @@ export class RecorderController {
       phase: 'requesting',
       error: null,
       localWriteFailed: false,
+      missingSequences: [],
       message: 'Requesting microphone access…',
     });
     await this.refreshStorage(true);
@@ -316,6 +357,13 @@ export class RecorderController {
   async resume(): Promise<void> {
     const local = this.localSession ?? (await getLatestLocalSession());
     if (!local || this.snapshot.phase !== 'recoverable') return;
+    if (this.snapshot.missingSequences.length > 0) {
+      this.patch({
+        error: null,
+        message: missingSequenceMessage(this.snapshot.missingSequences),
+      });
+      return;
+    }
     if (!local.recoveryToken) {
       this.patch({
         error: 'This legacy recovery session has no capture recovery capability.',
@@ -338,6 +386,17 @@ export class RecorderController {
 
       const state = await fetchRecordingState(local.sessionId);
       if (await this.adoptMatchingRemoteCompletion(local, state)) return;
+      const missingSequences = missingSequencesFromState(state);
+      if (missingSequences.length > 0) {
+        this.patch({
+          phase: 'recoverable',
+          missingSequences,
+          message: missingSequenceMessage(missingSequences),
+          error: null,
+        });
+        this.releaseCaptureLock();
+        return;
+      }
       await reconcileLocalSpool(local.sessionId, state);
       await this.syncNow();
       const pending = await countSpoolChunks(local.sessionId);
@@ -375,7 +434,7 @@ export class RecorderController {
 
       await this.recordRecoveryGap(resumed);
       this.captureFaulted = false;
-      this.patch({ localWriteFailed: false });
+      this.patch({ localWriteFailed: false, missingSequences: [] });
       this.beginMediaRecorder(stream, resumed);
       stream = null;
     } catch (error) {
@@ -434,6 +493,7 @@ export class RecorderController {
     this.finalizationAbortController = finalizationAbortController;
     this.patch({
       phase: 'finalizing',
+      missingSequences: [],
       message: 'Stopping capture and flushing the final audio fragment…',
     });
     this.stopTimers();
@@ -472,7 +532,17 @@ export class RecorderController {
         );
         return;
       }
-      await this.finalizeLocalSession(current, finalizationAbortController.signal);
+      const complete = await this.finalizeLocalSession(
+        current,
+        finalizationAbortController.signal,
+      );
+      if (!complete) {
+        await this.keepStoppedSessionRecoverable(
+          current,
+          missingSequenceMessage(this.snapshot.missingSequences),
+          null,
+        );
+      }
     } catch (error) {
       const current = this.localSession ?? local;
       const deferred = this.finalizationDeferred || requestCancelled(error);
@@ -492,16 +562,28 @@ export class RecorderController {
   }
 
   async finishRecovered(): Promise<void> {
+    await this.finishRecoveredWithDeclaredGaps([]);
+  }
+
+  async declareMissingSequencesAsGaps(): Promise<void> {
+    if (this.snapshot.phase !== 'recoverable' || this.snapshot.missingSequences.length === 0) return;
+    await this.finishRecoveredWithDeclaredGaps([...this.snapshot.missingSequences]);
+  }
+
+  private async finishRecoveredWithDeclaredGaps(gapSequences: number[]): Promise<void> {
     const local = this.localSession;
     if (!local || this.snapshot.phase !== 'recoverable') return;
 
     this.finalizationDeferred = false;
     const finalizationAbortController = new AbortController();
     this.finalizationAbortController = finalizationAbortController;
+    const declaringLoss = gapSequences.length > 0;
     this.patch({
       phase: 'finalizing',
       error: null,
-      message: 'Reconciling recovered audio before finalization…',
+      message: declaringLoss
+        ? 'Rechecking recovered audio before declaring the confirmed missing sequences as gaps…'
+        : 'Reconciling recovered audio before finalization…',
     });
     try {
       this.captureLock = await acquireCaptureTabLock(local.sessionId, local.writerId);
@@ -527,6 +609,7 @@ export class RecorderController {
 
       let finalizingOwner = this.localSession ?? local;
       if (await this.adoptMatchingRemoteCompletion(finalizingOwner, state)) return;
+      const alreadyFinalizing = state.session.state === 'finalizing';
       if (finalizingOwner.pendingWriterId) {
         const pendingWriterId = finalizingOwner.pendingWriterId;
         if (
@@ -569,8 +652,23 @@ export class RecorderController {
         this.localSession = finalizingOwner;
       }
 
-      await this.recordRecoveryGap(finalizingOwner, finalizationAbortController.signal);
-      await this.finalizeLocalSession(finalizingOwner, finalizationAbortController.signal);
+      // A FINALIZING session already has the recovery evidence from the attempt that established
+      // its final boundary. Repeated Finish clicks must not append another wall-clock gap.
+      if (!alreadyFinalizing) {
+        await this.recordRecoveryGap(finalizingOwner, finalizationAbortController.signal);
+      }
+      const complete = await this.finalizeLocalSession(
+        finalizingOwner,
+        finalizationAbortController.signal,
+        gapSequences,
+      );
+      if (!complete) {
+        await this.keepStoppedSessionRecoverable(
+          finalizingOwner,
+          missingSequenceMessage(this.snapshot.missingSequences),
+          null,
+        );
+      }
     } catch (error) {
       const current = this.localSession ?? local;
       const deferred = this.finalizationDeferred || requestCancelled(error);
@@ -631,6 +729,7 @@ export class RecorderController {
     this.patch({
       phase: 'recording',
       sessionId: local.sessionId,
+      missingSequences: [],
       error: null,
       message: `Recording capture generation ${local.captureEpoch}. Emitted audio is kept locally until the server durably acknowledges it.`,
       elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
@@ -791,6 +890,7 @@ export class RecorderController {
         state.highest_contiguous_sequence,
       ),
       gapCount: state.gaps.length,
+      missingSequences: [],
       localWriteFailed: false,
       message: state.gaps.length
         ? 'Recording finalized. Explicit interruption evidence is attached.'
@@ -847,6 +947,7 @@ export class RecorderController {
         highestAckedSequence: state.highest_contiguous_sequence,
         pendingChunks: pendingAfterReconcile.length,
         gapCount: state.gaps.length,
+        missingSequences: missingSequencesFromState(state),
       });
 
       for (const chunk of pendingAfterReconcile) {
@@ -915,7 +1016,8 @@ export class RecorderController {
   private async finalizeLocalSession(
     local: LocalRecordingSession,
     signal?: AbortSignal,
-  ): Promise<void> {
+    gapSequences: number[] = [],
+  ): Promise<boolean> {
     const finalizing: LocalRecordingSession = {
       ...local,
       state: 'finalizing',
@@ -928,11 +1030,18 @@ export class RecorderController {
       capture_epoch: finalizing.captureEpoch,
       final_sequence: finalizing.lastSequence,
       final_monotonic_end_ms: finalizing.lastMonotonicEndMs,
-      gap_sequences: [],
+      gap_sequences: gapSequences,
     };
     const final = await finalizeRecording(finalizing.sessionId, body, { signal });
     if (!final.complete) {
-      throw new Error(`Server still expects sequence(s): ${final.missing_sequences.join(', ')}`);
+      const missingSequences = [...final.missing_sequences];
+      this.patch({
+        missingSequences,
+        gapCount: final.gaps.length,
+        message: missingSequenceMessage(missingSequences),
+        error: null,
+      });
+      return false;
     }
     await deleteLocalSession(finalizing.sessionId);
     this.localSession = null;
@@ -941,12 +1050,14 @@ export class RecorderController {
       phase: 'complete',
       pendingChunks: 0,
       gapCount: final.gaps.length,
+      missingSequences: [],
       localWriteFailed: false,
       message: final.gaps.length
         ? 'Recording finalized. Explicit interruption evidence is attached.'
         : 'Recording finalized with every expected audio sequence durably acknowledged.',
       error: null,
     });
+    return true;
   }
 
   private async stopMediaRecorder(): Promise<void> {
