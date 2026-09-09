@@ -71,9 +71,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["session_id"], ["recording_sessions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "session_id", "sequence", name="uq_recording_chunk_session_sequence"
-        ),
+        sa.UniqueConstraint("session_id", "sequence", name="uq_recording_chunk_session_sequence"),
     )
     op.create_index("ix_recording_chunks_session_id", "recording_chunks", ["session_id"])
 

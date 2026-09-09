@@ -259,9 +259,11 @@ async def test_two_sessions_keep_sequences_and_audio_metadata_isolated(client: A
 
     first_state = (await client.get(f"/api/v1/sessions/{first_id}/recording-state")).json()
     second_state = (await client.get(f"/api/v1/sessions/{second_id}/recording-state")).json()
-    assert first_state["accepted_ranges"] == second_state["accepted_ranges"] == [
-        {"start": 1, "end": 1}
-    ]
+    assert (
+        first_state["accepted_ranges"]
+        == second_state["accepted_ranges"]
+        == [{"start": 1, "end": 1}]
+    )
     assert first_state["session"]["id"] != second_state["session"]["id"]
 
 

@@ -422,9 +422,7 @@ async def finalize_session(
         )
         gaps = list(
             (
-                await db.scalars(
-                    select(RecordingGap).where(RecordingGap.session_id == session_id)
-                )
+                await db.scalars(select(RecordingGap).where(RecordingGap.session_id == session_id))
             ).all()
         )
         covered = _sequences_covered_by_gaps(gaps, final_sequence)
