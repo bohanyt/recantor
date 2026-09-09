@@ -34,27 +34,6 @@ jobs:
         run: |
           uv sync --project apps/api --frozen --dev
           pnpm --dir apps/web install --frozen-lockfile
-      - name: Patch restart witness for recovery capability
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('.github/workflows/ci.yml')
-          text = path.read_text()
-          writer_line = '          writer_id="ci-restart-writer-0001"\n'
-          token_line = '          recovery_token="ci-restart-recovery-capability-0001"\n'
-          if token_line not in text:
-              if writer_line not in text:
-                  raise SystemExit('restart witness writer line not found')
-              text = text.replace(writer_line, writer_line + token_line, 1)
-          old = r'\"writer_id\":\"$writer_id\"}'
-          new = r'\"writer_id\":\"$writer_id\",\"recovery_token\":\"$recovery_token\"}'
-          if new not in text:
-              if old not in text:
-                  raise SystemExit('restart witness request body not found')
-              text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
       - name: Format backend and web
         run: |
           uv run --project apps/api ruff check --fix apps/api
@@ -64,10 +43,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml apps/api apps/web
+          git add apps/api apps/web
           if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0
           fi
-          git commit -m "Format and reconcile Phase 1C CI witnesses"
+          git commit -m "Format Phase 1C sources"
           git push origin "HEAD:${{ github.head_ref }}"
