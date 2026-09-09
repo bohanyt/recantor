@@ -19,7 +19,7 @@ Future Android/iOS recorder clients will reuse the same server session/ingest pr
 
 ## Current architecture truth
 
-The foundation stack is:
+The selected foundation stack is:
 
 - React + TypeScript + Vite + Tailwind CSS web SPA;
 - TanStack Query for server state;
@@ -32,8 +32,10 @@ The foundation stack is:
 - faster-whisper/CTranslate2 as local STT fallback;
 - FFmpeg for media normalization;
 - Docker Compose deployment baseline;
-- Caddy as the default/simple reverse proxy, replaceable downstream;
+- Caddy as the default/simple production reverse proxy, replaceable downstream;
 - Node.js 24 LTS for initial web/tooling and Python 3.13 for the main API.
+
+Not every selected component is implemented yet. The repository state below distinguishes proven runtime from planned downstream stack.
 
 Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
 
@@ -41,7 +43,7 @@ Most important:
 
 > Capture is infrastructure. Intelligence is downstream.
 
-The durable recording path is conceptually:
+The future durable recording path is:
 
 ```text
 capture -> local recovery spool -> sequenced upload -> durable server write -> ACK
@@ -49,7 +51,7 @@ capture -> local recovery spool -> sequenced upload -> durable server write -> A
 
 STT, diarization, live transcript delivery, and LLM summaries are downstream and may degrade without invalidating already acknowledged audio.
 
-The foundation audit added these non-optional guardrails before recording implementation:
+Non-optional recording guardrails already established before implementation:
 
 - browser IndexedDB is a recovery spool and must expose persistence/quota failure rather than pretending it is equivalent to server durability;
 - only one active capture writer may own a live session at once;
@@ -63,66 +65,70 @@ The foundation audit added these non-optional guardrails before recording implem
 
 ## Repository state
 
-The repository is still in **Phase 0: Foundation**.
+**Phase 0 application foundation is implemented and CI-proven.**
 
-Present:
+Implemented:
 
-- Apache-2.0 license;
-- project README;
-- product contract;
-- architecture contract;
-- roadmap;
-- agent working contract;
-- stack ADR;
-- recording/access guardrail ADR;
-- third-party reference notes.
+- React + TypeScript + Vite + Tailwind web shell;
+- TanStack Query server-state usage;
+- FastAPI/Pydantic API;
+- `/healthz` process liveness;
+- `/readyz` PostgreSQL readiness, including a negative 503 proof when PostgreSQL is unavailable;
+- versioned `/api/v1` product namespace;
+- OpenAPI-generated TypeScript API client used by the web application;
+- PostgreSQL connectivity through SQLAlchemy 2;
+- Alembic migration history and migration execution;
+- Redis development service and CI reachability proof;
+- pinned Node/Python/tooling baselines and committed `uv`/`pnpm` lockfiles;
+- Docker images using frozen dependency installs;
+- Docker Compose development stack with PostgreSQL, Redis, one-shot migration, API, and web services;
+- backend tests/lint/format checks;
+- frontend lint/format/typecheck/unit/build checks;
+- real Chromium Playwright smoke from the web shell through the API to PostgreSQL readiness;
+- Docker Compose build/start/readiness/web-shell smoke in CI.
+
+The Phase 0 CI witness is intentionally bounded: it proves the scaffold and development path, not recording behavior.
 
 Not implemented yet:
 
-- application scaffold;
-- web UI;
-- FastAPI server;
-- PostgreSQL schema;
-- recording protocol;
-- background workers;
-- STT;
+- microphone recording;
+- Dexie/IndexedDB recording spool;
+- live session/chunk protocol;
+- capture ownership lease/epoch;
+- durable audio ACK path;
+- background/Celery workers;
+- Groq or local STT;
 - diarization;
 - summaries;
-- upload pipeline;
-- authentication;
-- production deployment.
+- tus upload pipeline;
+- authentication/authorization;
+- production deployment/reverse proxy;
+- native mobile clients.
 
 Do not describe any of those as working until repository evidence proves it.
 
 ## Immediate next delivery
 
-The next bounded work is GitHub Issue #2: **Phase 0 application scaffold**, not STT implementation.
+GitHub Issue #5: **Phase 1: reliable desktop browser recording and recovery**.
 
-It should create the smallest runnable end-to-end skeleton:
+Phase 1 is the first durability-critical product slice. It must implement and prove:
 
-```text
-apps/web       React + TypeScript + Vite
-apps/api       FastAPI + Pydantic
-infra          local Docker Compose baseline
-```
+- durable live session lifecycle in PostgreSQL;
+- one active capture writer per live session;
+- browser microphone capture;
+- Dexie/IndexedDB local recovery spool;
+- persistent-storage/quota safety state;
+- monotonically sequenced, idempotent chunk ingestion;
+- filesystem `AudioStorage` with durable ACK semantics;
+- retry/reconnect and server/client acknowledgement reconciliation;
+- heartbeat/interruption state;
+- final sequence/high-water-mark finalization;
+- explicit gaps when continuity cannot be proven;
+- two simultaneous independent sessions;
+- same-session competing-tab rejection;
+- bounded real-browser desktop background/minimized witness.
 
-With:
-
-- a web page that can reach the API;
-- `/healthz` process liveness and `/readyz` PostgreSQL readiness;
-- product API namespace reserved under `/api/v1`;
-- generated OpenAPI -> TypeScript contract used by the web app;
-- PostgreSQL connectivity and migration tooling;
-- Redis connectivity available for later workers;
-- initial lint/typecheck/test commands;
-- CI that runs those checks;
-- pinned/documented runtime/tooling expectations;
-- `.env.example` with no secrets;
-- clear local development instructions.
-
-Do **not** add microphone recording, Groq, GPU STT, diarization, LLM, or production authentication dependencies in the first scaffold unless required to prove the base contracts.
-
-After the scaffold is proven, the next product slice is Phase 1 reliable web recording.
+Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
 ## Open decisions intentionally deferred
 
@@ -141,7 +147,7 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 
 ## Known design boundaries
 
-- Browser background/minimized recording on an awake desktop is a core web use case.
+- Browser background/minimized recording on an awake desktop is a core web use case to prove in Phase 1.
 - Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
 - Browser local storage may be best-effort unless persistent storage is granted; UI must reflect unsafe/degraded recovery state.
 - WebSocket is for realtime updates, not durable state.

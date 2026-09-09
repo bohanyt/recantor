@@ -1,0 +1,17 @@
+{
+  "name": "recantor",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "web:dev": "pnpm --dir apps/web dev",
+    "web:generate": "pnpm --dir apps/web generate:api",
+    "web:lint": "pnpm --dir apps/web lint",
+    "web:format:check": "pnpm --dir apps/web format:check",
+    "web:typecheck": "pnpm --dir apps/web typecheck",
+    "web:test": "pnpm --dir apps/web test",
+    "web:build": "pnpm --dir apps/web build"
+  }
+}

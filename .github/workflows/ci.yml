@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "24"
+  UV_VERSION: "0.10.0"
+  PNPM_VERSION: "11.7.0"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: recantor
+          POSTGRES_USER: recantor
+          POSTGRES_PASSWORD: recantor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recantor -d recantor"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install API dependencies
+        run: uv sync --project apps/api --frozen --dev
+      - name: Ruff lint
+        run: uv run --project apps/api ruff check apps/api
+      - name: Ruff format
+        run: uv run --project apps/api ruff format --check apps/api
+      - name: Backend tests
+        run: uv run --project apps/api pytest
+      - name: Alembic upgrade
+        run: uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+      - name: Alembic current
+        run: uv run --project apps/api alembic -c apps/api/alembic.ini current
+      - name: Redis protocol check
+        run: |
+          python - <<'PY'
+          import socket
+          with socket.create_connection(("127.0.0.1", 6379), timeout=3) as sock:
+              sock.sendall(b"*1\r\n$4\r\nPING\r\n")
+              reply = sock.recv(64)
+          if reply != b"+PONG\r\n":
+              raise SystemExit(f"unexpected Redis response: {reply!r}")
+          PY
+      - name: Readiness fails honestly when PostgreSQL is unavailable
+        run: |
+          DATABASE_URL=postgresql+psycopg://recantor:recantor@127.0.0.1:1/recantor \
+            uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8001 \
+            > /tmp/recantor-api-unready.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8001/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          code=$(curl -sS -o /tmp/recantor-unready.json -w "%{http_code}" http://127.0.0.1:8001/readyz)
+          cat /tmp/recantor-unready.json
+          test "$code" = "503"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Install API dependencies for OpenAPI generation
+        run: uv sync --project apps/api --frozen --dev
+      - name: Install web dependencies
+        run: pnpm --dir apps/web install --frozen-lockfile
+      - name: Start API for OpenAPI generation
+        run: |
+          uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/recantor-api.log
+          exit 1
+      - name: Generate API client
+        run: pnpm --dir apps/web generate:api
+      - name: Frontend lint
+        run: pnpm --dir apps/web lint
+      - name: Frontend format
+        run: pnpm --dir apps/web format:check
+      - name: Frontend typecheck
+        run: pnpm --dir apps/web typecheck
+      - name: Frontend tests
+        run: pnpm --dir apps/web test
+      - name: Frontend build
+        run: pnpm --dir apps/web build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: recantor
+          POSTGRES_USER: recantor
+          POSTGRES_PASSWORD: recantor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recantor -d recantor"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
+      CORS_ORIGINS: http://127.0.0.1:4173,http://localhost:4173
+      VITE_APP_NAME: Recantor
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Install dependencies
+        run: |
+          uv sync --project apps/api --frozen --dev
+          pnpm --dir apps/web install --frozen-lockfile
+      - name: Migrate database
+        run: uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+      - name: Start API
+        run: |
+          uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/recantor-api.log
+          exit 1
+      - name: Generate API client and build web
+        run: |
+          pnpm --dir apps/web generate:api
+          pnpm --dir apps/web build
+      - name: Install Chromium
+        run: pnpm --dir apps/web exec playwright install --with-deps chromium
+      - name: Start web preview
+        run: |
+          pnpm --dir apps/web preview --host 127.0.0.1 --port 4173 > /tmp/recantor-web.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/recantor-web.log
+          exit 1
+      - name: Browser smoke
+        run: pnpm --dir apps/web test:e2e
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Compose model
+        run: docker compose -f infra/compose.yaml config --quiet
+      - name: Build and start development stack
+        run: docker compose -f infra/compose.yaml up --build -d
+      - name: Wait for API readiness and web shell
+        run: |
+          for i in {1..90}; do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null && curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f infra/compose.yaml ps
+          docker compose -f infra/compose.yaml logs
+          exit 1
+      - name: Inspect Compose services
+        run: docker compose -f infra/compose.yaml ps
+      - name: Stop development stack
+        if: always()
+        run: docker compose -f infra/compose.yaml down -v

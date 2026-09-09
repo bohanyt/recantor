@@ -16,34 +16,99 @@ The project is designed for two primary workflows:
 5. **Failures must be visible.** Missing audio is reported as a gap; Recantor must never silently pretend a recording is complete.
 6. **Boring, documented technology wins.** Prefer mainstream tools with clear contracts, tests, and operational behavior.
 
-## Planned stack
+## Stack
+
+Current application foundation:
 
 - Web: React + TypeScript + Vite + Tailwind CSS
 - Server state: TanStack Query
-- Browser recovery spool: IndexedDB via Dexie
 - API: Python + FastAPI + Pydantic
 - Database: PostgreSQL + SQLAlchemy 2 + Alembic
+- Development orchestration: Docker Compose
+- Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
+- API contract: FastAPI OpenAPI -> generated TypeScript client
+
+Planned downstream capabilities:
+
+- Browser recovery spool: IndexedDB via Dexie
 - Jobs: Celery + Redis
 - Realtime delivery: WebSocket where appropriate
 - Resumable guest uploads: Uppy + tus/tusd
 - Primary STT: Groq Whisper API
 - Local STT fallback: faster-whisper / CTranslate2
 - Audio normalization: FFmpeg
-- Deployment baseline: Docker Compose + Caddy
+- Default production reverse proxy: Caddy, replaceable downstream
 
 The public upstream stays deployment-agnostic. Organization-specific branding, domains, authentication policy, infrastructure, and secrets belong in deployment configuration or downstream forks/overlays.
 
+## Quick start
+
+The Phase 0 development stack requires Docker with Docker Compose.
+
+```bash
+git clone https://github.com/bohanyt/recantor.git
+cd recantor
+docker compose -f infra/compose.yaml up --build
+```
+
+Compose starts PostgreSQL and Redis, runs Alembic migrations, then starts the API and web application.
+
+Open:
+
+- Web: `http://localhost:5173`
+- API docs: `http://localhost:8000/docs`
+- Process liveness: `http://localhost:8000/healthz`
+- PostgreSQL readiness: `http://localhost:8000/readyz`
+
+Stop the stack:
+
+```bash
+docker compose -f infra/compose.yaml down
+```
+
+Delete the development database volume too:
+
+```bash
+docker compose -f infra/compose.yaml down -v
+```
+
+The current UI is intentionally only a foundation/status shell. It does **not** record audio yet.
+
+## Development checks
+
+The repository pins dependency resolutions in `apps/api/uv.lock` and `apps/web/pnpm-lock.yaml`.
+
+Typical checks are:
+
+```bash
+uv sync --project apps/api --frozen --dev
+uv run --project apps/api ruff check apps/api
+uv run --project apps/api ruff format --check apps/api
+uv run --project apps/api pytest
+
+pnpm --dir apps/web install --frozen-lockfile
+# Start the API first so OpenAPI can be generated.
+pnpm --dir apps/web generate:api
+pnpm --dir apps/web lint
+pnpm --dir apps/web format:check
+pnpm --dir apps/web typecheck
+pnpm --dir apps/web test
+pnpm --dir apps/web build
+```
+
+GitHub Actions additionally proves PostgreSQL migrations/readiness, Redis reachability, a real Chromium web -> API -> PostgreSQL smoke path, and the Docker Compose development path.
+
 ## Reliability boundary
 
-Browser live recording uses a local recovery spool plus sequenced server ingestion. A server ACK is the durable boundary; browser IndexedDB may still be subject to browser persistence/quota behavior.
+Browser live recording will use a local recovery spool plus sequenced server ingestion. A server ACK is the durable boundary; browser IndexedDB may still be subject to browser persistence/quota behavior.
 
-A clean Stop declares a final sequence/high-water mark so completion can be proven rather than inferred from silence.
+A clean Stop will declare a final sequence/high-water mark so completion can be proven rather than inferred from silence.
 
 Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains useful while active, while future Android/iOS recorder clients provide the stronger background/lock-screen capture path.
 
 ## Project status
 
-**Foundation / pre-implementation.** Product and architecture contracts are established and audited; the next bounded step is the runnable application scaffold in Issue #2.
+**Phase 0 application foundation.** The runnable web/API/database/Redis/Compose/CI baseline is implemented. Recording, STT, diarization, summaries, uploads, and production authentication remain intentionally unimplemented.
 
 Start here:
 
