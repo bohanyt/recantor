@@ -1,6 +1,12 @@
 import type { RecordingStateResponse } from '../api/generated/types.gen';
+import { fetchRecordingState } from './api';
 import { RecorderController, type RecorderSnapshot } from './controller';
-import { getLatestLocalSession, type SpoolChunk } from './db';
+import {
+  countSpoolChunks,
+  getLatestLocalSession,
+  type LocalRecordingSession,
+  type SpoolChunk,
+} from './db';
 
 const STALE_ACTIVE_GENERATION_DETAIL = 'capture writer or epoch is no longer active';
 
@@ -72,22 +78,64 @@ export class FencedRecorderController {
     }
   };
 
+  private serverStateFencesLocal(
+    local: LocalRecordingSession,
+    state: RecordingStateResponse,
+  ): boolean {
+    const remote = state.session;
+    const matchingCompletion =
+      remote.state === 'complete' &&
+      remote.capture_epoch === local.captureEpoch &&
+      remote.final_sequence === local.lastSequence &&
+      remote.final_monotonic_end_ms === local.lastMonotonicEndMs;
+    if (matchingCompletion) return false;
+
+    const claimAlreadyAdvanced =
+      Boolean(local.pendingWriterId) &&
+      remote.capture_epoch === local.captureEpoch + 1 &&
+      remote.active_writer_id === local.pendingWriterId;
+    if (claimAlreadyAdvanced) return false;
+
+    return (
+      remote.state === 'complete' ||
+      remote.capture_epoch !== local.captureEpoch ||
+      (remote.active_writer_id !== null && remote.active_writer_id !== local.writerId)
+    );
+  }
+
+  private async initializeFencedFromServerTruth(): Promise<boolean> {
+    const local = await getLatestLocalSession();
+    if (!local) return false;
+
+    try {
+      const state = await fetchRecordingState(local.sessionId);
+      if (!this.serverStateFencesLocal(local, state)) return false;
+
+      this.captureFenced = true;
+      this.snapshot = this.decorate({
+        ...this.inner.getSnapshot(),
+        phase: 'recoverable',
+        sessionId: local.sessionId,
+        pendingChunks: await countSpoolChunks(local.sessionId),
+        highestAckedSequence: state.highest_contiguous_sequence,
+        elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
+        gapCount: state.gaps.length,
+        lockKind: null,
+        error: STALE_ACTIVE_GENERATION_DETAIL,
+      });
+      this.emit();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async refreshFenceFromServer(): Promise<void> {
     try {
-      const [local, state] = await Promise.all([getLatestLocalSession(), this.inner.debugState()]);
-      if (!local || !state || state.session.state === 'complete') return;
-
-      const claimAlreadyAdvanced =
-        Boolean(local.pendingWriterId) &&
-        state.session.capture_epoch === local.captureEpoch + 1 &&
-        state.session.active_writer_id === local.pendingWriterId;
-      if (claimAlreadyAdvanced) return;
-
-      const ownershipChanged =
-        state.session.capture_epoch !== local.captureEpoch ||
-        (state.session.active_writer_id !== null &&
-          state.session.active_writer_id !== local.writerId);
-      if (ownershipChanged) {
+      const local = await getLatestLocalSession();
+      if (!local) return;
+      const state = (await this.inner.debugState()) ?? (await fetchRecordingState(local.sessionId));
+      if (this.serverStateFencesLocal(local, state)) {
         this.captureFenced = true;
         this.publish();
       }
@@ -98,6 +146,7 @@ export class FencedRecorderController {
   }
 
   async initialize(): Promise<void> {
+    if (await this.initializeFencedFromServerTruth()) return;
     await this.inner.initialize();
     await this.refreshFenceFromServer();
   }
@@ -136,7 +185,10 @@ export class FencedRecorderController {
   }
 
   async debugState(): Promise<RecordingStateResponse | null> {
-    return this.inner.debugState();
+    const state = await this.inner.debugState();
+    if (state) return state;
+    const local = await getLatestLocalSession();
+    return local ? fetchRecordingState(local.sessionId) : null;
   }
 
   async debugPendingChunks(): Promise<SpoolChunk[]> {
