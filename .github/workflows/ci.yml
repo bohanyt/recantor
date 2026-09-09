@@ -53,7 +53,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
       - name: Install API dependencies
-        run: uv sync --project apps/api --dev
+        run: uv sync --project apps/api --frozen --dev
       - name: Ruff lint
         run: uv run --project apps/api ruff check apps/api
       - name: Ruff format
@@ -106,9 +106,9 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
       - name: Install API dependencies for OpenAPI generation
-        run: uv sync --project apps/api --dev
+        run: uv sync --project apps/api --frozen --dev
       - name: Install web dependencies
-        run: pnpm --dir apps/web install --no-frozen-lockfile
+        run: pnpm --dir apps/web install --frozen-lockfile
       - name: Start API for OpenAPI generation
         run: |
           uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-api.log 2>&1 &
@@ -171,8 +171,8 @@ jobs:
           run_install: false
       - name: Install dependencies
         run: |
-          uv sync --project apps/api --dev
-          pnpm --dir apps/web install --no-frozen-lockfile
+          uv sync --project apps/api --frozen --dev
+          pnpm --dir apps/web install --frozen-lockfile
       - name: Migrate database
         run: uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
       - name: Start API
@@ -201,44 +201,3 @@ jobs:
           exit 1
       - name: Browser smoke
         run: pnpm --dir apps/web test:e2e
-
-  bootstrap-lockfiles:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: ${{ env.UV_VERSION }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-      - name: Resolve dependency lockfiles
-        run: |
-          uv lock --project apps/api
-          pnpm --dir apps/web install --lockfile-only --no-frozen-lockfile
-      - name: Commit resolved lockfiles when changed
-        run: |
-          if [ -z "$(git status --porcelain -- apps/api/uv.lock apps/web/pnpm-lock.yaml)" ]; then
-            echo "Lockfiles already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/uv.lock apps/web/pnpm-lock.yaml
-          git commit -m "Commit resolved dependency lockfiles"
-          git push origin "HEAD:${{ github.head_ref }}"
