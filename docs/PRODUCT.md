@@ -34,6 +34,8 @@ Expected live experience:
 
 The live summary may lag behind the transcript. That is acceptable. Summary latency must never be allowed to block recording.
 
+A trusted development build may prove recording reliability before authentication exists, but the Live Intelligence workflow is not production-ready until session ownership and authorization are implemented.
+
 ### 2. Transcribe Recording
 
 A user can provide an existing audio/video recording and receive a transcript and exports.
@@ -82,17 +84,27 @@ The intended browser durability model is:
 1. capture audio;
 2. persist an encoded chunk in local browser storage;
 3. upload with session ID and monotonic sequence number;
-4. server durably writes the chunk;
+4. server durably writes the chunk and acceptance metadata;
 5. server acknowledges the sequence;
 6. browser may then delete its local copy.
 
-If the network disappears, unacknowledged chunks remain local and are retried.
+If the network disappears, unacknowledged chunks remain local and are retried while browser capture/execution remains alive.
+
+Browser local storage is a recovery spool, not the same durability guarantee as a server ACK. Recantor should request persistent origin storage when available, monitor local quota, and visibly report when the local recovery path is no longer safe.
 
 If the browser reconnects, client and server reconcile acknowledged/missing sequences.
 
+Only one active capture writer should own a live session at a time. Multiple tabs/devices must not silently create competing sequence streams for one session.
+
+### Stop and finalization
+
+A clean Stop has a declared final sequence/high-water mark. Recantor should not mark a session complete until every expected sequence through that boundary is either durably present or explicitly represented as a gap/failure.
+
+If a browser disappears without a clean Stop, the session becomes interrupted rather than silently complete.
+
 ### Interruptions
 
-A browser closing, crashing, refreshing, losing network, or being suspended must not silently transform an incomplete recording into a complete one.
+A browser closing, crashing, refreshing, losing network, sleeping, or being suspended must not silently transform an incomplete recording into a complete one.
 
 Sessions may enter an interrupted/recovering state. When the user returns, Recantor should offer recovery where possible and show any audio gap it cannot recover.
 
@@ -122,6 +134,27 @@ They add:
 - recovery from application/network interruptions.
 
 They should not introduce a separate transcript model or independent meeting backend.
+
+## Access, privacy, and retention
+
+Meeting audio and transcripts are sensitive data.
+
+For authenticated Live Intelligence:
+
+- sessions/audio/transcripts belong to an authenticated owner or authorized scope;
+- unguessable URLs are not an authorization model;
+- users need a visible way to delete recordings they own;
+- retention behavior must be explicit before production exposure.
+
+For guest workflows:
+
+- access uses high-entropy capability tokens;
+- tokens and results expire according to bounded retention;
+- upload/processing limits and abuse controls are required.
+
+Recantor is not designed for covert recording. The UI must make active recording obvious to the operator. Deployers/operators remain responsible for applicable participant notice and consent requirements in their jurisdiction and organization.
+
+Organization-wide roles, SSO policy, compliance retention rules, and similar enterprise policy can mature later without changing the capture model.
 
 ## Canonical outputs
 
@@ -190,8 +223,10 @@ Stopping a live meeting starts a finalization process.
 
 Finalization may include:
 
-- waiting for all accepted chunks;
+- reconciling the declared final sequence/high-water mark;
+- waiting for all expected chunks or explicitly recording gaps;
 - processing queued/untranscribed audio;
+- reconstructing/normalizing final audio;
 - reconciling transcript ordering;
 - higher-quality/offline diarization;
 - optional speaker identification;
@@ -207,6 +242,7 @@ Multiple simultaneous sessions are a normal product condition.
 Requirements:
 
 - strict session isolation;
+- one active capture writer per individual live session;
 - bounded concurrency;
 - fair scheduling across meetings;
 - separate queue priorities for latency-sensitive and deferrable work;
