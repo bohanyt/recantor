@@ -102,6 +102,30 @@ test('recovers IndexedDB audio after refresh when chunk uploads were unavailable
   await expect(page.getByTestId('pending-chunks')).toContainText('0 fragments');
 });
 
+test('surfaces recovery after the recording tab disappears without a clean Stop', async ({
+  context,
+}) => {
+  const recordingPage = await context.newPage();
+  await recordingPage.goto('/');
+  await recordingPage.getByTestId('start-recording').click();
+  await expect(recordingPage.getByTestId('recorder-message')).toContainText('Recording');
+  await recordingPage.waitForTimeout(2_600);
+  await recordingPage.close();
+
+  const recoveryPage = await context.newPage();
+  await recoveryPage.goto('/');
+  await expect(recoveryPage.getByTestId('resume-recording')).toBeVisible({ timeout: 10_000 });
+  await recoveryPage.getByTestId('resume-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText('Recording', {
+    timeout: 10_000,
+  });
+  await recoveryPage.waitForTimeout(2_200);
+  await recoveryPage.getByTestId('stop-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
+
 test('a second same-origin tab cannot silently become the active recorder', async ({
   page,
   context,
