@@ -43,15 +43,18 @@ Most important:
 
 > Capture is infrastructure. Intelligence is downstream.
 
-The future durable recording path is:
+The durable recording path is being delivered as:
 
 ```text
-capture -> local recovery spool -> sequenced upload -> durable server write -> ACK
+capture -> browser recovery spool -> sequenced upload
+        -> durable server audio + acceptance metadata -> ACK
 ```
+
+The server-side half of that contract is now implemented. The browser capture/recovery half is the next Phase 1 slice.
 
 STT, diarization, live transcript delivery, and LLM summaries are downstream and may degrade without invalidating already acknowledged audio.
 
-Non-optional recording guardrails already established before implementation:
+Non-optional recording guardrails:
 
 - browser IndexedDB is a recovery spool and must expose persistence/quota failure rather than pretending it is equivalent to server durability;
 - only one active capture writer may own a live session at once;
@@ -65,9 +68,9 @@ Non-optional recording guardrails already established before implementation:
 
 ## Repository state
 
-**Phase 0 application foundation is implemented and CI-proven.**
+### Phase 0 — complete
 
-Implemented:
+The runnable application foundation is implemented and CI-proven:
 
 - React + TypeScript + Vite + Tailwind web shell;
 - TanStack Query server-state usage;
@@ -87,15 +90,47 @@ Implemented:
 - real Chromium Playwright smoke from the web shell through the API to PostgreSQL readiness;
 - Docker Compose build/start/readiness/web-shell smoke in CI.
 
-The Phase 0 CI witness is intentionally bounded: it proves the scaffold and development path, not recording behavior.
+### Phase 1A — server durability core implemented and CI-proven
 
-Not implemented yet:
+The server-side recording contract now includes:
 
-- microphone recording;
-- Dexie/IndexedDB recording spool;
-- live session/chunk protocol;
-- capture ownership lease/epoch;
-- durable audio ACK path;
+- durable PostgreSQL live-session lifecycle;
+- explicit active writer ID and capture epoch;
+- competing/stale writer rejection for new capture;
+- heartbeat-based interruption derivation without inferring successful completion;
+- sequenced `/api/v1` binary chunk ingestion;
+- per-chunk writer/epoch/timing/content/hash identity evidence;
+- strict retry idempotency: a sequence can be retried only with matching accepted metadata and bytes;
+- filesystem `AudioStorage` using temp write, file flush/fsync, atomic replace, parent-directory fsync where available, and post-write integrity verification;
+- PostgreSQL acceptance metadata committed before the HTTP ACK is returned;
+- safe retry through the file-before-database crash window by reusing an identical orphaned durable file;
+- persistent Compose audio volume;
+- server reconciliation of accepted sequence ranges and highest contiguous sequence;
+- explicit sequence/wall-clock gap declarations with immutable idempotency keys;
+- final sequence/high-water-mark and monotonic-time boundaries;
+- rejection of a final boundary that excludes already accepted audio;
+- finalization that remains `FINALIZING` while expected sequences are missing;
+- explicit unrecoverable gaps as an alternative to fabricating continuity;
+- retry-safe completed finalization tied to the original finalizing writer/epoch;
+- two independent recording sessions proven isolated in automated tests.
+
+GitHub Actions run `34308690997` is the Phase 1A witness: backend, frontend, Chromium e2e, and Compose smoke all completed successfully after the final architecture/idempotency review changes.
+
+This evidence proves the **server-side recording contract**, not browser microphone capture or end-user recording reliability yet.
+
+### Not implemented/proven yet
+
+- browser microphone recording;
+- Dexie/IndexedDB recording recovery spool;
+- browser persistent-storage/quota handling;
+- browser retry/backoff and ACK-driven spool deletion;
+- refresh/reconnect browser recovery;
+- same-origin Web Locks/fallback tab coordination;
+- recorder UI durability/degraded states;
+- browser Stop flushing its final MediaRecorder event before finalization;
+- deterministic browser recovery/network-loss tests;
+- bounded real desktop Chrome/Edge background/minimized recording witness;
+- cross-device capture takeover after an interrupted writer;
 - background/Celery workers;
 - Groq or local STT;
 - diarization;
@@ -109,24 +144,25 @@ Do not describe any of those as working until repository evidence proves it.
 
 ## Immediate next delivery
 
-GitHub Issue #5: **Phase 1: reliable desktop browser recording and recovery**.
+GitHub Issue #5 remains open for **Phase 1: reliable desktop browser recording and recovery**.
 
-Phase 1 is the first durability-critical product slice. It must implement and prove:
+The immediate next slice is **Phase 1B: browser recorder and recovery client**, built on the Phase 1A server contract. It must add and prove:
 
-- durable live session lifecycle in PostgreSQL;
-- one active capture writer per live session;
-- browser microphone capture;
-- Dexie/IndexedDB local recovery spool;
-- persistent-storage/quota safety state;
-- monotonically sequenced, idempotent chunk ingestion;
-- filesystem `AudioStorage` with durable ACK semantics;
-- retry/reconnect and server/client acknowledgement reconciliation;
-- heartbeat/interruption state;
-- final sequence/high-water-mark finalization;
-- explicit gaps when continuity cannot be proven;
-- two simultaneous independent sessions;
-- same-session competing-tab rejection;
-- bounded real-browser desktop background/minimized witness.
+- microphone permission/capability handling and MediaRecorder capture;
+- Dexie/IndexedDB local recovery spool before upload;
+- stable session/writer identity across refresh recovery;
+- persistent-storage request/status and quota monitoring;
+- monotonically sequenced chunks with Web Crypto SHA-256;
+- bounded retry/backoff;
+- delete-local-only-after-durable-ACK behavior;
+- server/client accepted-sequence reconciliation after reconnect;
+- same-origin tab coordination plus server-authoritative writer rejection;
+- heartbeat/interruption recovery behavior;
+- clean Stop that waits for the final `dataavailable`, persists it, flushes pending uploads, and then finalizes the declared high-water mark;
+- visible pending/synced/degraded/unsafe/gap states;
+- deterministic Playwright recovery scenarios where browser automation can prove them.
+
+The final Phase 1 exit still requires a bounded real Chrome/Edge background/minimized witness on an awake desktop. CI must not be used to overclaim that operating-system/browser-lifecycle behavior.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
@@ -155,6 +191,7 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 - Raw audio is not stored as database blobs.
 - Multiple simultaneous sessions are a normal operating condition, not an edge case.
 - A single live session has one active capture writer at a time.
+- Current Phase 1A recovery ownership is same-writer/same-epoch; cross-device takeover is intentionally not claimed.
 - Public upstream must remain free of deployment secrets and organization-private data.
 
 ## Handoff rule
