@@ -43,16 +43,18 @@ Most important:
 
 > Capture is infrastructure. Intelligence is downstream.
 
-The durable recording path is being delivered as:
+The implemented browser/server durability path is now:
 
 ```text
-capture -> browser recovery spool -> sequenced upload
-        -> durable server audio + acceptance metadata -> ACK
+MediaRecorder
+  -> atomic Dexie/IndexedDB chunk + local high-water commit
+  -> sequenced HTTP upload with hash/timing/ownership evidence
+  -> crash-safe filesystem audio commit + PostgreSQL acceptance metadata
+  -> HTTP ACK
+  -> local chunk deletion
 ```
 
-The server-side half of that contract is now implemented. The browser capture/recovery half is the next Phase 1 slice.
-
-STT, diarization, live transcript delivery, and LLM summaries are downstream and may degrade without invalidating already acknowledged audio.
+STT, diarization, live transcript delivery, and LLM summaries remain downstream and are intentionally absent from Phase 1.
 
 Non-optional recording guardrails:
 
@@ -60,7 +62,7 @@ Non-optional recording guardrails:
 - only one active capture writer may own a live session at once;
 - Stop/finalize declares a final sequence/high-water mark;
 - a server ACK requires durable audio plus durable acceptance metadata;
-- raw MediaRecorder chunks must not be assumed independently decodable;
+- raw MediaRecorder chunks are ordered media fragments and must not be assumed independently decodable;
 - product API routes start versioned under `/api/v1`;
 - `/healthz` is process liveness and `/readyz` is dependency readiness;
 - Live Intelligence must gain authentication/ownership before production exposure;
@@ -78,91 +80,112 @@ The runnable application foundation is implemented and CI-proven:
 - `/healthz` process liveness;
 - `/readyz` PostgreSQL readiness, including a negative 503 proof when PostgreSQL is unavailable;
 - versioned `/api/v1` product namespace;
-- OpenAPI-generated TypeScript API client used by the web application;
+- OpenAPI-generated TypeScript API client contract;
 - PostgreSQL connectivity through SQLAlchemy 2;
-- Alembic migration history and migration execution;
+- Alembic migration history and execution;
 - Redis development service and CI reachability proof;
 - pinned Node/Python/tooling baselines and committed `uv`/`pnpm` lockfiles;
 - Docker images using frozen dependency installs;
 - Docker Compose development stack with PostgreSQL, Redis, one-shot migration, API, and web services;
-- backend tests/lint/format checks;
-- frontend lint/format/typecheck/unit/build checks;
-- real Chromium Playwright smoke from the web shell through the API to PostgreSQL readiness;
-- Docker Compose build/start/readiness/web-shell smoke in CI.
+- backend and frontend lint/format/typecheck/test/build gates;
+- real Chromium Playwright shell/API/readiness smoke;
+- Docker Compose build/start/readiness smoke.
 
-### Phase 1A — server durability core implemented and CI-proven
+### Phase 1A — merged server durability core
 
-The server-side recording contract now includes:
+PR #6 is merged to `main` at `40053821aa470728083b5235070ad626d1c76be2`.
+
+The server-side recording contract includes:
 
 - durable PostgreSQL live-session lifecycle;
 - explicit active writer ID and capture epoch;
-- competing/stale writer rejection for new capture;
+- stale/competing writer checks;
 - heartbeat-based interruption derivation without inferring successful completion;
 - sequenced `/api/v1` binary chunk ingestion;
 - per-chunk writer/epoch/timing/content/hash identity evidence;
 - strict retry idempotency: a sequence can be retried only with matching accepted metadata and bytes;
-- filesystem `AudioStorage` using temp write, file flush/fsync, atomic replace, parent-directory fsync where available, and post-write integrity verification;
-- PostgreSQL acceptance metadata committed before the HTTP ACK is returned;
+- filesystem `AudioStorage` using temp write, flush/fsync, atomic replace, parent-directory fsync where available, and post-write integrity verification;
+- PostgreSQL acceptance metadata committed before HTTP ACK;
 - safe retry through the file-before-database crash window by reusing an identical orphaned durable file;
 - persistent Compose audio volume;
-- server reconciliation of accepted sequence ranges and highest contiguous sequence;
-- explicit sequence/wall-clock gap declarations with immutable idempotency keys;
-- final sequence/high-water-mark and monotonic-time boundaries;
-- rejection of a final boundary that excludes already accepted audio;
-- finalization that remains `FINALIZING` while expected sequences are missing;
-- explicit unrecoverable gaps as an alternative to fabricating continuity;
-- retry-safe completed finalization tied to the original finalizing writer/epoch;
-- two independent recording sessions proven isolated in automated tests.
+- accepted sequence range/highest-contiguous reconciliation;
+- immutable explicit sequence/wall-clock gap declarations;
+- final sequence/high-water and monotonic-time boundaries;
+- rejection of final boundaries that exclude accepted audio;
+- finalization that remains incomplete while expected evidence is missing;
+- retry-safe completed finalization tied to the finalizing writer/epoch;
+- automated isolation of independent concurrent sessions.
 
-GitHub Actions run `34308690997` is the Phase 1A witness: backend, frontend, Chromium e2e, and Compose smoke all completed successfully after the final architecture/idempotency review changes.
+### Phase 1B — browser recorder implemented and automated-CI proven on PR #7
 
-This evidence proves the **server-side recording contract**, not browser microphone capture or end-user recording reliability yet.
+The browser half now implements:
 
-### Not implemented/proven yet
+- microphone permission/capability handling and `MediaRecorder` capture;
+- Dexie/IndexedDB recovery spool;
+- atomic local commit of each captured fragment together with the local sequence/timing high-water, preventing a crash/race window that could overwrite an unacknowledged sequence;
+- Web Crypto SHA-256 per fragment;
+- delete-local-only-after-server-ACK behavior;
+- bounded upload retry/backoff;
+- reconnect/manual sync reconciliation against server accepted ranges;
+- persistent-origin-storage request/status and quota safety reporting;
+- same-origin capture coordination using Web Locks with a local-storage fallback;
+- a transactional IndexedDB stale-writer fence as a final local guard against silent same-sequence overwrite;
+- heartbeat/interruption/recovery UX;
+- clean Stop that waits for MediaRecorder stop/final data, drains the local async persistence chain, flushes pending uploads, then finalizes the declared high-water mark;
+- explicit unsafe/recoverable behavior when IndexedDB chunk persistence fails instead of continuing to claim safe recording;
+- explicit wall-clock gap evidence for uncertain recovery intervals;
+- responsive recorder UI with pending/synced/recoverable/unsafe state.
 
-- browser microphone recording;
-- Dexie/IndexedDB recording recovery spool;
-- browser persistent-storage/quota handling;
-- browser retry/backoff and ACK-driven spool deletion;
-- refresh/reconnect browser recovery;
-- same-origin Web Locks/fallback tab coordination;
-- recorder UI durability/degraded states;
-- browser Stop flushing its final MediaRecorder event before finalization;
-- deterministic browser recovery/network-loss tests;
-- bounded real desktop Chrome/Edge background/minimized recording witness;
-- cross-device capture takeover after an interrupted writer;
-- background/Celery workers;
+The latest exact-code automated witness before this documentation reconciliation is GitHub Actions run `34312039836` on commit `1f8d22d2f8711d6aa05dc90f87ff7d9120f49a6c`; all four CI jobs completed successfully.
+
+Automated browser evidence includes:
+
+- normal fake-microphone capture -> local spool -> durable ACK -> clean finalization;
+- two independent browser contexts recording/finalizing concurrently without session mixing;
+- temporary chunk-upload failure while capture continues into IndexedDB, followed by catch-up and clean finalization;
+- page refresh with unacknowledged IndexedDB audio followed by recovery/finalization;
+- disappearance of the recording tab without clean Stop followed by a recovery page, resumed capture, and finalization;
+- rejection of a competing same-origin tab attempting to resume while the owning tab still holds the capture lock;
+- a bounded Chromium background-tab interval while the browser process remains awake, followed by clean finalization;
+- injected IndexedDB chunk-write failure causing capture to stop and surface an explicit unsafe/recoverable state rather than hiding the continuity uncertainty;
+- storage-persistence granted/denied and low-quota safety-state unit tests;
+- API process restart after an acknowledged audio chunk, followed by an idempotent retry that proves the durable audio file and PostgreSQL acceptance ledger survived the restart.
+
+The automated background-tab test is **not** evidence that an operating-system-minimized Chrome/Edge window, sleeping laptop, closed browser, or mobile-backgrounded browser is universally reliable. A bounded real desktop witness is still required before Phase 1 is called complete.
+
+## Remaining Phase 1 work before closing Issue #5
+
+Phase 1 is not finished yet.
+
+Two bounded items remain:
+
+1. **Capture-generation ownership hardening.** The current recovery client deliberately reuses the same persistent writer ID/capture epoch after a page interruption so previously spooled chunks remain uploadable. That is workable for the current same-origin browser slice, but it does not yet fully satisfy ADR 0002's stronger distinction between uploading old recovery chunks and owning a newly started live capture generation. A follow-up must rotate/fence new capture ownership without making already-spooled recovery data unrecoverable, and must preserve retry-safe recovery semantics.
+2. **Real desktop witness.** Run a bounded Chrome and/or Edge test on an awake desktop/laptop with the window backgrounded/minimized and normal application switching. Record exact OS/browser/version/duration and verify the final server/local evidence. CI cannot substitute for that platform witness.
+
+Until item 1 is fixed, do not describe the capture epoch as a complete cross-tab/device takeover fence. Until item 2 is witnessed, describe automated background behavior only as the tested Chromium background-tab case.
+
+Cross-device takeover remains intentionally out of scope for the initial web slice; future native/authenticated clients can add a stronger device/user ownership model on top of the same session/ingest contracts.
+
+## Not implemented yet
+
+- background/Celery processing workers;
 - Groq or local STT;
+- realtime transcript delivery;
 - diarization;
-- summaries;
+- rolling/final summaries;
 - tus upload pipeline;
 - authentication/authorization;
+- recording deletion/retention UI;
 - production deployment/reverse proxy;
-- native mobile clients.
+- native Android/iOS clients.
 
-Do not describe any of those as working until repository evidence proves it.
+Do not describe those as working until repository evidence proves them.
 
 ## Immediate next delivery
 
-GitHub Issue #5 remains open for **Phase 1: reliable desktop browser recording and recovery**.
+GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**.
 
-The immediate next slice is **Phase 1B: browser recorder and recovery client**, built on the Phase 1A server contract. It must add and prove:
-
-- microphone permission/capability handling and MediaRecorder capture;
-- Dexie/IndexedDB local recovery spool before upload;
-- stable session/writer identity across refresh recovery;
-- persistent-storage request/status and quota monitoring;
-- monotonically sequenced chunks with Web Crypto SHA-256;
-- bounded retry/backoff;
-- delete-local-only-after-durable-ACK behavior;
-- server/client accepted-sequence reconciliation after reconnect;
-- same-origin tab coordination plus server-authoritative writer rejection;
-- heartbeat/interruption recovery behavior;
-- clean Stop that waits for the final `dataavailable`, persists it, flushes pending uploads, and then finalizes the declared high-water mark;
-- visible pending/synced/degraded/unsafe/gap states;
-- deterministic Playwright recovery scenarios where browser automation can prove them.
-
-The final Phase 1 exit still requires a bounded real Chrome/Edge background/minimized witness on an awake desktop. CI must not be used to overclaim that operating-system/browser-lifecycle behavior.
+After PR #7 is merged, the immediate implementation slice is the capture-generation ownership hardening described above, followed by the bounded real desktop Chrome/Edge witness.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
@@ -185,13 +208,14 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 
 - Browser background/minimized recording on an awake desktop is a core web use case to prove in Phase 1.
 - Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
-- Browser local storage may be best-effort unless persistent storage is granted; UI must reflect unsafe/degraded recovery state.
+- Browser local storage may be best-effort unless persistent storage is granted; UI must reflect degraded/unsafe recovery state.
+- A currently open MediaRecorder fragment is not yet a durable IndexedDB/server chunk; abrupt process/device loss can therefore lose an un-emitted bounded tail even when all earlier emitted chunks are safe.
 - WebSocket is for realtime updates, not durable state.
 - Redis is not durable source of truth.
 - Raw audio is not stored as database blobs.
 - Multiple simultaneous sessions are a normal operating condition, not an edge case.
 - A single live session has one active capture writer at a time.
-- Current Phase 1A recovery ownership is same-writer/same-epoch; cross-device takeover is intentionally not claimed.
+- Current Phase 1B recovery ownership is same-origin/same-writer/same-epoch; stronger new-generation fencing is the next Phase 1 slice.
 - Public upstream must remain free of deployment secrets and organization-private data.
 
 ## Handoff rule
