@@ -1,0 +1,28 @@
+name: Resolve web lockfile
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-web-lockfile:
+    if: github.head_ref == 'phase1/browser-recorder'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "11.7.0"
+          run_install: false
+      - name: Resolve web lockfile
+        run: pnpm --dir apps/web install --lockfile-only --no-frozen-lockfile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1b-web-lockfile
+          path: apps/web/pnpm-lock.yaml
+          if-no-files-found: error
