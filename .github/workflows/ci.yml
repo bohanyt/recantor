@@ -126,6 +126,12 @@ jobs:
         run: |
           pnpm --dir apps/web exec prettier --write src/recorder/controller.ts e2e/missing-sequence.spec.ts
           git diff -- apps/web/src/recorder/controller.ts apps/web/e2e/missing-sequence.spec.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prettier-issue13
+          path: |
+            apps/web/src/recorder/controller.ts
+            apps/web/e2e/missing-sequence.spec.ts
       - name: Frontend format
         run: pnpm --dir apps/web format:check
       - name: Frontend typecheck
