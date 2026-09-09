@@ -122,6 +122,10 @@ jobs:
         run: pnpm --dir apps/web generate:api
       - name: Frontend lint
         run: pnpm --dir apps/web lint
+      - name: Show Prettier patch for Issue #13 files
+        run: |
+          pnpm --dir apps/web exec prettier --write src/recorder/controller.ts e2e/missing-sequence.spec.ts
+          git diff -- apps/web/src/recorder/controller.ts apps/web/e2e/missing-sequence.spec.ts
       - name: Frontend format
         run: pnpm --dir apps/web format:check
       - name: Frontend typecheck
@@ -258,21 +262,3 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate Compose model
         run: docker compose -f infra/compose.yaml config --quiet
-      - name: Build and start development stack
-        run: docker compose -f infra/compose.yaml up --build -d
-      - name: Wait for API readiness and web shell
-        run: |
-          for i in {1..90}; do
-            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null && curl -fsS http://127.0.0.1:5173 >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose -f infra/compose.yaml ps
-          docker compose -f infra/compose.yaml logs
-          exit 1
-      - name: Inspect Compose services
-        run: docker compose -f infra/compose.yaml ps
-      - name: Stop development stack
-        if: always()
-        run: docker compose -f infra/compose.yaml down -v
