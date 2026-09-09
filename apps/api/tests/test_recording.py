@@ -3,6 +3,7 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
@@ -13,7 +14,7 @@ from recantor.recording import utcnow
 from recantor.settings import get_settings
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(clean_recording_state) -> AsyncClient:
     del clean_recording_state
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
