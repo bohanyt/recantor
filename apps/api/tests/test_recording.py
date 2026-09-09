@@ -161,9 +161,7 @@ async def test_finalize_waits_for_missing_chunk_then_completes(client: AsyncClie
         "final_monotonic_end_ms": 6000,
         "gap_sequences": [],
     }
-    incomplete = await client.post(
-        f"/api/v1/sessions/{session_id}/finalize", json=finalize_body
-    )
+    incomplete = await client.post(f"/api/v1/sessions/{session_id}/finalize", json=finalize_body)
     assert incomplete.status_code == 200
     assert incomplete.json()["complete"] is False
     assert incomplete.json()["missing_sequences"] == [2]
@@ -181,9 +179,7 @@ async def test_finalize_waits_for_missing_chunk_then_completes(client: AsyncClie
     )
     assert recovered.status_code == 200
 
-    complete = await client.post(
-        f"/api/v1/sessions/{session_id}/finalize", json=finalize_body
-    )
+    complete = await client.post(f"/api/v1/sessions/{session_id}/finalize", json=finalize_body)
     assert complete.status_code == 200
     assert complete.json()["complete"] is True
     assert complete.json()["missing_sequences"] == []

@@ -73,10 +73,7 @@ def _validate_writer(session: RecordingSession, writer_id: str, capture_epoch: i
 def _validate_completed_finalizer(
     session: RecordingSession, writer_id: str, capture_epoch: int
 ) -> None:
-    if (
-        session.finalized_writer_id != writer_id
-        or session.finalized_capture_epoch != capture_epoch
-    ):
+    if session.finalized_writer_id != writer_id or session.finalized_capture_epoch != capture_epoch:
         raise StaleWriter("finalize retry does not match the completed capture owner")
 
 
