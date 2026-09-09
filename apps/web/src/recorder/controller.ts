@@ -90,7 +90,9 @@ function requestCancelled(error: unknown): boolean {
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (!signal) return new Promise((resolve) => window.setTimeout(resolve, ms));
   if (signal.aborted) {
-    return Promise.reject(new RecordingApiError('recording request was cancelled', null, 'aborted'));
+    return Promise.reject(
+      new RecordingApiError('recording request was cancelled', null, 'aborted'),
+    );
   }
 
   return new Promise((resolve, reject) => {
@@ -468,11 +470,7 @@ export class RecorderController {
         deferred
           ? 'Finalization deferred. Local recovery state was kept.'
           : 'Capture stopped. Local recovery state was kept instead of claiming completion.',
-        deferred
-          ? null
-          : error instanceof Error
-            ? error.message
-            : 'Failed to finalize recording.',
+        deferred ? null : error instanceof Error ? error.message : 'Failed to finalize recording.',
       );
     } finally {
       if (this.finalizationAbortController === finalizationAbortController) {
@@ -565,7 +563,9 @@ export class RecorderController {
       const deferred = this.finalizationDeferred || requestCancelled(error);
       await this.keepStoppedSessionRecoverable(
         current,
-        deferred ? 'Finalization deferred. Recovered audio remains available locally.' : 'Recovered audio remains available locally.',
+        deferred
+          ? 'Finalization deferred. Recovered audio remains available locally.'
+          : 'Recovered audio remains available locally.',
         deferred
           ? null
           : error instanceof Error
