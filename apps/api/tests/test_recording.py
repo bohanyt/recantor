@@ -266,7 +266,9 @@ async def test_two_sessions_keep_sequences_and_audio_metadata_isolated(client: A
 
 
 @pytest.mark.asyncio
-async def test_stale_heartbeat_becomes_interrupted_without_becoming_complete(client: AsyncClient) -> None:
+async def test_stale_heartbeat_becomes_interrupted_without_becoming_complete(
+    client: AsyncClient,
+) -> None:
     writer = "writer-heartbeat-0001"
     session_id, _ = await create_session(client, writer)
 

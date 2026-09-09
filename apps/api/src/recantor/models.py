@@ -39,7 +39,9 @@ class RecordingSession(Base):
     )
     active_writer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     capture_epoch: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     interrupted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     final_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     final_monotonic_end_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

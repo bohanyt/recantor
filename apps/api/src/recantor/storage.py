@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -99,10 +100,8 @@ class FilesystemAudioStorage:
             os.replace(temp_path, final_path)
             self._fsync_directory(final_path.parent)
         finally:
-            try:
+            with suppress(OSError):
                 temp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
         stored_hash, stored_length = self._digest_file(final_path)
         if stored_hash != sha256 or stored_length != len(payload):

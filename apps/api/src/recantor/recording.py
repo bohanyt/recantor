@@ -10,7 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recantor.models import RecordingChunk, RecordingGap, RecordingSession, SessionKind, SessionState
+from recantor.models import (
+    RecordingChunk,
+    RecordingGap,
+    RecordingSession,
+    SessionKind,
+    SessionState,
+)
 from recantor.schemas import SequenceRange
 from recantor.settings import get_settings
 from recantor.storage import FilesystemAudioStorage
@@ -119,7 +125,9 @@ async def create_live_session(
         if existing is None:
             raise
         if existing.active_writer_id != writer_id:
-            raise RecordingConflict("idempotency key already belongs to a different writer") from None
+            raise RecordingConflict(
+                "idempotency key already belongs to a different writer"
+            ) from None
         return existing
     await db.refresh(session)
     return session
@@ -275,7 +283,9 @@ async def accept_chunk(
                 byte_length=existing.byte_length,
             )
             if not valid:
-                raise RecordingConflict("accepted chunk metadata exists but durable audio is missing")
+                raise RecordingConflict(
+                    "accepted chunk metadata exists but durable audio is missing"
+                )
             return existing, True
 
         _validate_writer(session, writer_id, capture_epoch)
@@ -383,12 +393,16 @@ async def finalize_session(
         session = await _locked_session(db, session_id)
         _validate_writer(session, writer_id, capture_epoch)
         if session.final_sequence is not None and session.final_sequence != final_sequence:
-            raise RecordingConflict("final sequence boundary conflicts with an earlier finalize request")
+            raise RecordingConflict(
+                "final sequence boundary conflicts with an earlier finalize request"
+            )
         if (
             session.final_monotonic_end_ms is not None
             and session.final_monotonic_end_ms != final_monotonic_end_ms
         ):
-            raise RecordingConflict("final monotonic boundary conflicts with an earlier finalize request")
+            raise RecordingConflict(
+                "final monotonic boundary conflicts with an earlier finalize request"
+            )
 
         session.final_sequence = final_sequence
         session.final_monotonic_end_ms = final_monotonic_end_ms
