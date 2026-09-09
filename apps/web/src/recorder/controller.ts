@@ -205,7 +205,12 @@ export class RecorderController {
   }
 
   async start(): Promise<void> {
-    if (this.snapshot.phase !== 'idle' && this.snapshot.phase !== 'complete') return;
+    if (
+      this.snapshot.phase !== 'idle' &&
+      this.snapshot.phase !== 'complete' &&
+      this.snapshot.phase !== 'error'
+    )
+      return;
     this.captureFaulted = false;
     this.patch({
       phase: 'requesting',
