@@ -42,7 +42,9 @@ async function readRecorderState(page: Page): Promise<{
 
     try {
       const transaction = database.transaction(['sessions', 'chunks'], 'readonly');
-      const sessions = (await requestResult(transaction.objectStore('sessions').getAll())) as Array<{
+      const sessions = (await requestResult(
+        transaction.objectStore('sessions').getAll(),
+      )) as Array<{
         sessionId: string;
         writerId: string;
         captureEpoch: number;
@@ -80,7 +82,11 @@ async function readRecorderState(page: Page): Promise<{
   });
 }
 
-async function externalClaim(page: Page, session: BrowserSession, writerId: string): Promise<number> {
+async function externalClaim(
+  page: Page,
+  session: BrowserSession,
+  writerId: string,
+): Promise<number> {
   expect(session.recoveryToken).toBeTruthy();
   const response = await page.request.post(
     `${API_BASE_URL}/api/v1/sessions/${session.sessionId}/capture/claim`,
@@ -150,10 +156,17 @@ test('chunk fencing retains conflicting old-epoch audio through reconciliation',
 
   await expectFencedUi(page);
   await expect
-    .poll(async () => {
-      const state = await readRecorderState(page);
-      return state.chunks.find((chunk) => chunk.captureEpoch === beforeClaim.session!.captureEpoch) ?? null;
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const state = await readRecorderState(page);
+        return (
+          state.chunks.find(
+            (chunk) => chunk.captureEpoch === beforeClaim.session!.captureEpoch,
+          ) ?? null
+        );
+      },
+      { timeout: 10_000 },
+    )
     .not.toBeNull();
 
   const afterFence = await readRecorderState(page);
