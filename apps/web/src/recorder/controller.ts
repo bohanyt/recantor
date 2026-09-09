@@ -16,10 +16,12 @@ import {
 import {
   appendCapturedChunk,
   chunkKey,
+  commitStartedSession,
   countSpoolChunks,
   deleteLocalSession,
   deleteSpoolChunk,
   getLatestLocalSession,
+  getOrCreatePendingStart,
   listSpoolChunks,
   putLocalSession,
   type LocalRecordingSession,
@@ -31,7 +33,13 @@ import { inspectStorageSafety, type StorageSafety } from './storageSafety';
 import { acquireCaptureTabLock, type CaptureTabLock } from './tabCoordinator';
 
 export type RecorderPhase =
-  'idle' | 'requesting' | 'recording' | 'recoverable' | 'finalizing' | 'complete' | 'error';
+  | 'idle'
+  | 'requesting'
+  | 'recording'
+  | 'recoverable'
+  | 'finalizing'
+  | 'complete'
+  | 'error';
 
 export type RecorderSnapshot = {
   phase: RecorderPhase;
@@ -73,7 +81,12 @@ function defaultSnapshot(): RecorderSnapshot {
 }
 
 function chooseMimeType(): string {
-  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ];
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
 }
 
@@ -87,9 +100,7 @@ function sleep(ms: number): Promise<void> {
 
 function isRetryableUpload(error: unknown): boolean {
   if (!(error instanceof RecordingApiError)) return false;
-  return (
-    error.status === null || error.status === 408 || error.status === 429 || error.status >= 500
-  );
+  return error.status === null || error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
 export class RecorderController {
@@ -104,6 +115,7 @@ export class RecorderController {
   private chunkChain: Promise<void> = Promise.resolve();
   private syncPromise: Promise<void> | null = null;
   private spoolFailurePromise: Promise<void> | null = null;
+  private captureInterruptionPromise: Promise<void> | null = null;
   private heartbeatTimer: number | null = null;
   private clockTimer: number | null = null;
   private storageTimer: number | null = null;
@@ -166,6 +178,7 @@ export class RecorderController {
       }
       const pendingChunks = await countSpoolChunks(local.sessionId);
       if (!this.lifecycleCurrent(lifecycleVersion)) return;
+      const legacy = !local.recoveryToken;
       this.patch({
         phase: 'recoverable',
         sessionId: local.sessionId,
@@ -173,7 +186,9 @@ export class RecorderController {
         highestAckedSequence: state.highest_contiguous_sequence,
         gapCount: state.gaps.length,
         elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
-        message: 'Interrupted recording found. Resume it or finish the recovered audio.',
+        message: legacy
+          ? 'Legacy recovery found. Existing audio can be finished, but a new capture generation cannot be started.'
+          : 'Interrupted recording found. Resume it or finish the recovered audio.',
       });
     } catch (error) {
       if (!this.lifecycleCurrent(lifecycleVersion)) return;
@@ -212,19 +227,21 @@ export class RecorderController {
     let stream: MediaStream | null = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const writerId = crypto.randomUUID();
-      const clientRequestId = crypto.randomUUID();
+      const pending = await getOrCreatePendingStart();
       const remote = await createLiveSession({
-        client_request_id: clientRequestId,
-        writer_id: writerId,
+        client_request_id: pending.clientRequestId,
+        writer_id: pending.writerId,
+        recovery_token: pending.recoveryToken,
       });
       const mimeType = chooseMimeType();
       const now = Date.now();
       const local: LocalRecordingSession = {
         sessionId: remote.id,
-        clientRequestId,
-        writerId,
+        clientRequestId: pending.clientRequestId,
+        writerId: pending.writerId,
         captureEpoch: remote.capture_epoch,
+        recoveryToken: pending.recoveryToken,
+        pendingWriterId: null,
         state: 'recording',
         mimeType,
         lastSequence: 0,
@@ -234,7 +251,7 @@ export class RecorderController {
         createdAt: now,
         updatedAt: now,
       };
-      await putLocalSession(local);
+      await commitStartedSession(pending, local);
       this.localSession = local;
       this.captureLock = await acquireCaptureTabLock(local.sessionId, local.writerId);
       if (!this.captureLock) throw new Error('Another tab already owns this recording session.');
@@ -268,7 +285,7 @@ export class RecorderController {
       this.patch({
         phase: 'error',
         error: error instanceof Error ? error.message : 'Failed to start recording.',
-        message: 'Recording did not start.',
+        message: 'Recording did not start. The persisted start identity will be reused on retry.',
       });
     }
   }
@@ -276,10 +293,17 @@ export class RecorderController {
   async resume(): Promise<void> {
     const local = this.localSession ?? (await getLatestLocalSession());
     if (!local || this.snapshot.phase !== 'recoverable') return;
+    if (!local.recoveryToken) {
+      this.patch({
+        error: 'This legacy recovery session has no capture recovery capability.',
+        message: 'Finish the recovered audio instead of starting a new capture generation.',
+      });
+      return;
+    }
     this.patch({
       phase: 'requesting',
       error: null,
-      message: 'Reclaiming the interrupted recording…',
+      message: 'Reconciling old recovery audio before claiming a new capture generation…',
     });
     await this.refreshStorage(true);
 
@@ -292,15 +316,33 @@ export class RecorderController {
       const state = await fetchRecordingState(local.sessionId);
       await reconcileLocalSpool(local.sessionId, state);
       await this.syncNow();
+      const pending = await countSpoolChunks(local.sessionId);
+      if (pending > 0) {
+        throw new Error(
+          `${pending} recovery audio fragment(s) must receive a durable ACK before a new capture generation can start.`,
+        );
+      }
 
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const nextWriterId = local.pendingWriterId ?? crypto.randomUUID();
+      const claimIntent: LocalRecordingSession = local.pendingWriterId
+        ? local
+        : { ...local, pendingWriterId: nextWriterId, updatedAt: Date.now() };
+      if (!local.pendingWriterId) {
+        await putLocalSession(claimIntent);
+        this.localSession = claimIntent;
+      }
+
       const remote = await claimCapture(local.sessionId, {
-        writer_id: local.writerId,
+        writer_id: nextWriterId,
         expected_epoch: local.captureEpoch,
+        recovery_token: local.recoveryToken,
       });
       const resumed: LocalRecordingSession = {
-        ...local,
+        ...claimIntent,
+        writerId: nextWriterId,
         captureEpoch: remote.capture_epoch,
+        pendingWriterId: null,
         state: 'recording',
         updatedAt: Date.now(),
       };
@@ -318,7 +360,7 @@ export class RecorderController {
       this.patch({
         phase: 'recoverable',
         error: error instanceof Error ? error.message : 'Failed to resume recording.',
-        message: 'Recovery is still available; resume could not start.',
+        message: 'Recovery is still available; a new capture generation was not started.',
       });
     }
   }
@@ -399,25 +441,56 @@ export class RecorderController {
       this.captureLock = await acquireCaptureTabLock(local.sessionId, local.writerId);
       if (!this.captureLock) throw new Error('Another tab is already handling this recording.');
       this.patch({ lockKind: this.captureLock.kind });
-      const state = await fetchRecordingState(local.sessionId);
+
+      let state = await fetchRecordingState(local.sessionId);
       await reconcileLocalSpool(local.sessionId, state);
-      const remote = await claimCapture(local.sessionId, {
-        writer_id: local.writerId,
-        expected_epoch: local.captureEpoch,
-      });
-      const claimed: LocalRecordingSession = {
-        ...local,
-        captureEpoch: remote.capture_epoch,
-        updatedAt: Date.now(),
-      };
-      await putLocalSession(claimed);
-      this.localSession = claimed;
-      await this.recordRecoveryGap(claimed);
       await this.syncNow();
-      const pending = await countSpoolChunks(claimed.sessionId);
-      if (pending > 0)
+      const pending = await countSpoolChunks(local.sessionId);
+      if (pending > 0) {
         throw new Error(`${pending} local audio fragment(s) still lack a durable ACK.`);
-      await this.finalizeLocalSession(claimed);
+      }
+      state = await fetchRecordingState(local.sessionId);
+
+      let finalizingOwner = this.localSession ?? local;
+      if (finalizingOwner.pendingWriterId) {
+        const pendingWriterId = finalizingOwner.pendingWriterId;
+        if (
+          state.session.capture_epoch === finalizingOwner.captureEpoch + 1 &&
+          state.session.active_writer_id === pendingWriterId
+        ) {
+          if (!finalizingOwner.recoveryToken) {
+            throw new Error('Cannot recover an already-claimed generation without its capability.');
+          }
+          const remote = await claimCapture(finalizingOwner.sessionId, {
+            writer_id: pendingWriterId,
+            expected_epoch: finalizingOwner.captureEpoch,
+            recovery_token: finalizingOwner.recoveryToken,
+          });
+          finalizingOwner = {
+            ...finalizingOwner,
+            writerId: pendingWriterId,
+            captureEpoch: remote.capture_epoch,
+            pendingWriterId: null,
+            updatedAt: Date.now(),
+          };
+        } else if (
+          state.session.capture_epoch === finalizingOwner.captureEpoch &&
+          state.session.active_writer_id === finalizingOwner.writerId
+        ) {
+          finalizingOwner = {
+            ...finalizingOwner,
+            pendingWriterId: null,
+            updatedAt: Date.now(),
+          };
+        } else {
+          throw new Error('Capture ownership changed while recovery finalization was pending.');
+        }
+        await putLocalSession(finalizingOwner);
+        this.localSession = finalizingOwner;
+      }
+
+      await this.recordRecoveryGap(finalizingOwner);
+      await this.finalizeLocalSession(finalizingOwner);
     } catch (error) {
       this.releaseCaptureLock();
       this.patch({
@@ -451,11 +524,15 @@ export class RecorderController {
         });
     });
     recorder.addEventListener('error', () => {
-      this.patch({
-        error: 'MediaRecorder reported a capture error.',
-        message: 'Capture degraded.',
-      });
+      if (this.snapshot.phase !== 'recording') return;
+      void this.failCaptureBecauseMediaInterrupted('MediaRecorder reported a capture error.');
     });
+    for (const track of stream.getAudioTracks()) {
+      track.addEventListener('ended', () => {
+        if (this.snapshot.phase !== 'recording') return;
+        void this.failCaptureBecauseMediaInterrupted('The microphone track ended unexpectedly.');
+      });
+    }
 
     recorder.start(CHUNK_TIMESLICE_MS);
     this.startTimers();
@@ -463,7 +540,7 @@ export class RecorderController {
       phase: 'recording',
       sessionId: local.sessionId,
       error: null,
-      message: 'Recording. Audio is kept locally until the server durably acknowledges it.',
+      message: `Recording capture generation ${local.captureEpoch}. Emitted audio is kept locally until the server durably acknowledges it.`,
       elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
     });
   }
@@ -562,6 +639,43 @@ export class RecorderController {
     return this.spoolFailurePromise;
   }
 
+  private async failCaptureBecauseMediaInterrupted(message: string): Promise<void> {
+    if (this.captureInterruptionPromise) return this.captureInterruptionPromise;
+    this.captureInterruptionPromise = (async () => {
+      this.captureFaulted = true;
+      this.stopTimers();
+      try {
+        await this.stopMediaRecorder();
+      } catch {
+        stopStream(this.stream);
+        this.stream = null;
+        this.recorder = null;
+      }
+
+      const local = this.localSession;
+      if (local) {
+        const interrupted: LocalRecordingSession = {
+          ...local,
+          state: 'interrupted',
+          updatedAt: Date.now(),
+        };
+        await putLocalSession(interrupted);
+        this.localSession = interrupted;
+      }
+      this.releaseCaptureLock();
+      this.patch({
+        phase: 'recoverable',
+        pendingChunks: local ? await countSpoolChunks(local.sessionId) : 0,
+        error: message,
+        message:
+          'Capture stopped after a browser or microphone interruption. Already-emitted audio remains recoverable; the uncertain tail will be represented as a gap.',
+      });
+    })().finally(() => {
+      this.captureInterruptionPromise = null;
+    });
+    return this.captureInterruptionPromise;
+  }
+
   private async syncPending(): Promise<void> {
     const local = this.localSession;
     if (!local) return;
@@ -588,7 +702,7 @@ export class RecorderController {
           online: true,
           message:
             this.snapshot.phase === 'recording'
-              ? 'Recording — server sync is current.'
+              ? 'Recording — emitted audio is server-synced.'
               : this.snapshot.message,
         });
       }
