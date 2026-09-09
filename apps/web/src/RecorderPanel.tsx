@@ -44,7 +44,8 @@ export function RecorderPanel() {
     return () => controller.dispose();
   }, [controller]);
 
-  const canStart = snapshot.phase === 'idle' || snapshot.phase === 'complete';
+  const canStart =
+    snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error';
   const recoverable = snapshot.phase === 'recoverable';
   const busy = snapshot.phase === 'requesting' || snapshot.phase === 'finalizing';
 

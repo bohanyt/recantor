@@ -25,11 +25,13 @@ class ApiMetaResponse(BaseModel):
 class CreateLiveSessionRequest(BaseModel):
     client_request_id: UUID
     writer_id: str = Field(min_length=8, max_length=128)
+    recovery_token: str = Field(min_length=32, max_length=256)
 
 
 class CaptureClaimRequest(BaseModel):
     writer_id: str = Field(min_length=8, max_length=128)
-    expected_epoch: int | None = Field(default=None, ge=0)
+    expected_epoch: int = Field(ge=1)
+    recovery_token: str = Field(min_length=32, max_length=256)
 
 
 class HeartbeatRequest(BaseModel):
