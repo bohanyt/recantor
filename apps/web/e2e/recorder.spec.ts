@@ -8,12 +8,16 @@ test('records microphone audio through durable ACK and clean finalization', asyn
   await page.waitForTimeout(2_600);
   await page.getByTestId('stop-recording').click();
 
-  await expect(page.getByTestId('recorder-message')).toContainText('finalized', { timeout: 20_000 });
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
   await expect(page.getByTestId('pending-chunks')).toContainText('0 fragments');
   await expect(page.getByTestId('durability-state')).toContainText('Server synced');
 });
 
-test('recovers IndexedDB audio after refresh when chunk uploads were unavailable', async ({ page }) => {
+test('recovers IndexedDB audio after refresh when chunk uploads were unavailable', async ({
+  page,
+}) => {
   await page.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
@@ -28,11 +32,16 @@ test('recovers IndexedDB audio after refresh when chunk uploads were unavailable
   await page.unroute('**/api/v1/sessions/*/chunks/*');
   await page.getByTestId('finish-recovered').click();
 
-  await expect(page.getByTestId('recorder-message')).toContainText('finalized', { timeout: 20_000 });
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
   await expect(page.getByTestId('pending-chunks')).toContainText('0 fragments');
 });
 
-test('a second same-origin tab cannot silently become the active recorder', async ({ page, context }) => {
+test('a second same-origin tab cannot silently become the active recorder', async ({
+  page,
+  context,
+}) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
   await expect(page.getByTestId('recorder-message')).toContainText('Recording');
@@ -44,5 +53,7 @@ test('a second same-origin tab cannot silently become the active recorder', asyn
   await expect(secondPage.getByRole('alert')).toContainText('Another tab', { timeout: 10_000 });
 
   await page.getByTestId('stop-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('finalized', { timeout: 20_000 });
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
 });

@@ -31,13 +31,7 @@ import { inspectStorageSafety, type StorageSafety } from './storageSafety';
 import { acquireCaptureTabLock, type CaptureTabLock } from './tabCoordinator';
 
 export type RecorderPhase =
-  | 'idle'
-  | 'requesting'
-  | 'recording'
-  | 'recoverable'
-  | 'finalizing'
-  | 'complete'
-  | 'error';
+  'idle' | 'requesting' | 'recording' | 'recoverable' | 'finalizing' | 'complete' | 'error';
 
 export type RecorderSnapshot = {
   phase: RecorderPhase;
@@ -79,12 +73,7 @@ function defaultSnapshot(): RecorderSnapshot {
 }
 
 function chooseMimeType(): string {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
-  ];
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
 }
 
@@ -98,7 +87,9 @@ function sleep(ms: number): Promise<void> {
 
 function isRetryableUpload(error: unknown): boolean {
   if (!(error instanceof RecordingApiError)) return false;
-  return error.status === null || error.status === 408 || error.status === 429 || error.status >= 500;
+  return (
+    error.status === null || error.status === 408 || error.status === 429 || error.status >= 500
+  );
 }
 
 export class RecorderController {
@@ -142,7 +133,10 @@ export class RecorderController {
   };
 
   private readonly handleOffline = (): void => {
-    this.patch({ online: false, message: 'Offline. Unacknowledged audio remains in browser storage.' });
+    this.patch({
+      online: false,
+      message: 'Offline. Unacknowledged audio remains in browser storage.',
+    });
   };
 
   async initialize(): Promise<void> {
@@ -282,7 +276,11 @@ export class RecorderController {
   async resume(): Promise<void> {
     const local = this.localSession ?? (await getLatestLocalSession());
     if (!local || this.snapshot.phase !== 'recoverable') return;
-    this.patch({ phase: 'requesting', error: null, message: 'Reclaiming the interrupted recording…' });
+    this.patch({
+      phase: 'requesting',
+      error: null,
+      message: 'Reclaiming the interrupted recording…',
+    });
     await this.refreshStorage(true);
 
     let stream: MediaStream | null = null;
@@ -337,7 +335,10 @@ export class RecorderController {
   async stop(): Promise<void> {
     const local = this.localSession;
     if (!local || this.snapshot.phase !== 'recording') return;
-    this.patch({ phase: 'finalizing', message: 'Stopping capture and flushing the final audio fragment…' });
+    this.patch({
+      phase: 'finalizing',
+      message: 'Stopping capture and flushing the final audio fragment…',
+    });
     this.stopTimers();
 
     try {
@@ -358,7 +359,8 @@ export class RecorderController {
         this.patch({
           phase: 'recoverable',
           pendingChunks: pending,
-          message: 'Capture stopped, but some audio still needs a server ACK. Finish recovery later.',
+          message:
+            'Capture stopped, but some audio still needs a server ACK. Finish recovery later.',
         });
         return;
       }
@@ -388,7 +390,11 @@ export class RecorderController {
   async finishRecovered(): Promise<void> {
     const local = this.localSession;
     if (!local || this.snapshot.phase !== 'recoverable') return;
-    this.patch({ phase: 'finalizing', error: null, message: 'Reconciling recovered audio before finalization…' });
+    this.patch({
+      phase: 'finalizing',
+      error: null,
+      message: 'Reconciling recovered audio before finalization…',
+    });
     try {
       this.captureLock = await acquireCaptureTabLock(local.sessionId, local.writerId);
       if (!this.captureLock) throw new Error('Another tab is already handling this recording.');
@@ -409,7 +415,8 @@ export class RecorderController {
       await this.recordRecoveryGap(claimed);
       await this.syncNow();
       const pending = await countSpoolChunks(claimed.sessionId);
-      if (pending > 0) throw new Error(`${pending} local audio fragment(s) still lack a durable ACK.`);
+      if (pending > 0)
+        throw new Error(`${pending} local audio fragment(s) still lack a durable ACK.`);
       await this.finalizeLocalSession(claimed);
     } catch (error) {
       this.releaseCaptureLock();
@@ -444,7 +451,10 @@ export class RecorderController {
         });
     });
     recorder.addEventListener('error', () => {
-      this.patch({ error: 'MediaRecorder reported a capture error.', message: 'Capture degraded.' });
+      this.patch({
+        error: 'MediaRecorder reported a capture error.',
+        message: 'Capture degraded.',
+      });
     });
 
     recorder.start(CHUNK_TIMESLICE_MS);
@@ -689,7 +699,10 @@ export class RecorderController {
         });
       });
     }, HEARTBEAT_MS);
-    this.storageTimer = window.setInterval(() => void this.refreshStorage(false), STORAGE_REFRESH_MS);
+    this.storageTimer = window.setInterval(
+      () => void this.refreshStorage(false),
+      STORAGE_REFRESH_MS,
+    );
   }
 
   private stopTimers(): void {

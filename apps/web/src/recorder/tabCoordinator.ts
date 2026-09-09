@@ -60,7 +60,10 @@ async function acquireWebLock(sessionId: string): Promise<CaptureTabLock | null 
   };
 }
 
-function acquireLocalStorageLock(sessionId: string, ownerId: string): CaptureTabLock | null | undefined {
+function acquireLocalStorageLock(
+  sessionId: string,
+  ownerId: string,
+): CaptureTabLock | null | undefined {
   const key = `recantor:capture:${sessionId}`;
   try {
     const now = Date.now();

@@ -36,13 +36,18 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${env.apiBaseUrl}${path}`, init);
   } catch (error) {
-    throw new RecordingApiError(error instanceof Error ? error.message : 'network request failed', null);
+    throw new RecordingApiError(
+      error instanceof Error ? error.message : 'network request failed',
+      null,
+    );
   }
   if (!response.ok) throw new RecordingApiError(await parseError(response), response.status);
   return (await response.json()) as T;
 }
 
-export function createLiveSession(body: CreateLiveSessionRequest): Promise<RecordingSessionResponse> {
+export function createLiveSession(
+  body: CreateLiveSessionRequest,
+): Promise<RecordingSessionResponse> {
   return jsonRequest('/api/v1/sessions/live', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

@@ -49,14 +49,19 @@ export function RecorderPanel() {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
             Reliable recorder
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">Capture first, intelligence later.</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+            Capture first, intelligence later.
+          </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             Unacknowledged audio is spooled in this browser, sequenced, and deleted locally only
             after the server returns a durable ACK.
           </p>
         </div>
         <div className="rounded-2xl border border-[var(--border)] px-4 py-3 text-right">
-          <p className="font-mono text-2xl font-semibold tabular-nums" data-testid="recording-elapsed">
+          <p
+            className="font-mono text-2xl font-semibold tabular-nums"
+            data-testid="recording-elapsed"
+          >
             {durationLabel(snapshot.elapsedMs)}
           </p>
           <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -160,7 +165,9 @@ export function RecorderPanel() {
 function Metric({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
     <div className="rounded-2xl border border-[var(--border)] p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+        {label}
+      </p>
       <p className="mt-2 text-sm font-semibold" data-testid={testId}>
         {value}
       </p>

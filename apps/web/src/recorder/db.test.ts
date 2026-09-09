@@ -63,7 +63,9 @@ describe('recorder recovery database', () => {
       await putSpoolChunk(makeChunk(sequence));
     }
 
-    expect((await listSpoolChunks(session.sessionId)).map((chunk) => chunk.sequence)).toEqual([1, 2]);
+    expect((await listSpoolChunks(session.sessionId)).map((chunk) => chunk.sequence)).toEqual([
+      1, 2,
+    ]);
     expect((await getLatestLocalSession())?.writerId).toBe('writer-a');
 
     await deleteSpoolChunk(session.sessionId, 1);

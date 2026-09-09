@@ -56,7 +56,9 @@ export async function putLocalSession(session: LocalRecordingSession): Promise<v
   await recorderDb.sessions.put(session);
 }
 
-export async function getLocalSession(sessionId: string): Promise<LocalRecordingSession | undefined> {
+export async function getLocalSession(
+  sessionId: string,
+): Promise<LocalRecordingSession | undefined> {
   return recorderDb.sessions.get(sessionId);
 }
 
@@ -83,8 +85,13 @@ export async function appendCapturedChunk(
   await recorderDb.transaction('rw', recorderDb.sessions, recorderDb.chunks, async () => {
     const storedSession = await recorderDb.sessions.get(chunk.sessionId);
     if (!storedSession) throw new Error('Local recording session is missing.');
-    if (storedSession.writerId !== chunk.writerId || storedSession.captureEpoch !== chunk.captureEpoch) {
-      throw new Error('Local capture ownership changed before the audio fragment could be committed.');
+    if (
+      storedSession.writerId !== chunk.writerId ||
+      storedSession.captureEpoch !== chunk.captureEpoch
+    ) {
+      throw new Error(
+        'Local capture ownership changed before the audio fragment could be committed.',
+      );
     }
 
     const expectedSequence = storedSession.lastSequence + 1;
