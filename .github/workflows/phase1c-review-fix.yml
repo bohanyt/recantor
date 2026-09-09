@@ -1,0 +1,97 @@
+name: Phase 1C review fix
+
+on:
+  push:
+    branches:
+      - phase1/capture-generation-fencing
+
+permissions:
+  contents: write
+
+jobs:
+  review-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "11.7.0"
+          run_install: false
+      - name: Install web dependencies
+        run: pnpm --dir apps/web install --frozen-lockfile
+      - name: Patch retry behavior
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          controller = Path('apps/web/src/recorder/controller.ts')
+          text = controller.read_text()
+          old = "    if (this.snapshot.phase !== 'idle' && this.snapshot.phase !== 'complete') return;"
+          new = """    if (
+              this.snapshot.phase !== 'idle' &&
+              this.snapshot.phase !== 'complete' &&
+              this.snapshot.phase !== 'error'
+            )
+              return;"""
+          if old not in text:
+              raise SystemExit('controller start guard not found')
+          controller.write_text(text.replace(old, new, 1))
+
+          panel = Path('apps/web/src/RecorderPanel.tsx')
+          text = panel.read_text()
+          old = "  const canStart = snapshot.phase === 'idle' || snapshot.phase === 'complete';"
+          new = "  const canStart = snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error';"
+          if old not in text:
+              raise SystemExit('RecorderPanel canStart line not found')
+          panel.write_text(text.replace(old, new, 1))
+
+          e2e = Path('apps/web/e2e/recorder.spec.ts')
+          text = e2e.read_text()
+          if "allows retry after an initial start request failure" not in text:
+              text += """
+
+test('allows retry after an initial start request failure', async ({ page }) => {
+  let createCalls = 0;
+  await page.route('**/api/v1/sessions/live', async (route) => {
+    createCalls += 1;
+    if (createCalls === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('start-recording')).toBeVisible();
+
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+    { timeout: 10_000 },
+  );
+  expect(createCalls).toBe(2);
+
+  await page.waitForTimeout(2_200);
+  await page.getByTestId('stop-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
+"""
+              e2e.write_text(text)
+          PY
+      - name: Format web sources
+        run: pnpm --dir apps/web format
+      - name: Commit review fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web
+          git commit -m "Fix retry after failed recorder start"
+          git push origin HEAD:phase1/capture-generation-fencing
