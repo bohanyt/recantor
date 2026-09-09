@@ -17,12 +17,31 @@ function bytesLabel(bytes: number | null): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+function missingSequenceLabel(sequences: number[]): string {
+  if (sequences.length === 0) return 'none';
+  const ordered = [...new Set(sequences)].sort((left, right) => left - right);
+  const ranges: string[] = [];
+  let start = ordered[0];
+  let end = start;
+  for (const sequence of ordered.slice(1)) {
+    if (sequence === end + 1) {
+      end = sequence;
+      continue;
+    }
+    ranges.push(start === end ? String(start) : `${start}–${end}`);
+    start = end = sequence;
+  }
+  ranges.push(start === end ? String(start) : `${start}–${end}`);
+  return ranges.join(', ');
+}
+
 function durabilityLabel(snapshot: FencedRecorderSnapshot): string {
   if (snapshot.captureFenced && snapshot.pendingChunks > 0) {
     return 'Orphaned local evidence — not safely syncable';
   }
   if (snapshot.captureFenced) return 'Capture fenced — local ownership stale';
   if (snapshot.localWriteFailed) return 'Unsafe — local spool failed';
+  if (snapshot.missingSequences.length > 0) return 'Continuity unresolved';
   if (snapshot.phase === 'complete' && snapshot.sessionId) return 'Server synced';
   if (snapshot.pendingChunks > 0 && snapshot.storage?.persisted) return 'Locally recoverable';
   if (snapshot.pendingChunks > 0) return 'Pending locally (best effort)';
@@ -59,6 +78,7 @@ export function RecorderPanel() {
     !snapshot.captureFenced &&
     (snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error');
   const recoverable = snapshot.phase === 'recoverable' && !snapshot.captureFenced;
+  const hasMissingSequences = snapshot.missingSequences.length > 0;
   const busy = snapshot.phase === 'requesting' || snapshot.phase === 'finalizing';
 
   return (
@@ -121,25 +141,35 @@ export function RecorderPanel() {
             Keep locally and finish later
           </button>
         )}
+        {recoverable && !hasMissingSequences && (
+          <button
+            type="button"
+            onClick={() => void controller.resume()}
+            className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white"
+            data-testid="resume-recording"
+          >
+            Resume recording
+          </button>
+        )}
         {recoverable && (
-          <>
-            <button
-              type="button"
-              onClick={() => void controller.resume()}
-              className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white"
-              data-testid="resume-recording"
-            >
-              Resume recording
-            </button>
-            <button
-              type="button"
-              onClick={() => void controller.finishRecovered()}
-              className="rounded-full border border-[var(--border)] px-5 py-3 text-sm font-semibold"
-              data-testid="finish-recovered"
-            >
-              Finish recovered audio
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => void controller.finishRecovered()}
+            className="rounded-full border border-[var(--border)] px-5 py-3 text-sm font-semibold"
+            data-testid="finish-recovered"
+          >
+            {hasMissingSequences ? 'Retry missing audio' : 'Finish recovered audio'}
+          </button>
+        )}
+        {recoverable && hasMissingSequences && (
+          <button
+            type="button"
+            onClick={() => void controller.declareMissingSequencesAsGaps()}
+            className="rounded-full border border-[var(--danger)] px-5 py-3 text-sm font-semibold text-[var(--danger)]"
+            data-testid="declare-missing-gaps"
+          >
+            Declare missing audio as lost & finish
+          </button>
         )}
         {snapshot.sessionId && snapshot.pendingChunks > 0 && !snapshot.captureFenced && (
           <button
@@ -153,6 +183,22 @@ export function RecorderPanel() {
           </button>
         )}
       </div>
+
+      {hasMissingSequences && !snapshot.captureFenced && (
+        <div
+          className="mt-5 rounded-2xl border border-[var(--danger)] p-4 text-sm"
+          data-testid="missing-sequences"
+        >
+          <p className="font-semibold text-[var(--danger)]">
+            Unaccounted audio sequence(s): {missingSequenceLabel(snapshot.missingSequences)}
+          </p>
+          <p className="mt-2 leading-6 text-[var(--muted)]">
+            Retry recovery first if these fragments may still exist locally. Declaring them lost is
+            an explicit, permanent continuity gap for this recording; Recantor will not do it
+            automatically.
+          </p>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Durability" value={durabilityLabel(snapshot)} testId="durability-state" />
