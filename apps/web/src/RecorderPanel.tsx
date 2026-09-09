@@ -99,6 +99,16 @@ export function RecorderPanel() {
             Stop
           </button>
         )}
+        {snapshot.phase === 'finalizing' && (
+          <button
+            type="button"
+            onClick={() => controller.deferFinalization()}
+            className="rounded-full border border-[var(--border)] px-5 py-3 text-sm font-semibold"
+            data-testid="defer-finalization"
+          >
+            Keep locally and finish later
+          </button>
+        )}
         {recoverable && (
           <>
             <button

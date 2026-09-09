@@ -203,7 +203,7 @@ As it stands, it is **not** evidence about real Chrome/Edge throttling, an OS-mi
 
 ## Validated Phase 1 blockers
 
-An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` reproduced five defects at runtime, using the repository's own toolchain (backend `pytest`, `vitest`, and Playwright with retries disabled) against a real API, PostgreSQL, and Chromium. The repository's existing suites were green before and after; these are gaps in coverage, not regressions.
+An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` reproduced five defects at runtime, using the repository's own toolchain (backend `pytest`, `vitest`, and Playwright with retries disabled) against a real API, PostgreSQL, and Chromium. Final review of the #14 remediation later exposed one additional timing-dependent Stop/sync race (#18). These are product gaps, not reasons to weaken the durability boundary.
 
 **Phase 1 cannot close until these are fixed.**
 
@@ -214,6 +214,7 @@ An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` 
 | #12 | Reconciliation deletes local audio on accepted-sequence membership alone | a real 32,860-byte local fragment was deleted because another generation had accepted that sequence number with different bytes |
 | #13 | When an expected middle fragment is absent from the local spool, the session is stranded in `FINALIZING` with no user path out | with one middle spool fragment **deliberately removed** so it was absent at finalization: Resume refused (`session in state finalizing cannot be claimed`), Finish looped identically 4x, every finalize sent `gap_sequences: []`, and each retry appended another wall-clock gap |
 | #14 | A stalled chunk upload hangs Stop in `FINALIZING` permanently | after 30s: `phase: finalizing`, controls `{start:0, stop:0, resume:0, finish:0, syncDisabled:true}`, server `final_sequence: null` |
+| #18 | Stop can reuse a pre-Stop single-flight sync snapshot and miss the final persisted fragment in the pass it awaits | run `34348856554` first attempt returned `Capture stopped, but some audio still needs a server ACK`; the Playwright retry passed, proving a timing-dependent non-lossy race |
 
 On #13, note carefully what is and is not established. The **product behavior** is proven: given a spool that is missing an expected middle sequence at finalization, the recorder cannot reach any terminal state. The **cause** of such partial spool loss is not established — the fragment in the repro was removed deliberately to create the precondition. Do not read #13 as evidence that browsers evict individual IndexedDB records, or as a characterization of any specific browser storage behavior.
 
@@ -222,8 +223,11 @@ Consequences for statements elsewhere in this file:
 - "Browser disappearance without a clean Stop creates an interruption" is only true if something reads the session during the interruption (#10).
 - "Already-spooled evidence remains recoverable after ownership rotates" does not currently hold for evidence produced by a fenced generation (#11, #12).
 - "A session may become complete only after every expected sequence is either durably present or explicitly represented as a gap" is upheld by the server, but the browser has no path to declare the gap, so affected sessions never reach a terminal state at all (#13).
+- A clean Stop is not yet deterministic if it reuses an in-flight sync snapshot created before the final fragment was persisted (#18); the audio remains local, but the UI can unnecessarily fall back to recovery.
 
-Dependency order for the fixes: #14 first (self-contained, unblocks testing of the rest), then #11 with #12 landing alongside it, then #13, then #10. Fixes belong in separate bounded PRs.
+PR #17 implements the bounded #14 remediation on branch `phase1/b5-bounded-finalization`. Recorder HTTP attempts now have a configurable per-attempt deadline (`VITE_RECORDING_REQUEST_TIMEOUT_MS`, default 5000 ms), with invalid/sub-millisecond configured values falling back rather than becoming a zero-millisecond deadline. Timeout remains retryable inside the existing bounded upload retry loop; exhausted attempts retain local audio and return Stop to `recoverable`; and `FINALIZING` exposes an enabled **Keep locally and finish later** escape that cancels in-flight recorder requests without discarding emitted evidence. The #14-specific Playwright file forces `retries: 0`, covers a request that never settles during Stop, covers a hung ordinary-recording upload that later catches up, and covers a lost successful finalize response by reconciling matching remote `COMPLETE` truth instead of wedging recovery. GitHub Actions run `34348856554` on head `fe72d4e908729ddc36ed9cfc9fbb04aa43fe6ab2` completed successfully across backend, frontend, Chromium e2e, and Compose smoke. The same run exposed #18 as a first-attempt flake in an older recovery-generation test; its retry passed. This is PR evidence until #17 merges; do not describe #14 as merged before then.
+
+Remaining blocker order after #17: #18 first, then #11 with #12 alongside it, then #13, then #10. Fixes belong in separate bounded PRs unless a proven dependency makes a coordinated slice clearer.
 
 ## Phase 2 / downstream gate
 
@@ -235,10 +239,10 @@ This is **not a current runtime failure**: no STT, diarization, summary, or Cele
 
 Two things remain, in order:
 
-1. **Fix the five validated blockers** (#10, #11, #12, #13, #14), each with regression coverage that the executed repro no longer reproduces.
+1. **Merge the proven #14 remediation, then fix the five remaining validated blockers** (#18, #10, #11, #12, #13), each with regression coverage that the executed repro no longer reproduces.
 2. **Real desktop background/minimized witness.** Run Chrome and/or Edge on an awake desktop/laptop, start a real microphone recording, background/minimize the browser while switching among ordinary applications for a bounded interval, then return and Stop. Record the exact OS, browser/version, duration, and final continuity/ACK evidence.
 
-The witness remains a required Phase 1 exit item, but it should be recorded **after** the blockers are fixed — a witness taken against the current recorder would be measuring a code path that is about to change, and the fenced-writer and stalled-upload defects can both corrupt what the witness appears to show.
+The witness remains a required Phase 1 exit item, but it should be recorded **after** the blockers are fixed. After #14, the fenced-writer/reconciliation defects (#11/#12) and the clean-Stop sync race (#18) remain capable of distorting what a witness appears to show.
 
 CI cannot substitute for that platform/lifecycle witness. Until it is recorded, describe automated background behavior only as the tested headless Chromium background-tab case, with the tooling caveat above.
 
@@ -261,9 +265,9 @@ Do not describe those as working until repository evidence proves them.
 
 ## Immediate next delivery
 
-GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**. Issues #10-#14 are its blocking sub-issues.
+GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**. Issues #10-#14 and #18 are its blocking work items; #10-#14 are attached sub-issues, while #18 is linked from #5 because the available connector did not expose sub-issue mutation.
 
-The immediate next action is #14 (bounded upload deadline and an always-escapable finalization state), because it is self-contained and makes the remaining repros testable.
+PR #17 is the bounded #14 remediation and must be reviewed/merged before #14 is considered closed. After that, #18 is the immediate bounded fix because it depends on #17's deadline/cancellation primitives and closes the now-executed clean-Stop sync race. Then continue with #11 plus the #12 interim reconciliation guard.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
@@ -302,6 +306,7 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 - Multiple simultaneous sessions are a normal operating condition.
 - A single live session has one active capture generation at a time; each resumed generation is fenced by fresh writer identity + incremented epoch.
 - Fencing is enforced server-side, but the fenced client does not currently stop capturing (#11).
+- A stopped recorder can still reuse a stale in-flight sync snapshot and leave its final emitted fragment pending locally (#18); this is recoverable and non-lossy but not yet a deterministic clean Stop.
 - Old already-spooled/accepted evidence remains recoverable without granting authority to create new stale-writer evidence.
 - Cross-device takeover is not yet claimed.
 - Public upstream must remain free of deployment secrets and organization-private data.
