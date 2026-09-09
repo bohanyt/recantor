@@ -337,6 +337,7 @@ export class RecorderController {
       this.patch({ lockKind: this.captureLock.kind });
 
       const state = await fetchRecordingState(local.sessionId);
+      if (await this.adoptMatchingRemoteCompletion(local, state)) return;
       await reconcileLocalSpool(local.sessionId, state);
       await this.syncNow();
       const pending = await countSpoolChunks(local.sessionId);
@@ -500,6 +501,7 @@ export class RecorderController {
       let state = await fetchRecordingState(local.sessionId, {
         signal: finalizationAbortController.signal,
       });
+      if (await this.adoptMatchingRemoteCompletion(local, state)) return;
       await reconcileLocalSpool(local.sessionId, state);
       await this.syncNow();
       if (this.finalizationDeferred) {
@@ -514,6 +516,7 @@ export class RecorderController {
       });
 
       let finalizingOwner = this.localSession ?? local;
+      if (await this.adoptMatchingRemoteCompletion(finalizingOwner, state)) return;
       if (finalizingOwner.pendingWriterId) {
         const pendingWriterId = finalizingOwner.pendingWriterId;
         if (
@@ -753,6 +756,38 @@ export class RecorderController {
       this.captureInterruptionPromise = null;
     });
     return this.captureInterruptionPromise;
+  }
+
+  private async adoptMatchingRemoteCompletion(
+    local: LocalRecordingSession,
+    state: RecordingStateResponse,
+  ): Promise<boolean> {
+    const remote = state.session;
+    const matches =
+      remote.state === 'complete' &&
+      remote.capture_epoch === local.captureEpoch &&
+      remote.final_sequence === local.lastSequence &&
+      remote.final_monotonic_end_ms === local.lastMonotonicEndMs;
+    if (!matches) return false;
+
+    await deleteLocalSession(local.sessionId);
+    this.localSession = null;
+    this.releaseCaptureLock();
+    this.patch({
+      phase: 'complete',
+      pendingChunks: 0,
+      highestAckedSequence: Math.max(
+        this.snapshot.highestAckedSequence,
+        state.highest_contiguous_sequence,
+      ),
+      gapCount: state.gaps.length,
+      localWriteFailed: false,
+      message: state.gaps.length
+        ? 'Recording finalized. Explicit interruption evidence is attached.'
+        : 'Recording finalized with every expected audio sequence durably acknowledged.',
+      error: null,
+    });
+    return true;
   }
 
   private async keepStoppedSessionRecoverable(
