@@ -11,7 +11,7 @@
     "generate:api": "openapi-ts",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write . && git diff -- e2e/finalization-timeout.spec.ts src/recorder/controller.ts",
+    "format:check": "prettier --check .",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "build": "tsc -b && vite build",
