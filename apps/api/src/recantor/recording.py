@@ -247,6 +247,28 @@ async def recording_state(
     return session, chunks, gaps
 
 
+def _chunk_retry_matches(
+    chunk: RecordingChunk,
+    *,
+    writer_id: str,
+    capture_epoch: int,
+    monotonic_start_ms: int,
+    monotonic_end_ms: int,
+    content_type: str,
+    sha256: str,
+    byte_length: int,
+) -> bool:
+    return (
+        chunk.writer_id == writer_id
+        and chunk.capture_epoch == capture_epoch
+        and chunk.monotonic_start_ms == monotonic_start_ms
+        and chunk.monotonic_end_ms == monotonic_end_ms
+        and chunk.content_type == content_type
+        and chunk.sha256 == sha256
+        and chunk.byte_length == byte_length
+    )
+
+
 async def accept_chunk(
     db: AsyncSession,
     *,
@@ -281,8 +303,17 @@ async def accept_chunk(
             )
         )
         if existing is not None:
-            if existing.sha256 != actual_sha256 or existing.byte_length != len(payload):
-                raise RecordingConflict("sequence already accepted with different content")
+            if not _chunk_retry_matches(
+                existing,
+                writer_id=writer_id,
+                capture_epoch=capture_epoch,
+                monotonic_start_ms=monotonic_start_ms,
+                monotonic_end_ms=monotonic_end_ms,
+                content_type=content_type,
+                sha256=actual_sha256,
+                byte_length=len(payload),
+            ):
+                raise RecordingConflict("sequence retry metadata conflicts with accepted chunk")
             valid = await asyncio.to_thread(
                 storage.verify,
                 existing.storage_key,
@@ -316,6 +347,7 @@ async def accept_chunk(
         chunk = RecordingChunk(
             session_id=session_id,
             sequence=sequence,
+            writer_id=writer_id,
             capture_epoch=capture_epoch,
             monotonic_start_ms=monotonic_start_ms,
             monotonic_end_ms=monotonic_end_ms,
@@ -353,10 +385,23 @@ async def declare_gap(
             )
         )
         if existing is not None:
+            matches = (
+                existing.writer_id == writer_id
+                and existing.capture_epoch == capture_epoch
+                and existing.sequence_start == sequence_start
+                and existing.sequence_end == sequence_end
+                and _as_aware(existing.wall_started_at) == _as_aware(wall_started_at)
+                and _as_aware(existing.wall_ended_at) == _as_aware(wall_ended_at)
+                and existing.reason == reason
+            )
+            if not matches:
+                raise RecordingConflict("gap retry conflicts with the accepted declaration")
             return existing
         gap = RecordingGap(
             session_id=session_id,
             client_gap_id=client_gap_id,
+            writer_id=writer_id,
+            capture_epoch=capture_epoch,
             sequence_start=sequence_start,
             sequence_end=sequence_end,
             wall_started_at=wall_started_at,
@@ -415,21 +460,25 @@ async def finalize_session(
             missing_after: list[int] = []
         else:
             _validate_writer(session, writer_id, capture_epoch)
+            chunks = list(
+                (
+                    await db.scalars(
+                        select(RecordingChunk).where(RecordingChunk.session_id == session_id)
+                    )
+                ).all()
+            )
+            if any(chunk.sequence > final_sequence for chunk in chunks):
+                raise RecordingConflict("final sequence excludes an already accepted chunk")
+            max_chunk_end_ms = max((chunk.monotonic_end_ms for chunk in chunks), default=0)
+            if final_monotonic_end_ms < max_chunk_end_ms:
+                raise RecordingConflict("final monotonic boundary precedes accepted audio")
+
             session.final_sequence = final_sequence
             session.final_monotonic_end_ms = final_monotonic_end_ms
             session.state = SessionState.FINALIZING.value
             session.updated_at = utcnow()
 
-            accepted = set(
-                (
-                    await db.scalars(
-                        select(RecordingChunk.sequence).where(
-                            RecordingChunk.session_id == session_id,
-                            RecordingChunk.sequence <= final_sequence,
-                        )
-                    )
-                ).all()
-            )
+            accepted = {chunk.sequence for chunk in chunks}
             gaps = list(
                 (
                     await db.scalars(
@@ -449,6 +498,8 @@ async def finalize_session(
                 gap = RecordingGap(
                     session_id=session_id,
                     client_gap_id=uuid4(),
+                    writer_id=writer_id,
+                    capture_epoch=capture_epoch,
                     sequence_start=start,
                     sequence_end=end,
                     reason="client_declared_missing_at_finalize",

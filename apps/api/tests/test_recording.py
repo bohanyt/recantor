@@ -129,6 +129,30 @@ async def test_chunk_ack_is_durable_idempotent_and_conflict_safe(client: AsyncCl
     )
     assert conflict.status_code == 409
 
+    timing_conflict = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=writer,
+        epoch=1,
+        sequence=1,
+        payload=payload,
+        start_ms=100,
+        end_ms=2000,
+    )
+    assert timing_conflict.status_code == 409
+
+    writer_conflict = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id="writer-different-0002",
+        epoch=1,
+        sequence=1,
+        payload=payload,
+        start_ms=0,
+        end_ms=2000,
+    )
+    assert writer_conflict.status_code == 409
+
     state = await client.get(f"/api/v1/sessions/{session_id}/recording-state")
     assert state.status_code == 200
     assert state.json()["accepted_count"] == 1
@@ -197,6 +221,75 @@ async def test_finalize_waits_for_missing_chunk_then_completes(client: AsyncClie
         json={**finalize_body, "writer_id": "writer-not-finalizer-0001"},
     )
     assert wrong_writer.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_finalize_rejects_boundary_that_excludes_accepted_audio(client: AsyncClient) -> None:
+    writer = "writer-boundary-0001"
+    session_id, _ = await create_session(client, writer)
+    for sequence in (1, 2):
+        response = await put_chunk(
+            client,
+            session_id=session_id,
+            writer_id=writer,
+            epoch=1,
+            sequence=sequence,
+            payload=f"boundary-{sequence}".encode(),
+            start_ms=(sequence - 1) * 2000,
+            end_ms=sequence * 2000,
+        )
+        assert response.status_code == 200
+
+    too_low_sequence = await client.post(
+        f"/api/v1/sessions/{session_id}/finalize",
+        json={
+            "writer_id": writer,
+            "capture_epoch": 1,
+            "final_sequence": 1,
+            "final_monotonic_end_ms": 4000,
+            "gap_sequences": [],
+        },
+    )
+    assert too_low_sequence.status_code == 409
+
+    too_low_time = await client.post(
+        f"/api/v1/sessions/{session_id}/finalize",
+        json={
+            "writer_id": writer,
+            "capture_epoch": 1,
+            "final_sequence": 2,
+            "final_monotonic_end_ms": 3000,
+            "gap_sequences": [],
+        },
+    )
+    assert too_low_time.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_gap_declaration_is_idempotent_but_not_mutable(client: AsyncClient) -> None:
+    writer = "writer-gap-idem-0001"
+    session_id, _ = await create_session(client, writer)
+    gap_id = str(uuid4())
+    body = {
+        "client_gap_id": gap_id,
+        "writer_id": writer,
+        "capture_epoch": 1,
+        "sequence_start": 2,
+        "sequence_end": 3,
+        "reason": "browser_storage_failure",
+    }
+
+    first = await client.post(f"/api/v1/sessions/{session_id}/gaps", json=body)
+    retry = await client.post(f"/api/v1/sessions/{session_id}/gaps", json=body)
+    conflict = await client.post(
+        f"/api/v1/sessions/{session_id}/gaps",
+        json={**body, "sequence_end": 4},
+    )
+
+    assert first.status_code == 201
+    assert retry.status_code == 201
+    assert retry.json()["client_gap_id"] == gap_id
+    assert conflict.status_code == 409
 
 
 @pytest.mark.asyncio

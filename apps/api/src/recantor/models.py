@@ -67,6 +67,7 @@ class RecordingChunk(Base):
         Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    writer_id: Mapped[str] = mapped_column(String(128), nullable=False)
     capture_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
     monotonic_start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     monotonic_end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -90,6 +91,8 @@ class RecordingGap(Base):
         Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
     )
     client_gap_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, default=uuid4)
+    writer_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    capture_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
     sequence_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sequence_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wall_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
