@@ -7,6 +7,8 @@ export type LocalRecordingSession = {
   clientRequestId: string;
   writerId: string;
   captureEpoch: number;
+  recoveryToken?: string | null;
+  pendingWriterId?: string | null;
   state: LocalSessionState;
   mimeType: string;
   lastSequence: number;
@@ -15,6 +17,14 @@ export type LocalRecordingSession = {
   recordingStartedWallMs: number;
   createdAt: number;
   updatedAt: number;
+};
+
+export type PendingStart = {
+  key: 'pending-start';
+  clientRequestId: string;
+  writerId: string;
+  recoveryToken: string;
+  createdAt: number;
 };
 
 export type SpoolChunk = {
@@ -36,12 +46,18 @@ export type SpoolChunk = {
 class RecorderDatabase extends Dexie {
   sessions!: EntityTable<LocalRecordingSession, 'sessionId'>;
   chunks!: EntityTable<SpoolChunk, 'key'>;
+  pendingStarts!: EntityTable<PendingStart, 'key'>;
 
   constructor() {
     super('recantor-recorder');
     this.version(1).stores({
       sessions: '&sessionId, updatedAt',
       chunks: '&key, sessionId, sequence, [sessionId+sequence], createdAt',
+    });
+    this.version(2).stores({
+      sessions: '&sessionId, updatedAt',
+      chunks: '&key, sessionId, sequence, [sessionId+sequence], createdAt',
+      pendingStarts: '&key',
     });
   }
 }
@@ -71,6 +87,31 @@ export async function deleteLocalSession(sessionId: string): Promise<void> {
   await recorderDb.transaction('rw', recorderDb.sessions, recorderDb.chunks, async () => {
     await recorderDb.chunks.where('sessionId').equals(sessionId).delete();
     await recorderDb.sessions.delete(sessionId);
+  });
+}
+
+export async function getOrCreatePendingStart(): Promise<PendingStart> {
+  return recorderDb.transaction('rw', recorderDb.pendingStarts, async () => {
+    const existing = await recorderDb.pendingStarts.get('pending-start');
+    if (existing) return existing;
+    const pending: PendingStart = {
+      key: 'pending-start',
+      clientRequestId: crypto.randomUUID(),
+      writerId: crypto.randomUUID(),
+      recoveryToken: crypto.randomUUID(),
+      createdAt: Date.now(),
+    };
+    await recorderDb.pendingStarts.add(pending);
+    return pending;
+  });
+}
+
+export async function clearPendingStart(clientRequestId: string): Promise<void> {
+  await recorderDb.transaction('rw', recorderDb.pendingStarts, async () => {
+    const existing = await recorderDb.pendingStarts.get('pending-start');
+    if (existing?.clientRequestId === clientRequestId) {
+      await recorderDb.pendingStarts.delete('pending-start');
+    }
   });
 }
 
