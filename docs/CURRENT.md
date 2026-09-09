@@ -68,9 +68,9 @@ Non-optional recording guardrails:
 
 ## Repository state
 
-Canonical `main` at this checkpoint: `791d6492a9d484c3e144748a74b9c92a31199d1b`.
+Canonical `main` at this checkpoint: `3689d8a3431ef34a9106227cf99a3b48e78a245f`.
 
-PR #27 was deliberately squash-merged into `main` on 2026-09-10, closing Issue #13. Post-merge CI run `34416444878` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+PR #27 was deliberately squash-merged into `main` on 2026-09-10, closing Issue #13. Post-merge CI run `34416444878` completed successfully across backend, frontend, Chromium E2E, and Compose smoke. The subsequent `docs/CURRENT.md` reconciliation commit `3689d8a3431ef34a9106227cf99a3b48e78a245f` is also CI-green in run `34416682816`.
 
 ### Merged Phase 1 deliveries
 
@@ -82,11 +82,25 @@ PR #27 was deliberately squash-merged into `main` on 2026-09-10, closing Issue #
 - **PR #20 / Issues #11 and #12** — terminal browser fencing for stale writers plus the bounded same-epoch reconciliation safety guard. The final multi-client identity contract remains deferred.
 - **PR #27 / Issue #13** — explicit missing-sequence resolution: unresolved sequences are visible, retry remains non-destructive, permanent loss requires an explicit user action, repeated failed Finish attempts do not amplify wall-clock gaps, and a late local fragment can still fill the hole normally. Deterministic E2E covers declared-gap completion, late-fill completion, and stable gap count.
 
+### Phase 1H — Issue #10 implementation candidate, not merged
+
+PR #28 on `phase1/liveness-interruption-semantics` is the bounded candidate for Issue #10. It is **not** delivered on `main` and must not be merged without explicit user instruction.
+
+Candidate semantics deliberately avoid a new persistence abstraction:
+
+- `session.state == interrupted` is the **current** liveness-hole signal;
+- `interrupted_at` is the timestamp of the **latest historically observed** liveness interruption and intentionally remains populated after recovery;
+- heartbeat evaluates staleness before replacing the previous `last_heartbeat_at`, so a stall is recorded even when no GET/read occurred during it;
+- capture claim and heartbeat restoration both preserve the historical interruption timestamp while returning the active session to `recording`;
+- heartbeat/liveness interruption does **not** create a `RecordingGap`, because liveness loss is not proof of audio loss.
+
+Deterministic API coverage exercises stall → read → heartbeat, stall → heartbeat with no intervening read, and stall → claim, and verifies the no-audio-gap boundary.
+
 ## Validated Phase 1 blocker status
 
 | Issue | Status | Current truth |
 | --- | --- | --- |
-| #10 | **open blocker — next** | Liveness interruption is read-triggered and `interrupted_at` survives heartbeat restore. A stall can disappear if the next event is a heartbeat before any read observes it. |
+| #10 | **open blocker — PR #28 candidate, unmerged** | PR #28 detects a stale heartbeat before refresh and makes current-vs-historical liveness evidence explicit using lifecycle state plus `interrupted_at`; it remains a candidate until review/CI and deliberate merge. |
 | #11 | **fixed / closed** | Stale-writer conflicts terminally fence active browser capture and retain orphaned evidence honestly. |
 | #12 | **fixed for Phase 1 / closed** | Reconciliation has the interim same-capture-epoch deletion guard; final multi-client identity remains deferred. |
 | #13 | **fixed / closed by PR #27** | Missing-sequence finalization now has explicit declared-gap and late-fill exits with stable retry accounting. |
@@ -97,7 +111,7 @@ Issue #5 remains open as the umbrella for **Phase 1: reliable desktop browser re
 
 ## Immediate Phase 1 order
 
-1. **Issue #10 — liveness/interruption semantics.**
+1. **Issue #10 / PR #28** — finish review and CI reconciliation for liveness/interruption semantics; do not treat it as delivered until an explicitly authorized merge.
 2. **Real desktop Chrome/Edge witness** on an awake Windows/desktop machine using a real microphone, with the browser backgrounded/minimized for a bounded interval, then returned and stopped. Record exact OS/browser/version/test duration plus final ACK/continuity evidence.
 3. Reconcile Issue #5 against its acceptance matrix and close it only when #10 and the real-platform witness are satisfied.
 4. After Phase 1 closes, resolve **Issue #15** before writing the first downstream STT/summary consumer.
@@ -106,16 +120,17 @@ Do not pull Groq, Whisper, diarization, or LLM summaries into Phase 1.
 
 ## Issue #10 bounded contract
 
-Current code has one `interrupted_at` field, while `_mark_interrupted_if_stale()` only runs on selected read/claim paths. `heartbeat()` overwrites `last_heartbeat_at` before preserving evidence of a stall and restores `INTERRUPTED -> RECORDING` without clearing `interrupted_at`.
+On canonical `main` before PR #28, `_mark_interrupted_if_stale()` only runs on selected read/claim paths. `heartbeat()` overwrites `last_heartbeat_at` before preserving evidence of a stall, so a stall can disappear if no read occurs during it. `claim_capture()` also clears `interrupted_at`, while heartbeat restoration leaves it populated, giving the field inconsistent meaning.
 
-The bounded fix must:
+PR #28's candidate guarantee is:
 
-- detect a heartbeat stall exceeding `recording_heartbeat_timeout_seconds` before the next valid heartbeat overwrites the old timestamp;
-- preserve unambiguous distinction between **currently interrupted** and **has experienced a liveness interruption historically**;
-- ensure a restored session no longer reports itself as currently interrupted;
-- make heartbeat and claim semantics consistent, with any intentional difference documented;
-- cover stall → read → heartbeat, stall → heartbeat with no intervening read, and stall → claim;
-- update `docs/CURRENT.md` with the resulting guarantee.
+- a heartbeat request first evaluates the previous heartbeat timestamp against `recording_heartbeat_timeout_seconds`, before refreshing it;
+- current interruption is represented by `session.state == interrupted`;
+- `interrupted_at` has one meaning only: the latest historically observed liveness interruption timestamp, and therefore remains available after heartbeat or claim recovery;
+- a restored session reports `recording`, not `interrupted`, while still exposing historical interruption evidence;
+- both a normal read-path detection and a no-read heartbeat-path detection converge on the same current/historical semantics;
+- claim of a new capture generation preserves the same historical evidence semantics;
+- no heartbeat stall is automatically represented as an audio `RecordingGap`.
 
 Important boundary:
 
