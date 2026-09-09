@@ -179,6 +179,11 @@ export class FencedRecorderController {
     await this.inner.finishRecovered();
   }
 
+  async declareMissingSequencesAsGaps(): Promise<void> {
+    if (this.captureFenced) return;
+    await this.inner.declareMissingSequencesAsGaps();
+  }
+
   async syncNow(): Promise<void> {
     if (this.captureFenced) return;
     await this.inner.syncNow();
