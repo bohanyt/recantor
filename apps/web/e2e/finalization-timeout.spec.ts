@@ -8,7 +8,9 @@ async function stallChunkUploads(page: Page) {
   });
 }
 
-test('returns to recovery when a stalled chunk upload exhausts bounded attempts', async ({ page }) => {
+test('returns to recovery when a stalled chunk upload exhausts bounded attempts', async ({
+  page,
+}) => {
   test.setTimeout(45_000);
   await stallChunkUploads(page);
 
@@ -31,7 +33,9 @@ test('returns to recovery when a stalled chunk upload exhausts bounded attempts'
     .not.toContain('0 fragments');
 });
 
-test('lets the user defer a stalled finalization without discarding local audio', async ({ page }) => {
+test('lets the user defer a stalled finalization without discarding local audio', async ({
+  page,
+}) => {
   await stallChunkUploads(page);
 
   await page.goto('/');
