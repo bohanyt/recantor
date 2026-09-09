@@ -122,6 +122,28 @@ test('a second same-origin tab cannot silently become the active recorder', asyn
   });
 });
 
+test('continues through a bounded Chromium background-tab interval while the browser stays awake', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+
+  const foregroundPage = await context.newPage();
+  await foregroundPage.goto('/');
+  await foregroundPage.bringToFront();
+  await foregroundPage.waitForTimeout(4_500);
+  await page.bringToFront();
+
+  await page.getByTestId('stop-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+  await expect(page.getByTestId('pending-chunks')).toContainText('0 fragments');
+  await foregroundPage.close();
+});
+
 test('stops and surfaces an explicit unsafe state when the IndexedDB chunk append fails', async ({
   page,
 }) => {
