@@ -83,15 +83,35 @@ function stopStream(stream: MediaStream | null): void {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function requestCancelled(error: unknown): boolean {
+  return error instanceof RecordingApiError && error.kind === 'aborted';
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => window.setTimeout(resolve, ms));
+  if (signal.aborted) {
+    return Promise.reject(new RecordingApiError('recording request was cancelled', null, 'aborted'));
+  }
+
+  return new Promise((resolve, reject) => {
+    let timer = 0;
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(new RecordingApiError('recording request was cancelled', null, 'aborted'));
+    };
+    timer = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function isRetryableUpload(error: unknown): boolean {
   if (!(error instanceof RecordingApiError)) return false;
-  return (
-    error.status === null || error.status === 408 || error.status === 429 || error.status >= 500
-  );
+  if (error.kind === 'aborted') return false;
+  if (error.kind === 'network' || error.kind === 'timeout') return true;
+  return error.status === 408 || error.status === 429 || (error.status ?? 0) >= 500;
 }
 
 export class RecorderController {
@@ -105,6 +125,8 @@ export class RecorderController {
   private captureBaseMonotonicMs = 0;
   private chunkChain: Promise<void> = Promise.resolve();
   private syncPromise: Promise<void> | null = null;
+  private syncAbortController: AbortController | null = null;
+  private finalizationAbortController: AbortController | null = null;
   private spoolFailurePromise: Promise<void> | null = null;
   private captureInterruptionPromise: Promise<void> | null = null;
   private heartbeatTimer: number | null = null;
@@ -113,6 +135,7 @@ export class RecorderController {
   private initialized = false;
   private lifecycleVersion = 0;
   private captureFaulted = false;
+  private finalizationDeferred = false;
 
   readonly subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -199,6 +222,8 @@ export class RecorderController {
   dispose(): void {
     window.removeEventListener('online', this.handleOnline);
     window.removeEventListener('offline', this.handleOffline);
+    this.syncAbortController?.abort();
+    this.finalizationAbortController?.abort();
     this.initialized = false;
     this.lifecycleVersion += 1;
     if (!this.recorder) this.stopTimers();
@@ -364,15 +389,36 @@ export class RecorderController {
   async syncNow(): Promise<void> {
     if (!this.localSession) return;
     if (this.syncPromise) return this.syncPromise;
-    this.syncPromise = this.syncPending().finally(() => {
-      this.syncPromise = null;
+
+    const abortController = new AbortController();
+    this.syncAbortController = abortController;
+    const promise = this.syncPending(abortController.signal).finally(() => {
+      if (this.syncAbortController === abortController) this.syncAbortController = null;
+      if (this.syncPromise === promise) this.syncPromise = null;
     });
-    return this.syncPromise;
+    this.syncPromise = promise;
+    return promise;
+  }
+
+  deferFinalization(): void {
+    if (this.snapshot.phase !== 'finalizing') return;
+    this.finalizationDeferred = true;
+    this.syncAbortController?.abort();
+    this.finalizationAbortController?.abort();
+    this.patch({
+      error: null,
+      message:
+        'Deferring finalization. In-flight recorder requests are being cancelled; locally persisted audio will be kept for recovery.',
+    });
   }
 
   async stop(): Promise<void> {
     const local = this.localSession;
     if (!local || this.snapshot.phase !== 'recording') return;
+
+    this.finalizationDeferred = false;
+    const finalizationAbortController = new AbortController();
+    this.finalizationAbortController = finalizationAbortController;
     this.patch({
       phase: 'finalizing',
       message: 'Stopping capture and flushing the final audio fragment…',
@@ -382,52 +428,67 @@ export class RecorderController {
     try {
       await this.stopMediaRecorder();
       await this.chunkChain;
-      await this.syncNow();
-      const current = this.localSession ?? local;
-      const pending = await countSpoolChunks(current.sessionId);
-      if (pending > 0) {
-        const interrupted: LocalRecordingSession = {
-          ...current,
-          state: 'interrupted',
-          updatedAt: Date.now(),
-        };
-        await putLocalSession(interrupted);
-        this.localSession = interrupted;
-        this.releaseCaptureLock();
-        this.patch({
-          phase: 'recoverable',
-          pendingChunks: pending,
-          message:
-            'Capture stopped, but some audio still needs a server ACK. Finish recovery later.',
-        });
+      let current = this.localSession ?? local;
+
+      if (this.finalizationDeferred) {
+        await this.keepStoppedSessionRecoverable(
+          current,
+          'Finalization deferred. Emitted audio remains in browser recovery storage until it can receive durable server ACKs.',
+          null,
+        );
         return;
       }
-      await this.finalizeLocalSession(current);
+
+      await this.syncNow();
+      current = this.localSession ?? local;
+      if (this.finalizationDeferred) {
+        await this.keepStoppedSessionRecoverable(
+          current,
+          'Finalization deferred. Emitted audio remains in browser recovery storage until it can receive durable server ACKs.',
+          null,
+        );
+        return;
+      }
+
+      const pending = await countSpoolChunks(current.sessionId);
+      if (pending > 0) {
+        await this.keepStoppedSessionRecoverable(
+          current,
+          'Capture stopped, but some audio still needs a server ACK. Finish recovery later.',
+          this.snapshot.error,
+        );
+        return;
+      }
+      await this.finalizeLocalSession(current, finalizationAbortController.signal);
     } catch (error) {
       const current = this.localSession ?? local;
-      const interrupted: LocalRecordingSession = {
-        ...current,
-        state: 'interrupted',
-        updatedAt: Date.now(),
-      };
-      try {
-        await putLocalSession(interrupted);
-        this.localSession = interrupted;
-      } catch {
-        // Keep the in-memory recovery state and surface the failure instead of claiming completion.
+      const deferred = this.finalizationDeferred || requestCancelled(error);
+      await this.keepStoppedSessionRecoverable(
+        current,
+        deferred
+          ? 'Finalization deferred. Local recovery state was kept.'
+          : 'Capture stopped. Local recovery state was kept instead of claiming completion.',
+        deferred
+          ? null
+          : error instanceof Error
+            ? error.message
+            : 'Failed to finalize recording.',
+      );
+    } finally {
+      if (this.finalizationAbortController === finalizationAbortController) {
+        this.finalizationAbortController = null;
       }
-      this.releaseCaptureLock();
-      this.patch({
-        phase: 'recoverable',
-        error: error instanceof Error ? error.message : 'Failed to finalize recording.',
-        message: 'Capture stopped. Local recovery state was kept instead of claiming completion.',
-      });
+      this.finalizationDeferred = false;
     }
   }
 
   async finishRecovered(): Promise<void> {
     const local = this.localSession;
     if (!local || this.snapshot.phase !== 'recoverable') return;
+
+    this.finalizationDeferred = false;
+    const finalizationAbortController = new AbortController();
+    this.finalizationAbortController = finalizationAbortController;
     this.patch({
       phase: 'finalizing',
       error: null,
@@ -438,14 +499,21 @@ export class RecorderController {
       if (!this.captureLock) throw new Error('Another tab is already handling this recording.');
       this.patch({ lockKind: this.captureLock.kind });
 
-      let state = await fetchRecordingState(local.sessionId);
+      let state = await fetchRecordingState(local.sessionId, {
+        signal: finalizationAbortController.signal,
+      });
       await reconcileLocalSpool(local.sessionId, state);
       await this.syncNow();
+      if (this.finalizationDeferred) {
+        throw new RecordingApiError('recording request was cancelled', null, 'aborted');
+      }
       const pending = await countSpoolChunks(local.sessionId);
       if (pending > 0) {
         throw new Error(`${pending} local audio fragment(s) still lack a durable ACK.`);
       }
-      state = await fetchRecordingState(local.sessionId);
+      state = await fetchRecordingState(local.sessionId, {
+        signal: finalizationAbortController.signal,
+      });
 
       let finalizingOwner = this.localSession ?? local;
       if (finalizingOwner.pendingWriterId) {
@@ -457,16 +525,21 @@ export class RecorderController {
           if (!finalizingOwner.recoveryToken) {
             throw new Error('Cannot recover an already-claimed generation without its capability.');
           }
-          const remote = await claimCapture(finalizingOwner.sessionId, {
-            writer_id: pendingWriterId,
-            expected_epoch: finalizingOwner.captureEpoch,
-            recovery_token: finalizingOwner.recoveryToken,
-          });
+          const remote = await claimCapture(
+            finalizingOwner.sessionId,
+            {
+              writer_id: pendingWriterId,
+              expected_epoch: finalizingOwner.captureEpoch,
+              recovery_token: finalizingOwner.recoveryToken,
+            },
+            { signal: finalizationAbortController.signal },
+          );
           finalizingOwner = {
             ...finalizingOwner,
             writerId: pendingWriterId,
             captureEpoch: remote.capture_epoch,
             pendingWriterId: null,
+            state: 'interrupted',
             updatedAt: Date.now(),
           };
         } else if (
@@ -485,15 +558,25 @@ export class RecorderController {
         this.localSession = finalizingOwner;
       }
 
-      await this.recordRecoveryGap(finalizingOwner);
-      await this.finalizeLocalSession(finalizingOwner);
+      await this.recordRecoveryGap(finalizingOwner, finalizationAbortController.signal);
+      await this.finalizeLocalSession(finalizingOwner, finalizationAbortController.signal);
     } catch (error) {
-      this.releaseCaptureLock();
-      this.patch({
-        phase: 'recoverable',
-        error: error instanceof Error ? error.message : 'Failed to finish recovered recording.',
-        message: 'Recovered audio remains available locally.',
-      });
+      const current = this.localSession ?? local;
+      const deferred = this.finalizationDeferred || requestCancelled(error);
+      await this.keepStoppedSessionRecoverable(
+        current,
+        deferred ? 'Finalization deferred. Recovered audio remains available locally.' : 'Recovered audio remains available locally.',
+        deferred
+          ? null
+          : error instanceof Error
+            ? error.message
+            : 'Failed to finish recovered recording.',
+      );
+    } finally {
+      if (this.finalizationAbortController === finalizationAbortController) {
+        this.finalizationAbortController = null;
+      }
+      this.finalizationDeferred = false;
     }
   }
 
@@ -672,7 +755,39 @@ export class RecorderController {
     return this.captureInterruptionPromise;
   }
 
-  private async syncPending(): Promise<void> {
+  private async keepStoppedSessionRecoverable(
+    local: LocalRecordingSession,
+    message: string,
+    error: string | null,
+  ): Promise<void> {
+    const interrupted: LocalRecordingSession = {
+      ...local,
+      state: 'interrupted',
+      updatedAt: Date.now(),
+    };
+    try {
+      await putLocalSession(interrupted);
+      this.localSession = interrupted;
+    } catch {
+      // Keep the in-memory recovery state if IndexedDB cannot be updated here.
+    }
+
+    let pendingChunks = this.snapshot.pendingChunks;
+    try {
+      pendingChunks = await countSpoolChunks(local.sessionId);
+    } catch {
+      // Preserve the last known count if IndexedDB cannot be read here.
+    }
+    this.releaseCaptureLock();
+    this.patch({
+      phase: 'recoverable',
+      pendingChunks,
+      error,
+      message,
+    });
+  }
+
+  private async syncPending(signal: AbortSignal): Promise<void> {
     const local = this.localSession;
     if (!local) return;
     if (!navigator.onLine) {
@@ -681,7 +796,7 @@ export class RecorderController {
     }
 
     try {
-      const state = await fetchRecordingState(local.sessionId);
+      const state = await fetchRecordingState(local.sessionId, { signal });
       const pendingAfterReconcile = await reconcileLocalSpool(local.sessionId, state);
       this.patch({
         highestAckedSequence: state.highest_contiguous_sequence,
@@ -690,7 +805,7 @@ export class RecorderController {
       });
 
       for (const chunk of pendingAfterReconcile) {
-        const ack = await this.uploadWithRetry(chunk);
+        const ack = await this.uploadWithRetry(chunk, signal);
         await deleteSpoolChunk(local.sessionId, chunk.sequence);
         this.patch({
           highestAckedSequence: Math.max(this.snapshot.highestAckedSequence, ack.sequence),
@@ -703,6 +818,7 @@ export class RecorderController {
         });
       }
     } catch (error) {
+      if (requestCancelled(error)) return;
       this.patch({
         pendingChunks: await countSpoolChunks(local.sessionId),
         online: navigator.onLine,
@@ -712,21 +828,27 @@ export class RecorderController {
     }
   }
 
-  private async uploadWithRetry(chunk: SpoolChunk) {
+  private async uploadWithRetry(chunk: SpoolChunk, signal: AbortSignal) {
     let lastError: unknown = null;
     for (let attempt = 0; attempt < MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+      if (signal.aborted) {
+        throw new RecordingApiError('recording request was cancelled', null, 'aborted');
+      }
       try {
-        return await uploadRecordingChunk(chunk);
+        return await uploadRecordingChunk(chunk, { signal });
       } catch (error) {
         lastError = error;
         if (!isRetryableUpload(error) || attempt === MAX_UPLOAD_ATTEMPTS - 1) throw error;
-        await sleep(250 * 2 ** attempt);
+        await sleep(250 * 2 ** attempt, signal);
       }
     }
     throw lastError;
   }
 
-  private async recordRecoveryGap(local: LocalRecordingSession): Promise<void> {
+  private async recordRecoveryGap(
+    local: LocalRecordingSession,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const gapStartedWallMs = local.lastWallEndMs ?? local.recordingStartedWallMs;
     const wallEndMs = Date.now();
     if (wallEndMs - gapStartedWallMs < 1_000) return;
@@ -740,12 +862,15 @@ export class RecorderController {
         ? 'browser_local_spool_failure'
         : 'browser_interruption_before_recovery',
     };
-    await declareRecordingGap(local.sessionId, body);
-    const state = await fetchRecordingState(local.sessionId);
+    await declareRecordingGap(local.sessionId, body, { signal });
+    const state = await fetchRecordingState(local.sessionId, { signal });
     this.patch({ gapCount: state.gaps.length, localWriteFailed: false });
   }
 
-  private async finalizeLocalSession(local: LocalRecordingSession): Promise<void> {
+  private async finalizeLocalSession(
+    local: LocalRecordingSession,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const finalizing: LocalRecordingSession = {
       ...local,
       state: 'finalizing',
@@ -760,7 +885,7 @@ export class RecorderController {
       final_monotonic_end_ms: finalizing.lastMonotonicEndMs,
       gap_sequences: [],
     };
-    const final = await finalizeRecording(finalizing.sessionId, body);
+    const final = await finalizeRecording(finalizing.sessionId, body, { signal });
     if (!final.complete) {
       throw new Error(`Server still expects sequence(s): ${final.missing_sequences.join(', ')}`);
     }
