@@ -1,8 +1,8 @@
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
 function positiveInteger(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+  const parsed = Math.floor(Number(value));
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
 }
 
 export const env = {
