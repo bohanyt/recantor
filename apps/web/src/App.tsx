@@ -64,9 +64,8 @@ export default function App() {
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">{env.appName}</h1>
         <p className="mt-4 text-base leading-7 text-[var(--muted)] sm:text-lg">
-          Reliable capture comes first. This shell currently proves the browser-to-API,
-          PostgreSQL, generated-contract, and deployment foundations before recording code is
-          introduced.
+          Reliable capture comes first. This shell currently proves the browser-to-API, PostgreSQL,
+          generated-contract, and deployment foundations before recording code is introduced.
         </p>
       </header>
 
