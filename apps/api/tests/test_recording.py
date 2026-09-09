@@ -154,15 +154,15 @@ async def test_finalize_waits_for_missing_chunk_then_completes(client: AsyncClie
         )
         assert response.status_code == 200
 
+    finalize_body = {
+        "writer_id": writer,
+        "capture_epoch": 1,
+        "final_sequence": 3,
+        "final_monotonic_end_ms": 6000,
+        "gap_sequences": [],
+    }
     incomplete = await client.post(
-        f"/api/v1/sessions/{session_id}/finalize",
-        json={
-            "writer_id": writer,
-            "capture_epoch": 1,
-            "final_sequence": 3,
-            "final_monotonic_end_ms": 6000,
-            "gap_sequences": [],
-        },
+        f"/api/v1/sessions/{session_id}/finalize", json=finalize_body
     )
     assert incomplete.status_code == 200
     assert incomplete.json()["complete"] is False
@@ -182,19 +182,25 @@ async def test_finalize_waits_for_missing_chunk_then_completes(client: AsyncClie
     assert recovered.status_code == 200
 
     complete = await client.post(
-        f"/api/v1/sessions/{session_id}/finalize",
-        json={
-            "writer_id": writer,
-            "capture_epoch": 1,
-            "final_sequence": 3,
-            "final_monotonic_end_ms": 6000,
-            "gap_sequences": [],
-        },
+        f"/api/v1/sessions/{session_id}/finalize", json=finalize_body
     )
     assert complete.status_code == 200
     assert complete.json()["complete"] is True
     assert complete.json()["missing_sequences"] == []
     assert complete.json()["session"]["state"] == "complete"
+
+    retry_after_lost_response = await client.post(
+        f"/api/v1/sessions/{session_id}/finalize", json=finalize_body
+    )
+    assert retry_after_lost_response.status_code == 200
+    assert retry_after_lost_response.json()["complete"] is True
+    assert retry_after_lost_response.json()["missing_sequences"] == []
+
+    wrong_writer = await client.post(
+        f"/api/v1/sessions/{session_id}/finalize",
+        json={**finalize_body, "writer_id": "writer-not-finalizer-0001"},
+    )
+    assert wrong_writer.status_code == 409
 
 
 @pytest.mark.asyncio

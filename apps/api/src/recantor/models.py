@@ -45,6 +45,8 @@ class RecordingSession(Base):
     interrupted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     final_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     final_monotonic_end_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    finalized_writer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    finalized_capture_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

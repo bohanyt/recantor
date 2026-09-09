@@ -30,6 +30,8 @@ def upgrade() -> None:
         sa.Column("interrupted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("final_sequence", sa.Integer(), nullable=True),
         sa.Column("final_monotonic_end_ms", sa.Integer(), nullable=True),
+        sa.Column("finalized_writer_id", sa.String(length=128), nullable=True),
+        sa.Column("finalized_capture_epoch", sa.Integer(), nullable=True),
         sa.Column("finalized_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",

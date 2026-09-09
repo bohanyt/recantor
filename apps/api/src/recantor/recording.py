@@ -70,6 +70,16 @@ def _validate_writer(session: RecordingSession, writer_id: str, capture_epoch: i
         raise StaleWriter("capture writer or epoch is no longer active")
 
 
+def _validate_completed_finalizer(
+    session: RecordingSession, writer_id: str, capture_epoch: int
+) -> None:
+    if (
+        session.finalized_writer_id != writer_id
+        or session.finalized_capture_epoch != capture_epoch
+    ):
+        raise StaleWriter("finalize retry does not match the completed capture owner")
+
+
 def _can_accept_chunks(session: RecordingSession) -> bool:
     return session.state in {
         SessionState.RECORDING.value,
@@ -391,7 +401,6 @@ async def finalize_session(
 
     async with db.begin():
         session = await _locked_session(db, session_id)
-        _validate_writer(session, writer_id, capture_epoch)
         if session.final_sequence is not None and session.final_sequence != final_sequence:
             raise RecordingConflict(
                 "final sequence boundary conflicts with an earlier finalize request"
@@ -404,57 +413,65 @@ async def finalize_session(
                 "final monotonic boundary conflicts with an earlier finalize request"
             )
 
-        session.final_sequence = final_sequence
-        session.final_monotonic_end_ms = final_monotonic_end_ms
-        if session.state != SessionState.COMPLETE.value:
+        if session.state == SessionState.COMPLETE.value:
+            _validate_completed_finalizer(session, writer_id, capture_epoch)
+            missing_after: list[int] = []
+        else:
+            _validate_writer(session, writer_id, capture_epoch)
+            session.final_sequence = final_sequence
+            session.final_monotonic_end_ms = final_monotonic_end_ms
             session.state = SessionState.FINALIZING.value
-        session.updated_at = utcnow()
-
-        accepted = set(
-            (
-                await db.scalars(
-                    select(RecordingChunk.sequence).where(
-                        RecordingChunk.session_id == session_id,
-                        RecordingChunk.sequence <= final_sequence,
-                    )
-                )
-            ).all()
-        )
-        gaps = list(
-            (
-                await db.scalars(select(RecordingGap).where(RecordingGap.session_id == session_id))
-            ).all()
-        )
-        covered = _sequences_covered_by_gaps(gaps, final_sequence)
-        missing_before = [
-            sequence
-            for sequence in range(1, final_sequence + 1)
-            if sequence not in accepted and sequence not in covered
-        ]
-        declarable = [sequence for sequence in requested_gaps if sequence in set(missing_before)]
-        for start, end in _group_sequences(declarable):
-            gap = RecordingGap(
-                session_id=session_id,
-                client_gap_id=uuid4(),
-                sequence_start=start,
-                sequence_end=end,
-                reason="client_declared_missing_at_finalize",
-            )
-            db.add(gap)
-            gaps.append(gap)
-            covered.update(range(start, end + 1))
-
-        missing_after = [
-            sequence
-            for sequence in range(1, final_sequence + 1)
-            if sequence not in accepted and sequence not in covered
-        ]
-        if not missing_after:
-            session.state = SessionState.COMPLETE.value
-            session.active_writer_id = None
-            session.finalized_at = utcnow()
             session.updated_at = utcnow()
-        await db.flush()
+
+            accepted = set(
+                (
+                    await db.scalars(
+                        select(RecordingChunk.sequence).where(
+                            RecordingChunk.session_id == session_id,
+                            RecordingChunk.sequence <= final_sequence,
+                        )
+                    )
+                ).all()
+            )
+            gaps = list(
+                (
+                    await db.scalars(
+                        select(RecordingGap).where(RecordingGap.session_id == session_id)
+                    )
+                ).all()
+            )
+            covered = _sequences_covered_by_gaps(gaps, final_sequence)
+            missing_before = [
+                sequence
+                for sequence in range(1, final_sequence + 1)
+                if sequence not in accepted and sequence not in covered
+            ]
+            requested_gap_set = set(requested_gaps)
+            declarable = [sequence for sequence in missing_before if sequence in requested_gap_set]
+            for start, end in _group_sequences(declarable):
+                gap = RecordingGap(
+                    session_id=session_id,
+                    client_gap_id=uuid4(),
+                    sequence_start=start,
+                    sequence_end=end,
+                    reason="client_declared_missing_at_finalize",
+                )
+                db.add(gap)
+                covered.update(range(start, end + 1))
+
+            missing_after = [
+                sequence
+                for sequence in range(1, final_sequence + 1)
+                if sequence not in accepted and sequence not in covered
+            ]
+            if not missing_after:
+                session.state = SessionState.COMPLETE.value
+                session.finalized_writer_id = writer_id
+                session.finalized_capture_epoch = capture_epoch
+                session.active_writer_id = None
+                session.finalized_at = utcnow()
+                session.updated_at = utcnow()
+            await db.flush()
 
     gaps = list(
         (
