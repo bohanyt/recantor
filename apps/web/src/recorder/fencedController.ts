@@ -59,7 +59,11 @@ export class FencedRecorderController {
 
   private readonly handleInnerUpdate = (): void => {
     const raw = this.inner.getSnapshot();
-    if (raw.sessionId && isStaleActiveGenerationError(raw.error) && !this.captureFenced) {
+    if (
+      raw.sessionId &&
+      isStaleActiveGenerationError(raw.error) &&
+      !this.captureFenced
+    ) {
       this.captureFenced = true;
     }
     this.publish(raw);
@@ -74,10 +78,7 @@ export class FencedRecorderController {
 
   private async refreshFenceFromServer(): Promise<void> {
     try {
-      const [local, state] = await Promise.all([
-        getLatestLocalSession(),
-        this.inner.debugState(),
-      ]);
+      const [local, state] = await Promise.all([getLatestLocalSession(), this.inner.debugState()]);
       if (!local || !state || state.session.state === 'complete') return;
 
       const claimAlreadyAdvanced =
