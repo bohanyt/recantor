@@ -61,7 +61,10 @@ def _http_error(exc: Exception) -> HTTPException:
 async def create_live(body: CreateLiveSessionRequest, db: DbSession) -> RecordingSessionResponse:
     try:
         session = await create_live_session(
-            db, client_request_id=body.client_request_id, writer_id=body.writer_id
+            db,
+            client_request_id=body.client_request_id,
+            writer_id=body.writer_id,
+            recovery_token=body.recovery_token,
         )
     except (RecordingNotFound, RecordingConflict) as exc:
         raise _http_error(exc) from exc
@@ -93,6 +96,7 @@ async def claim_session(
             session_id=session_id,
             writer_id=body.writer_id,
             expected_epoch=body.expected_epoch,
+            recovery_token=body.recovery_token,
         )
     except (RecordingNotFound, RecordingConflict) as exc:
         raise _http_error(exc) from exc
