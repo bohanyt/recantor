@@ -106,12 +106,24 @@ export async function getOrCreatePendingStart(): Promise<PendingStart> {
   });
 }
 
-export async function clearPendingStart(clientRequestId: string): Promise<void> {
-  await recorderDb.transaction('rw', recorderDb.pendingStarts, async () => {
-    const existing = await recorderDb.pendingStarts.get('pending-start');
-    if (existing?.clientRequestId === clientRequestId) {
-      await recorderDb.pendingStarts.delete('pending-start');
+export async function commitStartedSession(
+  pending: PendingStart,
+  session: LocalRecordingSession,
+): Promise<void> {
+  await recorderDb.transaction('rw', recorderDb.pendingStarts, recorderDb.sessions, async () => {
+    const storedPending = await recorderDb.pendingStarts.get('pending-start');
+    if (!storedPending || storedPending.clientRequestId !== pending.clientRequestId) {
+      throw new Error('Pending recording start identity changed before session commit.');
     }
+    if (
+      session.clientRequestId !== pending.clientRequestId ||
+      session.writerId !== pending.writerId ||
+      session.recoveryToken !== pending.recoveryToken
+    ) {
+      throw new Error('Server session does not match the persisted recording start identity.');
+    }
+    await recorderDb.sessions.put(session);
+    await recorderDb.pendingStarts.delete('pending-start');
   });
 }
 
