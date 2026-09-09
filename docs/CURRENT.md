@@ -175,6 +175,12 @@ The merged browser behavior includes:
 
 The final PR-head CI run `34349870348` was green across backend, frontend, Chromium e2e, and Compose smoke with 17/17 E2E tests passing. Post-merge `main` CI run `34351060513` also completed successfully.
 
+### Phase 1E — merged deterministic clean Stop sync
+
+PR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18. After `MediaRecorder` stops and local persistence drains, Stop now cancels/settles any pre-Stop sync and runs exactly one fresh bounded sync over the stable stopped spool before finalization.
+
+The retries-disabled regression first reproduced the stale-snapshot failure, then passed after the fix. PR-head CI run `34353847749` and post-merge `main` CI run `34355423171` both completed successfully.
+
 ## What the automated background-tab test does not prove
 
 This is an observation about the tooling **as currently pinned and as executed in one validation run**, not a timeless property of Playwright.
@@ -199,11 +205,11 @@ An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` 
 | Issue | Current status | Defect / evidence |
 | --- | --- | --- |
 | #10 | **open blocker** | Liveness interruption is detected only when something reads the session, and `interrupted_at` survives heartbeat restore. A 10-minute stall with no intervening read could be overwritten by the next heartbeat without any interruption evidence. |
-| #11 | **open blocker** | A fenced writer keeps capturing audio the server will never accept, while the UI presents that local evidence optimistically. |
-| #12 | **open blocker** | Reconciliation can delete local audio on accepted-sequence membership alone; an executed composition deleted a different 32,860-byte local fragment because another generation had accepted the same sequence number. |
+| #11 | **remediation in PR #20; not merged yet** | A fenced writer currently keeps capturing after takeover; PR #20 stops the stale generation, releases capture ownership, retains emitted local evidence as explicitly orphaned, and withholds stale recovery/sync actions. |
+| #12 | **interim remediation in PR #20; not merged yet** | Sequence-only reconciliation can delete non-matching local audio; PR #20 adds the bounded Phase 1 rule that compact accepted ranges may delete only local chunks from the server session's current capture epoch. |
 | #13 | **open blocker** | With an expected middle sequence absent, the session can remain in `FINALIZING` with no user path to declare the missing sequence as a gap; repeated Finish attempts also amplify useless wall-clock gaps. |
 | #14 | **fixed / closed by PR #17** | A stalled HTTP request could hang Stop in `FINALIZING` forever with no reachable action. PR #17 added bounded deadlines, honest recovery, and an explicit finalization escape. |
-| #18 | **remediation in PR #19; not merged yet** | Stop can reuse a pre-Stop single-flight sync snapshot and miss the final persisted fragment in the pass it awaits, causing an unnecessary recoverable result rather than a deterministic clean Stop. |
+| #18 | **fixed / closed by PR #19** | Stop could reuse a pre-Stop single-flight sync snapshot and miss the final persisted fragment. PR #19 forces one fresh bounded sync over the stable stopped spool before finalization. |
 
 On #13, the **product behavior** is proven, but the natural cause of a missing middle local fragment is not. The executed repro deliberately removed one IndexedDB fragment to establish the precondition; it is not evidence that browsers naturally evict individual IndexedDB records.
 
@@ -229,16 +235,30 @@ This does not weaken durable ACK semantics. A PUT that committed server-side bef
 
 Code witness before documentation reconciliation: `56ca7ce6121683c093914ecedd4828df4abd7515`. GitHub Actions run `34352981065` on that head completed successfully across backend, frontend, Chromium e2e, and Compose smoke. E2E was clean: **18/18 passed** on the first attempt, including the retries-disabled #18 regression.
 
-This is **PR evidence until PR #19 merges**. Do not describe #18 as closed or the fresh stopped-spool sync as merged into `main` before then.
+PR #19 is merged to `main` at `50eaf450d4746569160876d81beb2f97c432c288`, closing #18. Post-merge `main` CI run `34355423171` completed successfully.
+
+### #11/#12 executed remediation evidence
+
+PR #20 is a coordinated Phase 1 safety slice because the executed B2→B3 composition can currently destroy local audio: a stale generation keeps emitting evidence, a newer generation accepts the same sequence with different bytes, and sequence-only reconciliation can delete the older local fragment. The two issue responsibilities remain distinct.
+
+For #11, a server-authoritative stale-writer conflict from either heartbeat or chunk upload now fences the browser generation. The browser uses the already-bounded Stop path to stop `MediaRecorder`/microphone capture, releases the capture lock, retains emitted local evidence, labels it **orphaned local evidence — not safely syncable**, and withholds Resume / Finish recovered / Sync actions that the stale ownership would make invalid. Reload also re-derives fencing from server epoch/writer truth. The existing lost-successful-claim exception is preserved. No heartbeat stall is converted into an audio gap.
+
+For #12, compact accepted ranges may delete a local chunk only when that chunk belongs to the server session's current `capture_epoch`. This is explicitly an **interim Phase 1 safety guard**. It does not define the future per-sequence multi-client reconciliation identity contract, which remains ADR-gated before native/multi-device semantics harden.
+
+The retries-disabled Playwright suite exercises both heartbeat-triggered and chunk-triggered fencing. Its B2→B3 composition then has a newer epoch accept the victim sequence with a different SHA, completes that newer generation, reloads the page, and proves the exact older local fragment (sequence + epoch + SHA + byte length) still survives as orphaned evidence.
+
+Code witness before this documentation reconciliation: `8194fe65e2b2597594f973b729d378ff80403236`. GitHub Actions run `34359040563` completed successfully across backend, frontend, Chromium E2E, and Compose smoke. E2E was clean: **20/20 passed** on the first attempt; the new fenced-capture suite explicitly sets `retries: 0`.
+
+This is **PR evidence until PR #20 merges**. Do not describe #11/#12 as fixed on `main` before then.
 
 Consequences for current planning:
 
 - "Browser disappearance without a clean Stop creates an interruption" remains unreliable until #10 is fixed.
 - "Already-spooled evidence remains recoverable after ownership rotates" remains unsafe until #11/#12 are fixed.
 - The server correctly refuses incomplete finalization, but the browser still needs an explicit missing-sequence resolution path (#13).
-- PR #19 provides evidence that the clean-Stop single-flight race is fixed without weakening #14 behavior, pending merge.
+- The clean-Stop single-flight race is fixed on `main` by PR #19 without weakening #14 behavior.
 
-Remaining blocker order after PR #19: **#11 + #12**, then **#13**, then **#10**. Keep those as bounded work items unless executed evidence requires otherwise.
+Remaining blocker order after PR #20: **#13**, then **#10**, then the required real Chrome/Edge desktop witness. Keep those as bounded work items unless executed evidence requires otherwise.
 
 ## Phase 2 / downstream gate
 
@@ -250,11 +270,10 @@ This is **not a current runtime failure** because no STT, diarization, summary, 
 
 In order:
 
-1. Review and merge the proven #18 remediation in PR #19.
-2. Fix #11 and the #12 interim reconciliation safety requirement as the next coordinated area, while keeping their issue-level responsibilities distinct.
-3. Fix #13's explicit missing-sequence resolution and gap-amplification behavior.
-4. Fix #10's liveness/interruption semantics without automatically equating a heartbeat stall with audio loss.
-5. Run the required real desktop Chrome/Edge background/minimized witness only after the blockers above are fixed.
+1. Review and merge the proven #11/#12 safety remediation in PR #20.
+2. Fix #13's explicit missing-sequence resolution and gap-amplification behavior.
+3. Fix #10's liveness/interruption semantics without automatically equating a heartbeat stall with audio loss.
+4. Run the required real desktop Chrome/Edge background/minimized witness only after the blockers above are fixed.
 
 For the desktop witness, use an awake desktop/laptop, start a real microphone recording, background/minimize the browser while switching among ordinary applications for a bounded interval, then return and Stop. Record the exact OS, browser/version, duration, and final continuity/ACK evidence.
 
@@ -281,7 +300,7 @@ Do not describe those as working until repository evidence proves them.
 
 GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**.
 
-PR #19 is the current bounded #18 remediation. It must remain unmerged until final review and CI on the final documentation head are complete. After #19 merges, the immediate implementation area is #11 plus the #12 interim reconciliation safety guard.
+PR #20 is the current coordinated-but-bounded #11/#12 safety remediation. It must remain unmerged until final review and CI on the final documentation head are complete. After #20 merges, #13 is the immediate implementation blocker.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
@@ -318,10 +337,10 @@ Resolve these by evidence/ADR when their implementation phase begins:
 - Raw audio is not stored as database blobs.
 - Multiple simultaneous sessions are a normal operating condition.
 - A single live session has one active capture generation at a time; each resumed generation is fenced by fresh writer identity + incremented epoch.
-- Fencing is enforced server-side, but the fenced client does not currently stop capturing (#11).
-- Sequence-only reconciliation can still delete non-matching local evidence (#12).
+- PR #20 proves a terminal fenced-client path and honest orphaned-evidence UI for #11, but that behavior is not `main` truth until the PR merges.
+- PR #20 proves an interim same-epoch deletion guard for #12, but the proper multi-client reconciliation identity contract remains deliberately deferred.
 - If an expected middle fragment is absent from the local spool at finalization, the product currently has no explicit terminal-resolution path (#13).
-- PR #19 proves a bounded fresh stopped-spool sync for #18, but that behavior is not `main` truth until the PR merges.
+- PR #19's bounded fresh stopped-spool sync for #18 is merged on `main` at `50eaf450d4746569160876d81beb2f97c432c288`.
 - Cross-device takeover is not yet claimed.
 - Public upstream must remain free of deployment secrets and organization-private data.
 
