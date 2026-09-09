@@ -25,7 +25,7 @@ The foundation stack is:
 - Python + FastAPI + Pydantic API;
 - PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
 - Celery + Redis background processing;
-- Dexie/IndexedDB local browser spool;
+- Dexie/IndexedDB local browser recovery spool;
 - Uppy + tus/tusd resumable existing-recording upload;
 - Groq Whisper API as primary STT;
 - faster-whisper/CTranslate2 as local STT fallback;
@@ -33,7 +33,7 @@ The foundation stack is:
 - Docker Compose deployment baseline;
 - Caddy as the default/simple reverse proxy, replaceable downstream.
 
-Architecture invariants are defined in `docs/ARCHITECTURE.md` and `AGENTS.md`.
+Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
 
 Most important:
 
@@ -42,16 +42,28 @@ Most important:
 The durable recording path is conceptually:
 
 ```text
-capture -> local spool -> sequenced upload -> durable server write -> ACK
+capture -> local recovery spool -> sequenced upload -> durable server write -> ACK
 ```
 
 STT, diarization, live transcript delivery, and LLM summaries are downstream and may degrade without invalidating already acknowledged audio.
 
+The foundation audit added these non-optional guardrails before recording implementation:
+
+- browser IndexedDB is a recovery spool and must expose persistence/quota failure rather than pretending it is equivalent to server durability;
+- only one active capture writer may own a live session at once;
+- Stop/finalize declares a final sequence/high-water mark;
+- a server ACK requires durable audio plus durable acceptance metadata;
+- raw MediaRecorder chunks must not be assumed independently decodable;
+- product API routes start versioned under `/api/v1`;
+- `/healthz` is process liveness and `/readyz` is dependency readiness;
+- Live Intelligence must gain authentication/ownership before production exposure;
+- recording deletion/retention and visible recording state are part of the production privacy baseline.
+
 ## Repository state
 
-At this checkpoint the repository is still in **Phase 0: Foundation**.
+The repository is still in **Phase 0: Foundation**.
 
-Present/being established:
+Present:
 
 - Apache-2.0 license;
 - project README;
@@ -60,6 +72,7 @@ Present/being established:
 - roadmap;
 - agent working contract;
 - stack ADR;
+- recording/access guardrail ADR;
 - third-party reference notes.
 
 Not implemented yet:
@@ -74,13 +87,14 @@ Not implemented yet:
 - diarization;
 - summaries;
 - upload pipeline;
+- authentication;
 - production deployment.
 
 Do not describe any of those as working until repository evidence proves it.
 
 ## Immediate next delivery
 
-The next bounded work is **Phase 0 application scaffold**, not STT implementation.
+The next bounded work is GitHub Issue #2: **Phase 0 application scaffold**, not STT implementation.
 
 It should create the smallest runnable end-to-end skeleton:
 
@@ -93,15 +107,18 @@ infra          local Docker Compose baseline
 With:
 
 - a web page that can reach the API;
-- API `/health` (or equivalent) endpoint;
+- `/healthz` process liveness and `/readyz` PostgreSQL readiness;
+- product API namespace reserved under `/api/v1`;
+- generated OpenAPI -> TypeScript contract used by the web app;
 - PostgreSQL connectivity and migration tooling;
 - Redis connectivity available for later workers;
 - initial lint/typecheck/test commands;
 - CI that runs those checks;
+- pinned/documented runtime/tooling expectations;
 - `.env.example` with no secrets;
 - clear local development instructions.
 
-Do **not** add microphone recording, Groq, GPU STT, diarization, or LLM dependencies in the first scaffold unless required to prove the base contracts.
+Do **not** add microphone recording, Groq, GPU STT, diarization, LLM, or production authentication dependencies in the first scaffold unless required to prove the base contracts.
 
 After the scaffold is proven, the next product slice is Phase 1 reliable web recording.
 
@@ -109,7 +126,7 @@ After the scaffold is proven, the next product slice is Phase 1 reliable web rec
 
 These should be resolved by evidence/ADR when their implementation phase begins:
 
-- exact authentication implementation / OIDC provider;
+- exact authentication implementation / OIDC or local-account strategy;
 - exact LLM provider(s) for rolling summaries;
 - final live diarization backend;
 - final offline diarization backend;
@@ -124,10 +141,12 @@ These should be resolved by evidence/ADR when their implementation phase begins:
 
 - Browser background/minimized recording on an awake desktop is a core web use case.
 - Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
+- Browser local storage may be best-effort unless persistent storage is granted; UI must reflect unsafe/degraded recovery state.
 - WebSocket is for realtime updates, not durable state.
 - Redis is not durable source of truth.
 - Raw audio is not stored as database blobs.
 - Multiple simultaneous sessions are a normal operating condition, not an edge case.
+- A single live session has one active capture writer at a time.
 - Public upstream must remain free of deployment secrets and organization-private data.
 
 ## Handoff rule
