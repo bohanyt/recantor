@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('records microphone audio through durable ACK and clean finalization', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   await page.waitForTimeout(2_600);
   await page.getByTestId('stop-recording').click();
@@ -30,8 +30,10 @@ test('keeps two independent browser contexts isolated while recording concurrent
       secondPage.getByTestId('start-recording').click(),
     ]);
     await Promise.all([
-      expect(page.getByTestId('recorder-message')).toContainText('Recording'),
-      expect(secondPage.getByTestId('recorder-message')).toContainText('Recording'),
+      expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1'),
+      expect(secondPage.getByTestId('recorder-message')).toContainText(
+        'Recording capture generation 1',
+      ),
     ]);
 
     await page.waitForTimeout(2_600);
@@ -61,7 +63,7 @@ test('keeps recording locally through temporary chunk-upload loss and catches up
   await page.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   await expect
     .poll(async () => page.getByTestId('pending-chunks').textContent(), { timeout: 10_000 })
@@ -85,7 +87,7 @@ test('recovers IndexedDB audio after refresh when chunk uploads were unavailable
   await page.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   await expect
     .poll(async () => page.getByTestId('pending-chunks').textContent(), { timeout: 10_000 })
@@ -102,13 +104,15 @@ test('recovers IndexedDB audio after refresh when chunk uploads were unavailable
   await expect(page.getByTestId('pending-chunks')).toContainText('0 fragments');
 });
 
-test('surfaces recovery after the recording tab disappears without a clean Stop', async ({
+test('starts a fresh fenced capture generation after the recording tab disappears', async ({
   context,
 }) => {
   const recordingPage = await context.newPage();
   await recordingPage.goto('/');
   await recordingPage.getByTestId('start-recording').click();
-  await expect(recordingPage.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(recordingPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
   await recordingPage.waitForTimeout(2_600);
   await recordingPage.close();
 
@@ -116,9 +120,101 @@ test('surfaces recovery after the recording tab disappears without a clean Stop'
   await recoveryPage.goto('/');
   await expect(recoveryPage.getByTestId('resume-recording')).toBeVisible({ timeout: 10_000 });
   await recoveryPage.getByTestId('resume-recording').click();
-  await expect(recoveryPage.getByTestId('recorder-message')).toContainText('Recording', {
-    timeout: 10_000,
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 2',
+    { timeout: 10_000 },
+  );
+  await recoveryPage.waitForTimeout(2_200);
+  await recoveryPage.getByTestId('stop-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
   });
+});
+
+test('retries a lost successful capture claim without incrementing the generation twice', async ({
+  context,
+}) => {
+  const recordingPage = await context.newPage();
+  await recordingPage.goto('/');
+  await recordingPage.getByTestId('start-recording').click();
+  await expect(recordingPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
+  await recordingPage.waitForTimeout(2_600);
+  await recordingPage.close();
+
+  const recoveryPage = await context.newPage();
+  let claimCalls = 0;
+  await recoveryPage.route('**/api/v1/sessions/*/capture/claim', async (route) => {
+    claimCalls += 1;
+    if (claimCalls === 1) {
+      const response = await route.fetch();
+      expect(response.ok()).toBeTruthy();
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await recoveryPage.goto('/');
+  await expect(recoveryPage.getByTestId('resume-recording')).toBeVisible({ timeout: 10_000 });
+  await recoveryPage.getByTestId('resume-recording').click();
+  await expect(recoveryPage.getByRole('alert')).toBeVisible({ timeout: 10_000 });
+  await expect(recoveryPage.getByTestId('resume-recording')).toBeVisible();
+
+  await recoveryPage.getByTestId('resume-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 2',
+    { timeout: 10_000 },
+  );
+  expect(claimCalls).toBe(2);
+
+  await recoveryPage.waitForTimeout(2_200);
+  await recoveryPage.getByTestId('stop-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
+
+test('does not claim a new live generation until old recovery chunks are durably ACKed', async ({
+  context,
+}) => {
+  await context.route('**/api/v1/sessions/*/chunks/*', async (route) => route.abort('failed'));
+
+  const recordingPage = await context.newPage();
+  await recordingPage.goto('/');
+  await recordingPage.getByTestId('start-recording').click();
+  await expect(recordingPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 1',
+  );
+  await expect
+    .poll(async () => recordingPage.getByTestId('pending-chunks').textContent(), {
+      timeout: 10_000,
+    })
+    .not.toContain('0 fragments');
+  await recordingPage.close();
+
+  const recoveryPage = await context.newPage();
+  let claimCalls = 0;
+  await recoveryPage.route('**/api/v1/sessions/*/capture/claim', async (route) => {
+    claimCalls += 1;
+    await route.continue();
+  });
+  await recoveryPage.goto('/');
+  await recoveryPage.getByTestId('resume-recording').click();
+  await expect(recoveryPage.getByRole('alert')).toContainText('must receive a durable ACK', {
+    timeout: 15_000,
+  });
+  expect(claimCalls).toBe(0);
+
+  await context.unroute('**/api/v1/sessions/*/chunks/*');
+  await recoveryPage.getByTestId('resume-recording').click();
+  await expect(recoveryPage.getByTestId('recorder-message')).toContainText(
+    'Recording capture generation 2',
+    { timeout: 20_000 },
+  );
+  expect(claimCalls).toBe(1);
+
   await recoveryPage.waitForTimeout(2_200);
   await recoveryPage.getByTestId('stop-recording').click();
   await expect(recoveryPage.getByTestId('recorder-message')).toContainText('finalized', {
@@ -132,7 +228,7 @@ test('a second same-origin tab cannot silently become the active recorder', asyn
 }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   const secondPage = await context.newPage();
   await secondPage.goto('/');
@@ -152,7 +248,7 @@ test('continues through a bounded Chromium background-tab interval while the bro
 }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   const foregroundPage = await context.newPage();
   await foregroundPage.goto('/');
@@ -183,7 +279,7 @@ test('stops and surfaces an explicit unsafe state when the IndexedDB chunk appen
 
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Recording');
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
 
   await expect(page.getByTestId('durability-state')).toContainText('Unsafe', { timeout: 10_000 });
   await expect(page.getByTestId('recorder-message')).toContainText('Capture stopped', {
@@ -197,5 +293,43 @@ test('stops and surfaces an explicit unsafe state when the IndexedDB chunk appen
     {
       timeout: 20_000,
     },
+  );
+});
+
+test('turns an unexpected microphone-track end into visible recoverable gap evidence', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const mediaDevices = navigator.mediaDevices;
+    const original = mediaDevices.getUserMedia.bind(mediaDevices);
+    mediaDevices.getUserMedia = async (...args) => {
+      const stream = await original(...args);
+      (window as unknown as { __recantorTestStream?: MediaStream }).__recantorTestStream = stream;
+      return stream;
+    };
+  });
+
+  await page.goto('/');
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('Recording capture generation 1');
+  await page.waitForTimeout(2_600);
+
+  await page.evaluate(() => {
+    const stream = (window as unknown as { __recantorTestStream?: MediaStream }).__recantorTestStream;
+    const track = stream?.getAudioTracks()[0];
+    if (!track) throw new Error('test microphone track unavailable');
+    track.dispatchEvent(new Event('ended'));
+  });
+
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Capture stopped after a browser or microphone interruption',
+    { timeout: 10_000 },
+  );
+  await expect(page.getByTestId('finish-recovered')).toBeVisible();
+  await page.waitForTimeout(1_200);
+  await page.getByTestId('finish-recovered').click();
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Explicit interruption evidence',
+    { timeout: 20_000 },
   );
 });
