@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
@@ -33,8 +33,8 @@ describe('App', () => {
   it('shows independent API and database readiness states', async () => {
     renderApp();
 
-    expect(await screen.findByTestId('health-state')).toHaveTextContent('Online');
-    expect(await screen.findByTestId('readiness-state')).toHaveTextContent('Online');
+    await waitFor(() => expect(screen.getByTestId('health-state')).toHaveTextContent('Online'));
+    await waitFor(() => expect(screen.getByTestId('readiness-state')).toHaveTextContent('Online'));
     expect(screen.getByText(/without depending on PostgreSQL/i)).toBeInTheDocument();
   });
 });
