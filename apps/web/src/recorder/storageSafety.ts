@@ -24,12 +24,10 @@ export async function inspectStorageSafety(requestPersistence: boolean): Promise
     };
   }
 
-  let persisted: boolean | null = null;
+  let persisted: boolean | null;
   try {
-    persisted = await manager.persisted();
-    if (requestPersistence && !persisted) {
-      persisted = await manager.persist();
-    }
+    const alreadyPersisted = await manager.persisted();
+    persisted = requestPersistence && !alreadyPersisted ? await manager.persist() : alreadyPersisted;
   } catch {
     persisted = null;
   }
