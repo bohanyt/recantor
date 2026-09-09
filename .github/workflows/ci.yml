@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   PYTHON_VERSION: "3.13"
@@ -122,16 +122,24 @@ jobs:
         run: pnpm --dir apps/web generate:api
       - name: Frontend lint
         run: pnpm --dir apps/web lint
-      - name: Show Prettier patch for Issue #13 files
+      - name: Commit exact Prettier output for Issue #13 files
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          git reset --hard HEAD
+          git fetch origin "$HEAD_REF"
+          git checkout -B formatter-head FETCH_HEAD
           pnpm --dir apps/web exec prettier --write src/recorder/controller.ts e2e/missing-sequence.spec.ts
-          git diff -- apps/web/src/recorder/controller.ts apps/web/e2e/missing-sequence.spec.ts
-      - uses: actions/upload-artifact@v4
-        with:
-          name: prettier-issue13
-          path: |
-            apps/web/src/recorder/controller.ts
-            apps/web/e2e/missing-sequence.spec.ts
+          if git diff --quiet -- apps/web/src/recorder/controller.ts apps/web/e2e/missing-sequence.spec.ts; then
+            echo "Issue #13 files already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/recorder/controller.ts apps/web/e2e/missing-sequence.spec.ts
+          git commit -m "style(web): apply prettier to issue 13 recovery"
+          git push origin HEAD:"$HEAD_REF"
       - name: Frontend format
         run: pnpm --dir apps/web format:check
       - name: Frontend typecheck
