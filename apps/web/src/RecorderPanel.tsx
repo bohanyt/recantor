@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
-import { RecorderController, type RecorderSnapshot } from './recorder/controller';
+import { FencedRecorderController, type FencedRecorderSnapshot } from './recorder/fencedController';
 
 function durationLabel(milliseconds: number): string {
   const totalSeconds = Math.floor(milliseconds / 1_000);
@@ -17,7 +17,11 @@ function bytesLabel(bytes: number | null): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-function durabilityLabel(snapshot: RecorderSnapshot): string {
+function durabilityLabel(snapshot: FencedRecorderSnapshot): string {
+  if (snapshot.captureFenced && snapshot.pendingChunks > 0) {
+    return 'Orphaned local evidence — not safely syncable';
+  }
+  if (snapshot.captureFenced) return 'Capture fenced — local ownership stale';
   if (snapshot.localWriteFailed) return 'Unsafe — local spool failed';
   if (snapshot.phase === 'complete' && snapshot.sessionId) return 'Server synced';
   if (snapshot.pendingChunks > 0 && snapshot.storage?.persisted) return 'Locally recoverable';
@@ -31,8 +35,15 @@ function durabilityLabel(snapshot: RecorderSnapshot): string {
   return 'Ready';
 }
 
+function pendingAudioLabel(snapshot: FencedRecorderSnapshot): string {
+  const noun = snapshot.pendingChunks === 1 ? 'fragment' : 'fragments';
+  return snapshot.captureFenced
+    ? `${snapshot.pendingChunks} orphaned ${noun}`
+    : `${snapshot.pendingChunks} ${noun}`;
+}
+
 export function RecorderPanel() {
-  const controller = useMemo(() => new RecorderController(), []);
+  const controller = useMemo(() => new FencedRecorderController(), []);
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -45,8 +56,9 @@ export function RecorderPanel() {
   }, [controller]);
 
   const canStart =
-    snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error';
-  const recoverable = snapshot.phase === 'recoverable';
+    !snapshot.captureFenced &&
+    (snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error');
+  const recoverable = snapshot.phase === 'recoverable' && !snapshot.captureFenced;
   const busy = snapshot.phase === 'requesting' || snapshot.phase === 'finalizing';
 
   return (
@@ -89,7 +101,7 @@ export function RecorderPanel() {
             Start recording
           </button>
         )}
-        {snapshot.phase === 'recording' && (
+        {snapshot.phase === 'recording' && !snapshot.captureFenced && (
           <button
             type="button"
             onClick={() => void controller.stop()}
@@ -99,7 +111,7 @@ export function RecorderPanel() {
             Stop
           </button>
         )}
-        {snapshot.phase === 'finalizing' && (
+        {snapshot.phase === 'finalizing' && !snapshot.captureFenced && (
           <button
             type="button"
             onClick={() => controller.deferFinalization()}
@@ -129,7 +141,7 @@ export function RecorderPanel() {
             </button>
           </>
         )}
-        {snapshot.sessionId && snapshot.pendingChunks > 0 && (
+        {snapshot.sessionId && snapshot.pendingChunks > 0 && !snapshot.captureFenced && (
           <button
             type="button"
             onClick={() => void controller.syncNow()}
@@ -146,7 +158,7 @@ export function RecorderPanel() {
         <Metric label="Durability" value={durabilityLabel(snapshot)} testId="durability-state" />
         <Metric
           label="Pending local audio"
-          value={`${snapshot.pendingChunks} fragment${snapshot.pendingChunks === 1 ? '' : 's'}`}
+          value={pendingAudioLabel(snapshot)}
           testId="pending-chunks"
         />
         <Metric
@@ -168,7 +180,8 @@ export function RecorderPanel() {
         <p className="mt-2 text-[var(--muted)]">
           Browser storage: {snapshot.storage?.persisted ? 'persistent' : 'best effort'} · estimated
           free {bytesLabel(snapshot.storage?.remainingBytes ?? null)} · capture lock{' '}
-          {snapshot.lockKind ?? 'not held'} · explicit gaps {snapshot.gapCount}
+          <span data-testid="capture-lock-state">{snapshot.lockKind ?? 'not held'}</span> · explicit
+          gaps {snapshot.gapCount}
         </p>
         {snapshot.error && (
           <p className="mt-2 font-medium text-[var(--danger)]" role="alert">
