@@ -92,12 +92,12 @@ describe('recorder recovery database', () => {
     await appendCapturedChunk(first, advanced);
 
     expect((await getLocalSession(session.sessionId))?.lastSequence).toBe(1);
-    expect(await (await listSpoolChunks(session.sessionId))[0].blob.text()).toBe('first-audio');
+    expect((await listSpoolChunks(session.sessionId))[0].sha256).toBe('hash-first-audio');
 
     const stale = makeChunk(1, 'second-tab-audio');
     await expect(appendCapturedChunk(stale, advanced)).rejects.toThrow(/expected 2/i);
 
     expect((await getLocalSession(session.sessionId))?.lastSequence).toBe(1);
-    expect(await (await listSpoolChunks(session.sessionId))[0].blob.text()).toBe('first-audio');
+    expect((await listSpoolChunks(session.sessionId))[0].sha256).toBe('hash-first-audio');
   });
 });
