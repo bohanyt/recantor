@@ -223,7 +223,9 @@ Consequences for statements elsewhere in this file:
 - "Already-spooled evidence remains recoverable after ownership rotates" does not currently hold for evidence produced by a fenced generation (#11, #12).
 - "A session may become complete only after every expected sequence is either durably present or explicitly represented as a gap" is upheld by the server, but the browser has no path to declare the gap, so affected sessions never reach a terminal state at all (#13).
 
-Dependency order for the fixes: #14 first (self-contained, unblocks testing of the rest), then #11 with #12 landing alongside it, then #13, then #10. Fixes belong in separate bounded PRs.
+PR #17 implements the bounded #14 remediation on branch `phase1/b5-bounded-finalization`. Recorder HTTP attempts now have a configurable deadline (`VITE_RECORDING_REQUEST_TIMEOUT_MS`, default 5000 ms); timeout remains retryable inside the existing bounded upload retry loop; exhausted attempts retain local audio and return Stop to `recoverable`; and `FINALIZING` exposes an enabled **Keep locally and finish later** escape that cancels in-flight recorder requests without discarding emitted evidence. GitHub Actions run `34343182531` on head `7fa78be6a45807e57cbba7e80d67c338ec4f973f` completed successfully across backend, frontend, Chromium e2e, and Compose smoke. The e2e suite includes a request that intentionally never settles and proves both automatic bounded recovery and the explicit finalization escape. This is PR evidence until #17 merges; do not describe #14 as merged before then.
+
+Remaining blocker order after #17: #11 with #12 alongside it, then #13, then #10. Fixes belong in separate bounded PRs unless a proven dependency makes a coordinated slice clearer.
 
 ## Phase 2 / downstream gate
 
@@ -235,10 +237,10 @@ This is **not a current runtime failure**: no STT, diarization, summary, or Cele
 
 Two things remain, in order:
 
-1. **Fix the five validated blockers** (#10, #11, #12, #13, #14), each with regression coverage that the executed repro no longer reproduces.
+1. **Merge the proven #14 remediation, then fix the four remaining validated blockers** (#10, #11, #12, #13), each with regression coverage that the executed repro no longer reproduces.
 2. **Real desktop background/minimized witness.** Run Chrome and/or Edge on an awake desktop/laptop, start a real microphone recording, background/minimize the browser while switching among ordinary applications for a bounded interval, then return and Stop. Record the exact OS, browser/version, duration, and final continuity/ACK evidence.
 
-The witness remains a required Phase 1 exit item, but it should be recorded **after** the blockers are fixed — a witness taken against the current recorder would be measuring a code path that is about to change, and the fenced-writer and stalled-upload defects can both corrupt what the witness appears to show.
+The witness remains a required Phase 1 exit item, but it should be recorded **after** the blockers are fixed. After #14, the fenced-writer/reconciliation defects (#11/#12) remain capable of corrupting what a witness appears to show.
 
 CI cannot substitute for that platform/lifecycle witness. Until it is recorded, describe automated background behavior only as the tested headless Chromium background-tab case, with the tooling caveat above.
 
@@ -263,7 +265,7 @@ Do not describe those as working until repository evidence proves them.
 
 GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop browser recording and recovery**. Issues #10-#14 are its blocking sub-issues.
 
-The immediate next action is #14 (bounded upload deadline and an always-escapable finalization state), because it is self-contained and makes the remaining repros testable.
+PR #17 is the bounded #14 remediation and must be reviewed/merged before #14 is considered closed. After that, the immediate implementation slice is #11 plus the #12 interim reconciliation guard, because the fenced-writer behavior is the currently reproduced trigger for #12's local-audio deletion path.
 
 Do **not** pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recording path must be trustworthy independently first.
 
