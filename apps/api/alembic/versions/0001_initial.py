@@ -4,6 +4,7 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-09-09
 """
+
 from collections.abc import Sequence
 
 revision: str = "0001"
