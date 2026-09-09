@@ -149,7 +149,7 @@ test('chunk fencing retains conflicting old-epoch audio through reconciliation',
   const newEpoch = await externalClaim(page, beforeClaim.session!, newWriterId);
 
   await expectFencedUi(page);
-  const fencedState = await expect
+  await expect
     .poll(async () => {
       const state = await readRecorderState(page);
       return state.chunks.find((chunk) => chunk.captureEpoch === beforeClaim.session!.captureEpoch) ?? null;
