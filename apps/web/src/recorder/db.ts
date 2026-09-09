@@ -76,6 +76,44 @@ export async function putSpoolChunk(chunk: SpoolChunk): Promise<void> {
   await recorderDb.chunks.put(chunk);
 }
 
+export async function appendCapturedChunk(
+  chunk: SpoolChunk,
+  nextSession: LocalRecordingSession,
+): Promise<void> {
+  await recorderDb.transaction('rw', recorderDb.sessions, recorderDb.chunks, async () => {
+    const storedSession = await recorderDb.sessions.get(chunk.sessionId);
+    if (!storedSession) throw new Error('Local recording session is missing.');
+    if (storedSession.writerId !== chunk.writerId || storedSession.captureEpoch !== chunk.captureEpoch) {
+      throw new Error('Local capture ownership changed before the audio fragment could be committed.');
+    }
+
+    const expectedSequence = storedSession.lastSequence + 1;
+    if (chunk.sequence !== expectedSequence) {
+      throw new Error(
+        `Refusing stale local sequence ${chunk.sequence}; expected ${expectedSequence}.`,
+      );
+    }
+    if (
+      nextSession.sessionId !== storedSession.sessionId ||
+      nextSession.writerId !== storedSession.writerId ||
+      nextSession.captureEpoch !== storedSession.captureEpoch ||
+      nextSession.lastSequence !== chunk.sequence ||
+      nextSession.lastMonotonicEndMs !== chunk.monotonicEndMs ||
+      nextSession.lastWallEndMs !== chunk.wallEndMs
+    ) {
+      throw new Error('Local recording high-water metadata does not match the captured fragment.');
+    }
+
+    const existing = await recorderDb.chunks.get(chunk.key);
+    if (existing) {
+      throw new Error(`Refusing to overwrite unacknowledged local sequence ${chunk.sequence}.`);
+    }
+
+    await recorderDb.chunks.add(chunk);
+    await recorderDb.sessions.put(nextSession);
+  });
+}
+
 export async function listSpoolChunks(sessionId: string): Promise<SpoolChunk[]> {
   const chunks = await recorderDb.chunks.where('sessionId').equals(sessionId).toArray();
   return chunks.sort((left, right) => left.sequence - right.sequence);
