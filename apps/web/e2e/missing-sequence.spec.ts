@@ -254,9 +254,7 @@ test('late local recovery uploads the missing sequence and completes without dec
   const complete = await fetchServerState(page, fixture.sessionId);
   expect(complete.session.state).toBe('complete');
   expect(complete.gaps).toHaveLength(gapCountBeforeRestore);
-  expect(
-    complete.gaps.some(
-      (gap) => gap.sequence_start === 2 && gap.sequence_end === 2,
-    ),
-  ).toBe(false);
+  expect(complete.gaps.some((gap) => gap.sequence_start === 2 && gap.sequence_end === 2)).toBe(
+    false,
+  );
 });

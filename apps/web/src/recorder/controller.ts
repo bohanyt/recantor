@@ -120,7 +120,8 @@ function isRetryableUpload(error: unknown): boolean {
 
 function missingSequencesFromState(state: RecordingStateResponse): number[] {
   const finalSequence = state.session.final_sequence;
-  if (state.session.state !== 'finalizing' || finalSequence === null || finalSequence < 1) return [];
+  if (state.session.state !== 'finalizing' || finalSequence === null || finalSequence < 1)
+    return [];
 
   const accounted = new Set<number>();
   for (const range of state.accepted_ranges) {
@@ -532,10 +533,7 @@ export class RecorderController {
         );
         return;
       }
-      const complete = await this.finalizeLocalSession(
-        current,
-        finalizationAbortController.signal,
-      );
+      const complete = await this.finalizeLocalSession(current, finalizationAbortController.signal);
       if (!complete) {
         await this.keepStoppedSessionRecoverable(
           current,
@@ -566,7 +564,8 @@ export class RecorderController {
   }
 
   async declareMissingSequencesAsGaps(): Promise<void> {
-    if (this.snapshot.phase !== 'recoverable' || this.snapshot.missingSequences.length === 0) return;
+    if (this.snapshot.phase !== 'recoverable' || this.snapshot.missingSequences.length === 0)
+      return;
     await this.finishRecoveredWithDeclaredGaps([...this.snapshot.missingSequences]);
   }
 
