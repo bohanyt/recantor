@@ -29,6 +29,7 @@ Use:
 - React
 - TypeScript
 - Vite
+- Tailwind CSS
 - TanStack Query
 - Dexie / IndexedDB
 
@@ -36,8 +37,9 @@ Rationale:
 
 - React/TypeScript is widely documented and familiar to human/AI maintainers.
 - Vite keeps the web app a conventional SPA and avoids introducing a second server-side application framework.
+- Tailwind is mainstream and works well with a small tokenized design system; Recantor should keep organization branding in CSS variables/configuration rather than hard-coded product forks.
 - TanStack Query provides a standard boundary for server state rather than inventing custom caching/fetch state.
-- Dexie provides a readable durable local spool over raw IndexedDB APIs.
+- Dexie provides a readable browser recovery spool over raw IndexedDB APIs.
 
 Do not use Next.js as the primary application framework unless a later product requirement genuinely needs its server-rendering/server-runtime capabilities.
 
@@ -57,6 +59,16 @@ Rationale:
 
 The API begins as a modular monolith.
 
+### Runtime baseline
+
+For the initial application scaffold:
+
+- use Node.js 24 LTS for the web/tooling runtime;
+- use Python 3.13 for the main FastAPI application;
+- record/pin runtime expectations in repository metadata and CI.
+
+GPU/ML services are separate runtime boundaries and may pin a different supported Python minor later if a selected CUDA/ML dependency requires it. That exception must stay local to the service rather than silently changing the whole application runtime.
+
 ### API contracts
 
 FastAPI/Pydantic is the source of truth for HTTP API schemas.
@@ -64,6 +76,8 @@ FastAPI/Pydantic is the source of truth for HTTP API schemas.
 Generate OpenAPI and derive TypeScript API types/client bindings from it rather than maintaining duplicate handwritten request/response interfaces.
 
 Future mobile/native clients should use the same documented server contracts.
+
+Product API routes start versioned under `/api/v1`. Operational liveness/readiness endpoints remain outside that product version namespace as defined by ADR 0002.
 
 ### Database
 
@@ -104,6 +118,8 @@ WebSocket is not a persistence mechanism. A reconnecting client must be able to 
 Use browser local persistent storage through Dexie/IndexedDB for unacknowledged chunks.
 
 Use sequence-numbered idempotent server ingestion and delete local chunks only after durable server ACK.
+
+Browser storage remains a recovery spool whose persistence/quota must be observed as defined by ADR 0002; it is not equivalent to server durability.
 
 Realtime audio processing may use Web Audio/PCM/WebSocket separately, but it must not replace the durable archive lane.
 
@@ -160,7 +176,7 @@ Use:
 - `Playwright` for real browser behavior;
 - GitHub Actions for public upstream CI.
 
-Exact lint/format tools will be selected during the application scaffold and recorded if they create meaningful architectural constraints.
+The Phase 0 scaffold should choose conventional lint/format tooling and wire it into CI rather than leaving formatting policy implicit. Exact package versions belong in lockfiles/repository metadata.
 
 ## Consequences
 
@@ -173,7 +189,8 @@ Exact lint/format tools will be selected during the application scaffold and rec
 - typed API boundary through Pydantic/OpenAPI/TypeScript generation;
 - production-capable relational persistence from the beginning;
 - minimal distributed infrastructure;
-- natural path from browser client to future native clients.
+- natural path from browser client to future native clients;
+- frontend branding can be changed through configuration/design tokens rather than organization-specific code forks.
 
 ### Costs
 
