@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendCapturedChunk,
   chunkKey,
+  commitStartedSession,
   deleteSpoolChunk,
   getLatestLocalSession,
   getLocalSession,
+  getOrCreatePendingStart,
   listSpoolChunks,
   putLocalSession,
   putSpoolChunk,
@@ -19,6 +21,8 @@ const session: LocalRecordingSession = {
   clientRequestId: 'request-a',
   writerId: 'writer-a',
   captureEpoch: 1,
+  recoveryToken: 'recovery-token-a',
+  pendingWriterId: null,
   state: 'recording',
   mimeType: 'audio/webm',
   lastSequence: 1,
@@ -51,10 +55,38 @@ function makeChunk(sequence: number, value = `chunk-${sequence}`): SpoolChunk {
 describe('recorder recovery database', () => {
   beforeEach(async () => {
     await recorderDb.open();
-    await recorderDb.transaction('rw', recorderDb.sessions, recorderDb.chunks, async () => {
-      await recorderDb.chunks.clear();
-      await recorderDb.sessions.clear();
-    });
+    await recorderDb.transaction(
+      'rw',
+      recorderDb.sessions,
+      recorderDb.chunks,
+      recorderDb.pendingStarts,
+      async () => {
+        await recorderDb.chunks.clear();
+        await recorderDb.sessions.clear();
+        await recorderDb.pendingStarts.clear();
+      },
+    );
+  });
+
+  it('persists one start identity across retries and promotes it atomically', async () => {
+    const pending = await getOrCreatePendingStart();
+    const retry = await getOrCreatePendingStart();
+    expect(retry).toEqual(pending);
+
+    const started: LocalRecordingSession = {
+      ...session,
+      sessionId: 'server-session',
+      clientRequestId: pending.clientRequestId,
+      writerId: pending.writerId,
+      recoveryToken: pending.recoveryToken,
+      lastSequence: 0,
+      lastMonotonicEndMs: 0,
+      lastWallEndMs: null,
+    };
+    await commitStartedSession(pending, started);
+
+    expect((await getLocalSession('server-session'))?.recoveryToken).toBe(pending.recoveryToken);
+    expect(await recorderDb.pendingStarts.get('pending-start')).toBeUndefined();
   });
 
   it('keeps ordered audio fragments until explicit deletion', async () => {
