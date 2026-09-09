@@ -403,6 +403,16 @@ export class RecorderController {
     return promise;
   }
 
+  private async syncStoppedSpool(): Promise<void> {
+    const preStopSync = this.syncPromise;
+    if (preStopSync) {
+      this.syncAbortController?.abort();
+      await preStopSync;
+    }
+    if (this.finalizationDeferred) return;
+    await this.syncNow();
+  }
+
   deferFinalization(): void {
     if (this.snapshot.phase !== 'finalizing') return;
     this.finalizationDeferred = true;
@@ -442,7 +452,7 @@ export class RecorderController {
         return;
       }
 
-      await this.syncNow();
+      await this.syncStoppedSpool();
       current = this.localSession ?? local;
       if (this.finalizationDeferred) {
         await this.keepStoppedSessionRecoverable(
