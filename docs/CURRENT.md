@@ -21,7 +21,8 @@ Future Android/iOS recorder clients will reuse the same server session/ingest pr
 
 The foundation stack is:
 
-- React + TypeScript + Vite web SPA;
+- React + TypeScript + Vite + Tailwind CSS web SPA;
+- TanStack Query for server state;
 - Python + FastAPI + Pydantic API;
 - PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
 - Celery + Redis background processing;
@@ -31,7 +32,8 @@ The foundation stack is:
 - faster-whisper/CTranslate2 as local STT fallback;
 - FFmpeg for media normalization;
 - Docker Compose deployment baseline;
-- Caddy as the default/simple reverse proxy, replaceable downstream.
+- Caddy as the default/simple reverse proxy, replaceable downstream;
+- Node.js 24 LTS for initial web/tooling and Python 3.13 for the main API.
 
 Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
 
