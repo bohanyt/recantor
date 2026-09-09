@@ -70,9 +70,9 @@ Non-optional recording guardrails:
 
 ## Repository state
 
-Canonical `main` at this checkpoint: `f989d88ec9765ae9678941ded11789ae810f6711`.
+Canonical `main` at this checkpoint: `3bdcc60a70b819166a4fb72eadefd636f558c4f9`.
 
-Post-merge CI run `34410387405` on that SHA completed successfully across the repository CI matrix.
+CI run `34413554794` on that SHA completed successfully across the repository CI matrix. The last merged implementation remains PR #20 at `f989d88ec9765ae9678941ded11789ae810f6711`; later `main` commits through this checkpoint are control-tower documentation/handoff updates rather than new recorder implementation.
 
 ### Phase 0 — complete
 
@@ -129,6 +129,21 @@ The last rule is explicitly an **interim Phase 1 safety mitigation**, not the fi
 
 The retries-disabled fenced-capture Playwright suite exercises heartbeat fencing, chunk fencing, capture/lock release, honest orphaned UI, and the executed B2→B3 composition where a newer generation accepts the same sequence with different bytes. The exact older local fragment survives completed takeover + reload. CI run `34359040563` passed with 20/20 E2E tests; final PR-head CI `34359711581` passed across backend, frontend, Chromium E2E, and Compose smoke. Post-merge `main` CI `34410387405` also completed successfully.
 
+### Phase 1G — Issue #13 implementation candidate, not merged
+
+PR #27 is open on `phase1/missing-sequence-resolution` as the bounded candidate for Issue #13. It is **not** delivered on `main` and must not be merged without explicit user instruction.
+
+Candidate behavior:
+
+- incomplete finalization surfaces the server's unresolved `missing_sequences` as recorder state and visible UI, including after reload of an already-`FINALIZING` session;
+- retry/recovery remains the non-destructive default, and Resume is withheld while the established finalization boundary still has missing sequence evidence;
+- declaring missing audio as permanently lost is a separate explicit user action that forwards only the currently confirmed missing sequence numbers as finalize-time gaps;
+- repeated failed Finish attempts on an already-`FINALIZING` session do not append another wall-clock recovery gap;
+- a late local fragment still uses the normal upload path and can complete the same finalization without declaring that sequence lost;
+- deterministic retries-disabled Playwright coverage exercises declared-gap completion, late-fill completion, and stable gap count across repeated failed finalization attempts.
+
+The candidate deliberately does not change `claim_capture` semantics for `FINALIZING`, does not generalize browser-eviction theory, and does not pull #10, #15, STT, diarization, Groq, Whisper, or LLM work into #13. Final PR-head CI after documentation/workflow cleanup remains the merge-readiness authority.
+
 ## Validated Phase 1 blocker status
 
 An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` originally reproduced five defects; final review later found #18. Their current status is:
@@ -138,7 +153,7 @@ An independent executed re-review at `e277535fca7bfcf5c046d79e07681b822e839398` 
 | #10 | **open blocker** | Liveness interruption is read-triggered and `interrupted_at` survives heartbeat restore. A stall can disappear if the next event is a heartbeat before any read observes it. |
 | #11 | **fixed / closed by PR #20** | Fenced capture now stops, releases mic/lock, retains emitted evidence, and surfaces it as orphaned rather than safely retryable. |
 | #12 | **fixed for Phase 1 / closed by PR #20** | Reconciliation now has the interim same-capture-epoch deletion guard; the final multi-client identity contract remains deferred. |
-| #13 | **open blocker — next** | If an expected middle sequence is absent from the local spool, the browser cannot deliberately declare it as a gap and repeated Finish attempts can append useless wall-clock gaps. |
+| #13 | **open blocker — PR #27 candidate, unmerged** | PR #27 supplies an explicit missing-sequence resolution path and deterministic declared-gap/late-fill/stable-retry coverage, but #13 remains open until the implementation is deliberately merged. |
 | #14 | **fixed / closed by PR #17** | Recorder requests are bounded and `FINALIZING` has a recoverable escape. |
 | #18 | **fixed / closed by PR #19** | Clean Stop runs a fresh stable-spool sync instead of reusing a stale pre-Stop snapshot. |
 
@@ -150,7 +165,7 @@ GitHub Issue #5 remains the source of truth for **Phase 1: reliable desktop brow
 
 Work in this order unless fresh evidence requires a change:
 
-1. **#13** — explicit missing-sequence resolution and stable gap accounting.
+1. **#13 / PR #27** — finish review and CI reconciliation for explicit missing-sequence resolution; do not treat it as delivered until an explicitly authorized merge.
 2. **#10** — liveness/interruption semantics, without automatically converting a heartbeat/liveness hole into an audio gap.
 3. **Real desktop Chrome/Edge witness** — awake Windows/desktop machine, real microphone capture, browser backgrounded/minimized for a bounded interval, return and Stop, then record exact OS/browser/version/duration plus final ACK/continuity evidence.
 4. Close Issue #5 only after the code blockers and real-platform witness are satisfied.
@@ -159,7 +174,7 @@ Do not pull Groq, Whisper, diarization, or LLM summaries into Phase 1. The recor
 
 ### #13 guardrails
 
-Issue #13 is the next implementation item. Required behavior includes:
+Issue #13 is the current implementation/review item until PR #27 is deliberately merged or rejected. Required behavior includes:
 
 - surface `missing_sequences` returned by incomplete finalize in recorder state/UI;
 - offer an explicit, informed user action to declare the unresolved sequence(s) as gaps only **after retry/recovery has been offered**;
