@@ -14,6 +14,10 @@ from recantor.recording import utcnow
 from recantor.settings import get_settings
 
 
+def recovery_token(writer_id: str) -> str:
+    return f"recantor-recovery-capability::{writer_id}::phase1c"
+
+
 @pytest_asyncio.fixture
 async def client(clean_recording_state) -> AsyncClient:
     del clean_recording_state
@@ -25,7 +29,11 @@ async def create_session(client: AsyncClient, writer_id: str) -> tuple[str, str]
     request_id = str(uuid4())
     response = await client.post(
         "/api/v1/sessions/live",
-        json={"client_request_id": request_id, "writer_id": writer_id},
+        json={
+            "client_request_id": request_id,
+            "writer_id": writer_id,
+            "recovery_token": recovery_token(writer_id),
+        },
     )
     assert response.status_code == 201, response.text
     return response.json()["id"], request_id
@@ -59,30 +67,148 @@ async def put_chunk(
 
 
 @pytest.mark.asyncio
-async def test_create_is_idempotent_and_competing_writer_is_rejected(client: AsyncClient) -> None:
+async def test_create_is_idempotent_and_new_generation_claim_is_fenced(client: AsyncClient) -> None:
     writer = "writer-primary-0001"
+    token = recovery_token(writer)
     session_id, request_id = await create_session(client, writer)
 
     retry = await client.post(
         "/api/v1/sessions/live",
-        json={"client_request_id": request_id, "writer_id": writer},
+        json={
+            "client_request_id": request_id,
+            "writer_id": writer,
+            "recovery_token": token,
+        },
     )
     assert retry.status_code == 201
     assert retry.json()["id"] == session_id
     assert retry.json()["capture_epoch"] == 1
 
-    conflict = await client.post(
+    bad_capability = await client.post(
         f"/api/v1/sessions/{session_id}/capture/claim",
-        json={"writer_id": "writer-secondary-0002", "expected_epoch": 1},
+        json={
+            "writer_id": "writer-generation-0002",
+            "expected_epoch": 1,
+            "recovery_token": "wrong-capability-value-that-is-long-enough-0001",
+        },
     )
-    assert conflict.status_code == 409
+    assert bad_capability.status_code == 409
 
-    same_writer = await client.post(
+    claim_body = {
+        "writer_id": "writer-generation-0002",
+        "expected_epoch": 1,
+        "recovery_token": token,
+    }
+    claimed = await client.post(
         f"/api/v1/sessions/{session_id}/capture/claim",
-        json={"writer_id": writer, "expected_epoch": 1},
+        json=claim_body,
     )
-    assert same_writer.status_code == 200
-    assert same_writer.json()["capture_epoch"] == 1
+    assert claimed.status_code == 200
+    assert claimed.json()["capture_epoch"] == 2
+    assert claimed.json()["active_writer_id"] == "writer-generation-0002"
+
+    lost_response_retry = await client.post(
+        f"/api/v1/sessions/{session_id}/capture/claim",
+        json=claim_body,
+    )
+    assert lost_response_retry.status_code == 200
+    assert lost_response_retry.json()["capture_epoch"] == 2
+
+    competing_retry = await client.post(
+        f"/api/v1/sessions/{session_id}/capture/claim",
+        json={
+            **claim_body,
+            "writer_id": "writer-generation-0003",
+        },
+    )
+    assert competing_retry.status_code == 409
+
+    old_heartbeat = await client.post(
+        f"/api/v1/sessions/{session_id}/heartbeat",
+        json={"writer_id": writer, "capture_epoch": 1},
+    )
+    assert old_heartbeat.status_code == 409
+
+    stale_new_chunk = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=writer,
+        epoch=1,
+        sequence=1,
+        payload=b"old-generation-after-takeover",
+        start_ms=0,
+        end_ms=1000,
+    )
+    assert stale_new_chunk.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_old_accepted_chunk_retry_survives_generation_takeover_but_new_old_chunk_does_not(
+    client: AsyncClient,
+) -> None:
+    writer = "writer-recovery-0001"
+    session_id, _ = await create_session(client, writer)
+    payload = b"accepted-before-takeover"
+    accepted = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=writer,
+        epoch=1,
+        sequence=1,
+        payload=payload,
+        start_ms=0,
+        end_ms=1000,
+    )
+    assert accepted.status_code == 200
+
+    next_writer = "writer-recovery-0002"
+    claimed = await client.post(
+        f"/api/v1/sessions/{session_id}/capture/claim",
+        json={
+            "writer_id": next_writer,
+            "expected_epoch": 1,
+            "recovery_token": recovery_token(writer),
+        },
+    )
+    assert claimed.status_code == 200
+    assert claimed.json()["capture_epoch"] == 2
+
+    duplicate_old_evidence = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=writer,
+        epoch=1,
+        sequence=1,
+        payload=payload,
+        start_ms=0,
+        end_ms=1000,
+    )
+    assert duplicate_old_evidence.status_code == 200
+    assert duplicate_old_evidence.json()["idempotent"] is True
+
+    new_old_evidence = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=writer,
+        epoch=1,
+        sequence=2,
+        payload=b"late-old-generation",
+        start_ms=1000,
+        end_ms=2000,
+    )
+    assert new_old_evidence.status_code == 409
+
+    new_generation = await put_chunk(
+        client,
+        session_id=session_id,
+        writer_id=next_writer,
+        epoch=2,
+        sequence=2,
+        payload=b"new-generation",
+        start_ms=1000,
+        end_ms=2000,
+    )
+    assert new_generation.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -364,7 +490,7 @@ async def test_two_sessions_keep_sequences_and_audio_metadata_isolated(client: A
 
 
 @pytest.mark.asyncio
-async def test_stale_heartbeat_becomes_interrupted_without_becoming_complete(
+async def test_stale_heartbeat_can_be_immediately_recovered_by_new_generation(
     client: AsyncClient,
 ) -> None:
     writer = "writer-heartbeat-0001"
@@ -387,7 +513,13 @@ async def test_stale_heartbeat_becomes_interrupted_without_becoming_complete(
 
     resumed = await client.post(
         f"/api/v1/sessions/{session_id}/capture/claim",
-        json={"writer_id": writer, "expected_epoch": 1},
+        json={
+            "writer_id": "writer-heartbeat-0002",
+            "expected_epoch": 1,
+            "recovery_token": recovery_token(writer),
+        },
     )
     assert resumed.status_code == 200
     assert resumed.json()["state"] == "recording"
+    assert resumed.json()["capture_epoch"] == 2
+    assert resumed.json()["active_writer_id"] == "writer-heartbeat-0002"
