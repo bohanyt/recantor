@@ -192,7 +192,10 @@ test('stops and surfaces an explicit unsafe state when the IndexedDB chunk appen
   await expect(page.getByTestId('finish-recovered')).toBeVisible();
 
   await page.getByTestId('finish-recovered').click();
-  await expect(page.getByTestId('recorder-message')).toContainText('Explicit interruption evidence', {
-    timeout: 20_000,
-  });
+  await expect(page.getByTestId('recorder-message')).toContainText(
+    'Explicit interruption evidence',
+    {
+      timeout: 20_000,
+    },
+  );
 });
