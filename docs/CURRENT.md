@@ -59,15 +59,7 @@ Retrying an already-complete finalize preserves the persisted classification.
 
 Issue #30 / PR #31 was squash-merged as `1aba22e22b859e84dfb016bc2bd211e067467e9c`; post-merge CI `34439502585` succeeded.
 
-Canonical transcript truth is PostgreSQL-backed immutable `TranscriptSegment` evidence with:
-
-- stable segment ID + `session_id`;
-- per-session monotonically increasing transcript `sequence` used as reconnect/publication cursor;
-- opaque producer key for retry idempotency;
-- explicit `start_ms` / `end_ms` on the recording timeline;
-- text plus optional language;
-- uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`;
-- reconnect-safe HTTP read at `/api/v1/sessions/{session_id}/transcript?after_sequence=...`.
+Canonical transcript truth is PostgreSQL-backed immutable `TranscriptSegment` evidence with stable segment/session identity, per-session monotonically increasing transcript sequence, opaque producer key, explicit `start_ms` / `end_ms`, text plus optional language, uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`, and reconnect-safe HTTP reads.
 
 Transcript sequence is independent from recording-chunk and utterance-work sequence.
 
@@ -75,25 +67,13 @@ Transcript sequence is independent from recording-chunk and utterance-work seque
 
 Issue #32 / PR #33 was squash-merged as `9ea3ee7ac9c8e9e1093ee78477ae1dc7f0d09939`.
 
-A committed `TranscriptionUtterance` has:
-
-- deterministic work UUID derived from `(session_id, canonical producer_key)`;
-- per-session monotonically increasing utterance sequence;
-- explicit `start_ms` / `end_ms`;
-- normalized media content type, SHA-256, byte length, and internal storage key;
-- independently decodable durable media at `sessions/<session-id>/utterances/<work-uuid>.media`;
-- durable identity manifest preserving retry/conflict semantics across a crash before DB commit;
-- deterministic canonical transcript producer key `utterance:<work-uuid>`.
+A committed `TranscriptionUtterance` has deterministic work identity, per-session sequence, explicit timing, normalized media metadata, independently decodable durable media, a durable identity manifest, and deterministic canonical transcript producer key `utterance:<work-uuid>`.
 
 Archive fragments and transcription utterances are distinct evidence namespaces. Archive ingest/ACK does not call the utterance path.
 
 ## Realtime PCM/VAD utterance producer — MERGED / Phase 2C CLOSED
 
-Issue #34 / PR #35 was squash-merged to `main` as:
-
-`7e0b2601ca17148db28df4b422d93c48273780cc`
-
-Post-merge CI run `34450139207` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
+Issue #34 / PR #35 was squash-merged to `main` as `7e0b2601ca17148db28df4b422d93c48273780cc`. Post-merge CI run `34450139207` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
 
 Merged realtime architecture:
 
@@ -101,7 +81,6 @@ Merged realtime architecture:
 same microphone MediaStream
         |
         +---------------- archive lane ----------------+
-        |                                               |
         |  MediaRecorder -> IndexedDB -> HTTP -> durable ACK
         |
         +--------------- realtime lane ----------------+
@@ -112,105 +91,98 @@ same microphone MediaStream
                          -> durable TranscriptionUtterance
 ```
 
-Rules proven by implementation/tests:
-
-- reuse the already-acquired microphone stream; no second `getUserMedia`;
-- PCM timing derives from monotonically increasing audio sample offsets rather than browser timers;
-- realtime backpressure/discontinuity may degrade live intelligence but must not block or weaken archive capture;
-- sample-offset discontinuity resets uncommitted VAD state rather than fabricating continuity;
-- handshake and durable live utterance commit are fenced by active writer/capture epoch;
-- utterance output is independently decodable mono PCM WAV committed through the durable utterance-work boundary;
-- realtime graph cleanup does not own/stop shared microphone tracks;
-- UI exposes realtime `inactive / connecting / live / degraded` plus committed-utterance count separately from archive durability.
+The realtime lane reuses the acquired microphone, carries sample-clock offsets, may degrade independently under backpressure/discontinuity, is fenced by active writer/capture epoch, emits independently decodable WAV utterances, and never participates in archive ACK semantics.
 
 ### Real Windows Edge witness — PASS
 
-Candidate witness ran against `b2210436f2321ddfde4ef033428ab06b3069dc4d` before merge:
+The Phase 2C witness used session `181b5dd8-41c8-49d8-86ea-f2e00ec74ae1` on Windows 11 / Edge with the real built-in microphone. After a bounded whole-window background/minimize interval and normal Stop, archive state was `COMPLETE` / `full`, final sequence `211`, pending `0`, explicit gaps `0`, and 71 durable utterance rows/files were present. Sample utterance media decoded as mono 16-bit PCM WAV at 48 kHz.
 
-- Windows 11 25H2 build `26200.9168`;
-- Edge `152.0.4191.66`, Chromium `152.0.7977.83`, ordinary Default profile;
-- built-in laptop microphone;
-- local Docker Compose at `http://localhost:5173`;
-- PC awake while whole Edge window was backgrounded/minimized.
+Current VAD thresholds are tuning defaults, not product-quality guarantees.
 
-Foreground checkpoint `00:01:10`:
+## Current Phase 2 slice — Issue #36 / PR #37
 
-- archive synced, pending `0`, ACK `34`, gaps `0`;
-- realtime `live`;
-- durable utterances `15`.
+Issue #36 is the active Phase 2D dependency: **STT provider boundary and durable utterance-to-transcript execution**.
 
-Final checkpoint after bounded background interval, restore, and normal Stop at `00:07:09`:
+Current candidate PR #37 is `phase2/stt-provider-executor`. Implementation head before this documentation reconciliation was:
 
-- `COMPLETE`, `Server synced`, pending `0`, ACK `211`, gaps `0`;
-- realtime `inactive` after Stop as expected;
-- durable utterances `71`.
+`a0af7124f6389a4800010feb7ef62dc1b514f335`
 
-Server witness session `181b5dd8-41c8-49d8-86ea-f2e00ec74ae1`:
+Exact-head CI run `34454490245` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
 
-- `state=complete`, `audio_completeness=full`;
-- `final_sequence=211`, 211 recording chunks;
-- 71 utterance rows with sequence `1..71`;
-- timeline bounds `1..427761 ms`;
-- all 71 rows `audio/wav`;
-- 71 durable `.media` objects + 71 `.json` manifests;
-- sampled media decodes as mono 16-bit PCM WAV at 48 kHz.
-
-Issue #34 contains the witness and post-merge reconciliation comment. Current VAD thresholds are tuning defaults, not product-quality guarantees.
-
-## Current Phase 2 slice — Issue #36 / Phase 2D
-
-Issue #36 is now the active bounded dependency:
-
-**STT provider boundary and durable utterance-to-transcript execution.**
-
-The missing causal link is exactly:
+Candidate causal path:
 
 ```text
 durable TranscriptionUtterance
+        -> verified storage read
         -> owned STTProvider
-        -> normalized STT result
+        -> Groq whisper-large-v3-turbo
+        -> normalized result
         -> canonical TranscriptSegment
            producer_key = utterance:<work-uuid>
 ```
 
-Scope for #36:
+Candidate rules:
 
-- owned provider-neutral `STTProvider` contract;
-- bounded executor for one committed utterance;
-- verified read of durable utterance media through the storage boundary;
-- first Groq Whisper adapter using server-side configuration only;
-- canonical transcript commit with utterance timing preserved;
-- retry/idempotency semantics through the existing transcript producer key;
-- blank/malformed/provider-failure behavior that leaves durable utterance evidence intact;
-- no real provider secret/network dependency in ordinary CI.
+- STT consumes only committed durable utterance work, never arbitrary raw MediaRecorder chunks;
+- durable manifest/path/hash/length evidence is verified before provider execution;
+- provider execution stays fully downstream from archive capture/ACK/finalization;
+- canonical timing is copied from the utterance work item;
+- retry identity is the existing `utterance:<work-uuid>` producer key;
+- already-committed canonical work short-circuits provider execution on sequential retry;
+- blank/malformed/provider failure creates no fake transcript evidence and leaves durable utterance work intact;
+- Groq API key is server-side only and Compose forwards local environment configuration without committing secrets;
+- Groq transport uses an explicit non-browser API `User-Agent` because the default Python `urllib` signature was rejected by Groq's Cloudflare edge with Error 1010.
 
-Current intended Groq default is `whisper-large-v3-turbo`, configurable. Provider failure remains fully downstream from archive capture.
+### Real Groq provider witness — PASS
 
-Explicitly **not** in this slice:
+The provider boundary has now been exercised twice against the previously validated real-microphone session.
 
-- Celery live scheduling/fairness;
-- realtime transcript WebSocket fanout/UI;
-- local faster-whisper execution/fallback;
-- diarization;
-- LLM summaries;
-- production auth/authorization;
-- existing-file upload.
+First work item:
 
-After #36 proves the one-utterance STT causal link, the next Phase 2 dependency is durable live queue/reconciliation/fairness, followed by realtime transcript delivery/reconnect UI and provider/fallback benchmarking.
+- utterance `87aec8c6-f11a-50b5-84d8-160d448eec1c`, sequence 29;
+- timing `152321..155621 ms`, duration 3300 ms, 316844 bytes, `audio/wav`;
+- initial request with default `urllib` client signature reached `api.groq.com` but Cloudflare returned HTTP 403 Error 1010 `browser_signature_banned`;
+- the same durable work succeeded when the request used an explicit non-browser API `User-Agent`;
+- Groq `whisper-large-v3-turbo` returned non-empty Indonesian text;
+- Recantor committed canonical segment `845ce524-0b1d-4b66-b700-45ff2d2221ed`, transcript sequence 1, preserving `152321..155621 ms`, `language=id`, `idempotent=False`.
+
+PR #37 then made that `User-Agent` behavior permanent and added a regression assertion.
+
+Second work item, using the permanent adapter with no runtime monkeypatch:
+
+- utterance `ad71e495-cdd6-5ae0-814b-758ba5133f85`, sequence 39;
+- timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
+- Groq call succeeded directly from the rebuilt PR #37 API container;
+- canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
+- PostgreSQL contained exactly the two expected canonical `utterance:<work-uuid>` rows from these witnesses.
+
+The API key remained local/server-side and was not committed or posted. This proves provider-path mechanics, not transcript accuracy: the sampled utterances did not have recorded ground-truth text, so accuracy remains a later benchmark concern.
+
+## Exit / next dependency
+
+If the docs-reconciled PR #37 head remains CI-green and review finds no new blocker, #37 is ready for merge authorization. Merging #37 should close Issue #36.
+
+The next Phase 2 dependency after #37 is **durable live STT queue/reconciliation/fairness** so newly committed utterances are automatically discovered and processed without making Redis/Celery the source of truth. Realtime transcript fanout/reconnect UI follows after that.
 
 ## Roadmap alignment / drift guard
 
-The repository is still following `docs/ROADMAP.md` dependency order. Phase 2 calls for: utterance/VAD pipeline, Groq provider, canonical transcript model, live STT queue, retry/rate-limit handling, realtime transcript updates/recovery, local provider contract, and benchmark evidence.
+The repository is still following `docs/ROADMAP.md` dependency order. Phase 2 calls for utterance/VAD pipeline, Groq provider, canonical transcript model, live STT queue, retry/rate-limit handling, realtime transcript updates/recovery, local provider contract, and benchmark evidence.
 
-Already landed from that Phase 2 list:
+Already landed or proven in the current candidate chain:
 
 - canonical transcript model/reconnect read foundation;
 - durable transcription utterance work;
-- realtime PCM/VAD utterance producer.
+- realtime PCM/VAD utterance producer;
+- provider-neutral STT boundary + real Groq utterance-to-canonical-transcript path in PR #37.
 
-Current #36 starts the Groq/provider + utterance-to-transcript portion. Queueing, realtime transcript delivery, local fallback, and benchmark/tuning remain later Phase 2 work.
+Still later Phase 2 work:
 
-Do not pull diarization, summaries, native mobile, upload flow, or production exposure concerns into the Phase 2 critical path unless a concrete dependency forces it.
+- automatic durable live queue/reconciliation/fairness;
+- realtime transcript delivery/reconnect UI;
+- local faster-whisper provider/fallback;
+- provider/VAD latency and accuracy benchmark/tuning.
+
+Do not pull diarization, summaries, native mobile, existing-file upload, or production exposure concerns into the Phase 2 critical path unless a concrete dependency forces it.
 
 ## Production exposure boundary
 
@@ -218,9 +190,8 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 
 ## Not implemented yet
 
-- actual merged Groq/local STT execution;
-- Celery live STT processing;
-- canonical transcript generation from real provider output;
+- merged automatic/live Groq STT execution from each new utterance;
+- durable live STT queue/reconciliation/fairness;
 - realtime transcript fanout/UI;
 - local faster-whisper fallback;
 - diarization/speaker labels;
@@ -244,6 +215,7 @@ Do not describe these as working until repository evidence proves them.
 - Speaker/diarization semantics are absent from the canonical raw transcript foundation.
 - Realtime discontinuity is live-intelligence evidence loss, not automatically an archive gap.
 - VAD defaults need real-office speech/noise/latency tuning before being treated as product-quality.
+- STT accuracy has not yet been benchmarked against known ground-truth meeting speech.
 
 ## Local development
 
@@ -265,7 +237,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #36 and its current implementation PR if one exists;
+5. read Issue #36 and PR #37 (or successors);
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
