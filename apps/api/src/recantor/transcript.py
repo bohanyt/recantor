@@ -77,9 +77,7 @@ async def commit_transcript_segment(
 
     async with db.begin():
         session = await db.scalar(
-            select(RecordingSession)
-            .where(RecordingSession.id == session_id)
-            .with_for_update()
+            select(RecordingSession).where(RecordingSession.id == session_id).with_for_update()
         )
         if session is None:
             raise TranscriptNotFound("recording session not found")
