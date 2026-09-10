@@ -28,7 +28,12 @@ def upgrade() -> None:
         sa.Column("end_ms", sa.Integer(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("language", sa.String(length=32), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.CheckConstraint(
             "length(btrim(producer_key)) > 0",
             name="ck_transcript_segment_producer_key_nonblank",
