@@ -76,6 +76,7 @@ _EXTENSION_BY_CONTENT_TYPE = {
     "audio/webm": ".webm",
 }
 _MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024
+_GROQ_USER_AGENT = "Recantor/0.1 (+https://github.com/bohanyt/recantor)"
 
 
 def _filename_for_content_type(content_type: str) -> str:
@@ -189,6 +190,7 @@ class GroqSTTProvider:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
                 "Accept": "application/json",
+                "User-Agent": _GROQ_USER_AGENT,
             },
         )
         try:
