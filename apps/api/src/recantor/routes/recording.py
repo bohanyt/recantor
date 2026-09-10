@@ -234,6 +234,7 @@ async def finalize(
     return FinalizeSessionResponse(
         session=RecordingSessionResponse.model_validate(session),
         complete=not missing,
+        audio_completeness=session.audio_completeness,
         missing_sequences=missing,
         gaps=[RecordingGapResponse.model_validate(gap) for gap in gaps],
     )
