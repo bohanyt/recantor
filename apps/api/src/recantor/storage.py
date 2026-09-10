@@ -47,6 +47,9 @@ class FilesystemAudioStorage:
         extension = self._extension(content_type)
         return self.root / "sessions" / str(session_id) / "raw" / f"{sequence:08d}{extension}"
 
+    def _utterance_path_for(self, session_id: UUID, work_id: UUID) -> Path:
+        return self.root / "sessions" / str(session_id) / "utterances" / f"{work_id}.media"
+
     def _key_for(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
 
@@ -106,6 +109,40 @@ class FilesystemAudioStorage:
         stored_hash, stored_length = self._digest_file(final_path)
         if stored_hash != sha256 or stored_length != len(payload):
             raise AudioStorageError("stored audio failed integrity verification")
+        return StoredAudio(self._key_for(final_path), stored_hash, stored_length)
+
+    def commit_utterance_bytes(
+        self,
+        *,
+        session_id: UUID,
+        work_id: UUID,
+        payload: bytes,
+        sha256: str,
+    ) -> StoredAudio:
+        final_path = self._utterance_path_for(session_id, work_id)
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if final_path.exists():
+            existing_hash, existing_length = self._digest_file(final_path)
+            if existing_hash != sha256 or existing_length != len(payload):
+                raise AudioStorageConflict("existing utterance storage object has different content")
+            return StoredAudio(self._key_for(final_path), existing_hash, existing_length)
+
+        temp_path = final_path.with_name(f".{final_path.name}.{uuid4().hex}.tmp")
+        try:
+            with temp_path.open("xb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, final_path)
+            self._fsync_directory(final_path.parent)
+        finally:
+            with suppress(OSError):
+                temp_path.unlink(missing_ok=True)
+
+        stored_hash, stored_length = self._digest_file(final_path)
+        if stored_hash != sha256 or stored_length != len(payload):
+            raise AudioStorageError("stored utterance audio failed integrity verification")
         return StoredAudio(self._key_for(final_path), stored_hash, stored_length)
 
     def verify(self, key: str, *, sha256: str, byte_length: int) -> bool:
