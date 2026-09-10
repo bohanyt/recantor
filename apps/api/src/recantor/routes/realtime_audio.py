@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -49,17 +50,13 @@ async def _owner_is_current(session_id: UUID, start: RealtimeAudioStart) -> bool
 
 
 async def _send_error(websocket: WebSocket, code: str, detail: str) -> None:
-    try:
+    with suppress(RuntimeError, WebSocketDisconnect):
         await websocket.send_json({"type": "error", "code": code, "detail": detail})
-    except (RuntimeError, WebSocketDisconnect):
-        pass
 
 
 async def _safe_close(websocket: WebSocket, code: int) -> None:
-    try:
+    with suppress(RuntimeError, WebSocketDisconnect):
         await websocket.close(code=code)
-    except (RuntimeError, WebSocketDisconnect):
-        pass
 
 
 def _is_stop_message(text: str) -> bool:
@@ -153,7 +150,9 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
             return
         first_text = first.get("text")
         if first_text is None:
-            raise RealtimeAudioProtocolError("first realtime message must be a JSON start handshake")
+            raise RealtimeAudioProtocolError(
+                "first realtime message must be a JSON start handshake"
+            )
         if len(first_text) > _MAX_HANDSHAKE_CHARS:
             raise RealtimeAudioProtocolError("realtime start handshake exceeds size limit")
         try:
@@ -249,7 +248,11 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
         ):
             tail = detector.flush()
             if tail is not None:
-                try:
+                with suppress(
+                    UtteranceWorkConflict,
+                    UtteranceWorkNotFound,
+                    UtteranceWorkStorageError,
+                ):
                     await _commit_candidate(
                         websocket,
                         session_id=session_id,
@@ -257,5 +260,3 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
                         candidate=tail,
                         notify=False,
                     )
-                except (UtteranceWorkConflict, UtteranceWorkNotFound, UtteranceWorkStorageError):
-                    pass
