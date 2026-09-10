@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -32,6 +33,8 @@ _ALLOWED_LIVE_STATES = {
     SessionState.RECOVERING.value,
     SessionState.INTERRUPTED.value,
 }
+_MAX_HANDSHAKE_CHARS = 4_096
+_MAX_CONTROL_CHARS = 256
 
 
 async def _owner_is_current(session_id: UUID, start: RealtimeAudioStart) -> bool:
@@ -50,6 +53,23 @@ async def _send_error(websocket: WebSocket, code: str, detail: str) -> None:
         await websocket.send_json({"type": "error", "code": code, "detail": detail})
     except (RuntimeError, WebSocketDisconnect):
         pass
+
+
+async def _safe_close(websocket: WebSocket, code: int) -> None:
+    try:
+        await websocket.close(code=code)
+    except (RuntimeError, WebSocketDisconnect):
+        pass
+
+
+def _is_stop_message(text: str) -> bool:
+    if len(text) > _MAX_CONTROL_CHARS:
+        raise RealtimeAudioProtocolError("realtime control message exceeds size limit")
+    try:
+        message = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RealtimeAudioProtocolError("invalid realtime control JSON") from exc
+    return isinstance(message, dict) and message == {"type": "stop"}
 
 
 async def _commit_candidate(
@@ -128,10 +148,16 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
 
     try:
         first = await websocket.receive()
-        if first.get("text") is None:
+        if first.get("type") == "websocket.disconnect":
+            disconnect_code = first.get("code")
+            return
+        first_text = first.get("text")
+        if first_text is None:
             raise RealtimeAudioProtocolError("first realtime message must be a JSON start handshake")
+        if len(first_text) > _MAX_HANDSHAKE_CHARS:
+            raise RealtimeAudioProtocolError("realtime start handshake exceeds size limit")
         try:
-            start = RealtimeAudioStart.model_validate_json(first["text"])
+            start = RealtimeAudioStart.model_validate_json(first_text)
         except ValidationError as exc:
             raise RealtimeAudioProtocolError("invalid realtime start handshake") from exc
         if not await _owner_is_current(session_id, start):
@@ -158,20 +184,20 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
 
             text = message.get("text")
             if text is not None:
-                if text.strip() == '{"type":"stop"}':
-                    clean_stop = True
-                    tail = detector.flush()
-                    if tail is not None:
-                        await _commit_candidate(
-                            websocket,
-                            session_id=session_id,
-                            start=start,
-                            candidate=tail,
-                        )
-                    await websocket.send_json({"type": "stopped"})
-                    await websocket.close(code=1000)
-                    break
-                raise RealtimeAudioProtocolError("unexpected realtime text message")
+                if not _is_stop_message(text):
+                    raise RealtimeAudioProtocolError("unexpected realtime control message")
+                clean_stop = True
+                tail = detector.flush()
+                if tail is not None:
+                    await _commit_candidate(
+                        websocket,
+                        session_id=session_id,
+                        start=start,
+                        candidate=tail,
+                    )
+                await websocket.send_json({"type": "stopped"})
+                await _safe_close(websocket, 1000)
+                break
 
             binary = message.get("bytes")
             if binary is None:
@@ -204,16 +230,16 @@ async def session_realtime_audio(websocket: WebSocket, session_id: UUID) -> None
         disconnect_code = exc.code
     except UtteranceWorkNotFound as exc:
         await _send_error(websocket, "session_not_found", str(exc))
-        await websocket.close(code=1008)
+        await _safe_close(websocket, 1008)
     except UtteranceWorkConflict as exc:
         await _send_error(websocket, "stale_or_conflicting_capture", str(exc))
-        await websocket.close(code=4009)
+        await _safe_close(websocket, 4009)
     except UtteranceWorkStorageError as exc:
         await _send_error(websocket, "utterance_storage_failed", str(exc))
-        await websocket.close(code=1011)
+        await _safe_close(websocket, 1011)
     except RealtimeAudioProtocolError as exc:
         await _send_error(websocket, "protocol_error", str(exc))
-        await websocket.close(code=1003)
+        await _safe_close(websocket, 1003)
     finally:
         if (
             not clean_stop
