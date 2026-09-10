@@ -51,6 +51,10 @@ services:
       AUDIO_STORAGE_PATH: /data/audio
       RECORDING_HEARTBEAT_TIMEOUT_SECONDS: 20
       RECORDING_MAX_CHUNK_BYTES: 16777216
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
+      GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
+      GROQ_STT_TIMEOUT_SECONDS: "${GROQ_STT_TIMEOUT_SECONDS:-30}"
     ports:
       - "8000:8000"
     volumes:

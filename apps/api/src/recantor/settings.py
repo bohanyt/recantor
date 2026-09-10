@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     realtime_vad_hard_max_ms: int = 8_000
     realtime_vad_absolute_threshold_dbfs: float = -50.0
     realtime_vad_noise_margin_db: float = 12.0
+    groq_api_key: str | None = None
+    groq_stt_endpoint: str = "https://api.groq.com/openai/v1/audio/transcriptions"
+    groq_stt_model: str = "whisper-large-v3-turbo"
+    groq_stt_timeout_seconds: float = 30.0
     log_level: str = "INFO"
 
     @property

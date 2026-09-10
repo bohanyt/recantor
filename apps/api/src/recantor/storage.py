@@ -133,6 +133,23 @@ class FilesystemAudioStorage:
 
         self._commit_file(manifest_path, self._manifest_bytes(identity))
 
+    def _read_utterance_manifest(
+        self,
+        *,
+        session_id: UUID,
+        work_id: UUID,
+        expected: UtteranceStorageIdentity,
+    ) -> None:
+        manifest_path = self._utterance_manifest_path_for(session_id, work_id)
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise AudioStorageError("utterance identity manifest is missing") from exc
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise AudioStorageError("utterance identity manifest is unreadable") from exc
+        if manifest != asdict(expected):
+            raise AudioStorageError("utterance identity manifest failed verification")
+
     def commit_bytes(
         self,
         *,
@@ -242,3 +259,47 @@ class FilesystemAudioStorage:
         if manifest != asdict(expected_identity):
             return False
         return self.verify(storage_key, sha256=sha256, byte_length=byte_length)
+
+    def read_utterance_bytes(
+        self,
+        *,
+        session_id: UUID,
+        work_id: UUID,
+        producer_key: str,
+        start_ms: int,
+        end_ms: int,
+        content_type: str,
+        storage_key: str,
+        sha256: str,
+        byte_length: int,
+    ) -> bytes:
+        expected_identity = UtteranceStorageIdentity(
+            producer_key=producer_key,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            content_type=content_type,
+            sha256=sha256,
+            byte_length=byte_length,
+        )
+        self._read_utterance_manifest(
+            session_id=session_id,
+            work_id=work_id,
+            expected=expected_identity,
+        )
+
+        path = (self.root / storage_key).resolve()
+        expected_path = self._utterance_path_for(session_id, work_id).resolve()
+        try:
+            path.relative_to(self.root)
+        except ValueError as exc:
+            raise AudioStorageError("utterance storage key escapes audio root") from exc
+        if path != expected_path:
+            raise AudioStorageError("utterance storage key does not match stable work identity")
+        try:
+            payload = path.read_bytes()
+        except OSError as exc:
+            raise AudioStorageError("utterance media is missing or unreadable") from exc
+        actual_hash = hashlib.sha256(payload).hexdigest()
+        if actual_hash != sha256 or len(payload) != byte_length:
+            raise AudioStorageError("utterance media failed integrity verification")
+        return payload
