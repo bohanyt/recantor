@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-10
 
-This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, and CI state outrank this summary if the repository has moved.
+This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, branch, and CI state outrank this summary if the repository has moved.
 
 ## Product truth
 
@@ -11,15 +11,13 @@ Recantor is a public, self-hosted recording and meeting-intelligence project wit
 1. **Live Intelligence** — authenticated live recording, transcript, speaker processing, and rolling meeting intelligence.
 2. **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then process/export it. A bounded guest path may operate without login.
 
-The implemented foundation is reliable capture first. Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains usable while active, but Recantor does not promise continuous browser recording through screen lock, OS suspension, sleep, or shutdown.
+Desktop Chrome/Edge on an **awake** computer is the first recording reliability target. Mobile web may work while actively executing, but Recantor does not promise continuous browser capture through screen lock, OS suspension, sleep, or shutdown.
 
 > Capture is infrastructure. Intelligence is downstream.
 
-Phase 1 capture is closed. Phase 2 transcript work may now proceed, but capture must remain independent from STT, diarization, realtime delivery, and LLM availability.
+The archive recording path must remain independent from STT, diarization, realtime delivery, and LLM availability.
 
-## Implemented capture architecture
-
-The browser/server durability path is:
+## Durable archive architecture — MERGED / Phase 1 CLOSED
 
 ```text
 MediaRecorder
@@ -30,164 +28,189 @@ MediaRecorder
   -> local fragment deletion
 ```
 
-Selected foundation:
+Important invariants:
 
-- React + TypeScript + Vite + Tailwind CSS web SPA;
-- TanStack Query for server state;
-- Python + FastAPI + Pydantic API;
-- PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
-- Redis for ephemeral coordination/background-job infrastructure;
-- Dexie/IndexedDB browser recovery spool;
-- Docker Compose development/deployment baseline;
-- Node.js 24 LTS and Python 3.13.
-
-Important capture guardrails:
-
-- IndexedDB is a recovery spool, not the final durability boundary;
-- a server ACK requires durable audio plus durable acceptance metadata;
-- one live session has one active capture generation at a time, fenced by writer identity + epoch;
-- already-spooled evidence must not be silently destroyed when ownership rotates;
+- IndexedDB is a recovery spool, not final durability;
+- an ACK requires durable audio plus durable acceptance metadata;
+- one live session has one active capture generation fenced by writer identity + epoch;
 - raw MediaRecorder chunks are ordered media fragments and are not assumed independently decodable;
-- Stop/finalize declares a final sequence/high-water boundary;
-- every expected sequence through that boundary must be durably present or explicitly represented as loss before completion;
+- Stop/finalize declares a final sequence boundary;
+- every expected sequence through that boundary must be durable or explicitly represented as loss before completion;
 - liveness interruption is not automatically audio loss;
 - PostgreSQL/audio storage are durable truth; Redis/WebSocket are not.
 
-## Repository checkpoint
-
-Phase 1 closed after the real-platform witness. The witness ran against `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`; closure docs landed as `cd9c35543be8881acd682b14b031b0786a81a1a7` and CI `34430899348` succeeded.
-
-Phase 2 gate Issue #15 was resolved by PR #29, squash-merged to `main` as `ba5c91145d70334335f06e8447f9310d8dac165b`. Post-merge CI run `34437634299` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
-
-Phase 2A Issue #30 was resolved by PR #31, squash-merged to `main` as `1aba22e22b859e84dfb016bc2bd211e067467e9c`. Post-merge CI run `34439502585` completed successfully. That merge established the canonical transcript segment store and reconnect-safe HTTP read model.
-
-This document may itself live in a later branch/commit; use GitHub `main` as the authoritative integration head rather than treating a checkpoint above as a self-referential branch SHA.
-
-## Phase 1 status — CLOSED
-
-All validated Phase 1 code blockers are merged/closed: #10, #11, #12, #13, #14, and #18. Issue #5 is closed.
-
-The final Case K witness established the bounded claim for an awake Windows desktop with an ordinary Edge browser and actual microphone:
-
-- checkout `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`;
-- local Docker Compose stack, browser at `http://localhost:5173`;
-- built-in laptop microphone;
-- Microsoft Edge `152.0.4191.66`, Chromium `152.0.7977.83`;
-- Windows 11 25H2 build `26200.9168`;
-- visible checkpoint at `00:01:05`: ACK through sequence `31`, one pending local fragment, gaps `0`;
-- entire Edge window minimized for about five minutes while the laptop remained awake;
-- final checkpoint at `00:06:05`: `COMPLETE`, Server synced, ACK through sequence `179`, pending local audio `0`, gaps `0`;
-- PostgreSQL witness session had `final_sequence=179`, 179 unique chunks spanning sequence 1 through 179, and zero gaps.
-
-Do not generalize this to desktop sleep/shutdown, execution-suspending lock behavior, or mobile browser suspension.
+Phase 1 Issue #5 is closed. The bounded real-platform Case K witness ran on Windows 11 25H2 build `26200.9168`, Microsoft Edge `152.0.4191.66` / Chromium `152.0.7977.83`, built-in laptop microphone, local Compose, and an awake desktop. The whole Edge window was minimized for about five minutes; the final session reached `COMPLETE`, ACK sequence `179`, pending local audio `0`, and explicit gaps `0`.
 
 ## Terminal audio completeness — MERGED
 
-PR #29 / Issue #15 separates lifecycle completion from audio completeness. `state == complete` means the declared final sequence boundary is fully accounted for. It does **not** by itself mean gap-free or non-empty audio.
+Issue #15 / PR #29 was squash-merged as `ba5c91145d70334335f06e8447f9310d8dac165b`; post-merge CI `34437634299` succeeded.
 
-`audio_completeness` is persisted in the finalize transaction and exposed on the session resource:
+`state == complete` means the declared final sequence boundary is fully accounted for. Downstream consumers must also inspect persisted `audio_completeness`:
 
 - `full` — non-zero final boundary and every expected sequence is durably present;
-- `partial` — non-zero final boundary and at least one expected sequence is represented by an explicit sequence-loss gap, including an all-gap result;
+- `partial` — non-zero final boundary with one or more explicit sequence-loss gaps;
 - `empty` — final sequence boundary is zero and no audio sequence was captured.
 
-Wall-clock-only liveness/interruption evidence does not by itself downgrade `full`. A retry of an already-`COMPLETE` finalize preserves the persisted classification. `FinalizeSessionResponse.complete` remains a compatibility signal meaning only that the declared boundary is accounted for.
-
-Downstream consumers must use `audio_completeness` rather than treating lifecycle `COMPLETE` as proof that audio exists or is gap-free.
+Retrying an already-complete finalize preserves the persisted classification.
 
 ## Canonical transcript foundation — MERGED
 
-PR #31 / Issue #30 established the provider-neutral canonical transcript source of truth before any provider execution:
+Issue #30 / PR #31 was squash-merged as `1aba22e22b859e84dfb016bc2bd211e067467e9c`; post-merge CI `34439502585` succeeded.
 
-- PostgreSQL-backed immutable committed `TranscriptSegment` rows;
-- stable segment ID plus owning `session_id`;
-- session-local monotonically increasing transcript `sequence` used as publication/reconnect cursor;
-- opaque per-session producer key for retry idempotency;
-- explicit `start_ms` / `end_ms` on the recording timeline;
-- canonical text and optional language;
-- database uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`;
-- identical producer-key retries return the existing segment while conflicting retries fail explicitly;
-- sequence allocation locks only the owning session row, so independent meetings do not globally block each other;
-- reconnect-safe `GET /api/v1/sessions/{session_id}/transcript?after_sequence=...&limit=...` returns ordered canonical segments and a continuation cursor.
+Canonical transcript truth is PostgreSQL-backed immutable `TranscriptSegment` evidence with:
 
-Transcript `sequence` is a publication/reconnect namespace, not the recording-chunk sequence and not an implicit timestamp. Timeline evidence remains explicit in `start_ms` / `end_ms`.
+- stable segment ID and `session_id`;
+- per-session monotonically increasing transcript `sequence` used as reconnect/publication cursor;
+- opaque producer key for retry idempotency;
+- explicit `start_ms` / `end_ms` recording timeline;
+- text plus optional language;
+- uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`;
+- reconnect-safe HTTP read via `/api/v1/sessions/{session_id}/transcript?after_sequence=...`.
 
-No Groq/Whisper, VAD, Celery worker, WebSocket transcript delivery, diarization, or LLM was added by this slice.
+Transcript sequence is not recording-chunk sequence and is not an implicit timestamp.
 
-## Current Phase 2 slice — Issue #32 / PR #33
+## Durable transcription utterance work — MERGED
 
-Issue #32 is the current Phase 2B task. Draft PR #33 on branch `phase2/durable-utterance-work` establishes the durable provider-neutral speech-sized audio-work contract that future VAD/repair producers create and future STT workers consume.
+Issue #32 / PR #33 was squash-merged to `main` as `9ea3ee7ac9c8e9e1093ee78477ae1dc7f0d09939`. The merge established the provider-neutral speech-sized audio-work boundary future STT workers consume.
 
-The candidate contract is:
+A committed `TranscriptionUtterance` has:
 
-- PostgreSQL-backed `TranscriptionUtterance` work rows;
-- deterministic work UUID derived from `(session_id, canonical producer_key)` so a retry after a process crash addresses the same storage object;
-- session-local monotonically increasing utterance `sequence` with sequence allocation serialized by locking only the owning session row;
-- explicit `start_ms` / `end_ms` on the recording timeline;
-- normalized audio `content_type`, SHA-256, byte length, and durable storage key;
-- independently decodable utterance media stored through the owned filesystem audio-storage boundary before the database row is acknowledged;
-- stable storage path `sessions/<session-id>/utterances/<work-uuid>.media`, so a matching object left by a crash before DB commit is safely reusable on retry;
-- identical producer-key retries are idempotent; timing/content-type/byte conflicts fail explicitly;
-- inspection read `GET /api/v1/sessions/{session_id}/utterances?after_sequence=...&limit=...`; the HTTP response does not expose the filesystem storage key;
-- deterministic future canonical transcript producer key `utterance:<work-uuid>` so provider retries cannot create duplicate transcript rows for one work item.
+- deterministic work UUID derived from `(session_id, canonical producer_key)`;
+- per-session monotonically increasing utterance sequence;
+- explicit `start_ms` / `end_ms`;
+- normalized media content type, SHA-256, byte length, and internal storage key;
+- independently decodable durable media in `sessions/<session-id>/utterances/<work-uuid>.media`;
+- a durable identity manifest used to preserve conflict/idempotency semantics across a crash before DB commit;
+- deterministic future transcript producer key `utterance:<work-uuid>`.
 
-Archive `MediaRecorder` fragments and transcription utterance work remain different things. Archive fragments are durability evidence and are not assumed independently decodable or semantically aligned to speech. The utterance producer is responsible for creating an independently decodable speech-sized object; this contract does not reconstruct arbitrary raw-fragment subsets into standalone media.
+The archive ingest/ACK path does not call this boundary. Archive fragments and transcription utterance work are different evidence namespaces.
 
-The recording ingest/ACK path does not call the utterance path. Capture remains safe even if utterance creation or all downstream intelligence is unavailable.
+## Current Phase 2 slice — Issue #34 / PR #35
 
-PR #33 deliberately does **not** implement Groq/Whisper/faster-whisper calls, a VAD algorithm, Celery execution, realtime PCM/WebSocket ingress, diarization, or LLM summaries.
+Issue #34 defines Phase 2C: an independent realtime PCM/VAD utterance producer on top of the durable work contract. Draft PR #35 is on branch `phase2/realtime-utterance-producer`.
 
-## Exact next dependency after Issue #32
+Merge candidate head validated by the real-platform witness before this docs reconciliation:
 
-After #32 is merged and post-merge evidence is green, the next bounded Phase 2 slice should build the **realtime utterance producer**:
+`b2210436f2321ddfde4ef033428ab06b3069dc4d`
 
-- capture a realtime PCM/Web Audio lane independently from the archive lane;
-- run VAD/endpoint detection to identify speech-sized intervals;
-- encode each committed interval as independently decodable media and commit it through the durable utterance-work contract;
-- preserve recording-timeline evidence and deterministic producer identity;
-- benchmark and tune minimum speech, silence endpoint, and hard maximum boundaries against real office audio;
-- prove realtime-lane degradation cannot weaken archive recording or durable chunk ACKs.
+Automated CI for that exact head: run `34447070869` — **SUCCESS** across backend, frontend, Chromium E2E, and Compose smoke.
 
-Only after that producer boundary is proven should the Groq `STTProvider` and live queue consume committed utterance work and write canonical transcript segments using `utterance:<work-uuid>` producer keys.
+Candidate implementation:
+
+```text
+same microphone MediaStream
+        |
+        +---------------- archive lane ----------------+
+        |                                               |
+        |  MediaRecorder -> IndexedDB -> HTTP -> durable ACK
+        |
+        +--------------- realtime lane ----------------+
+           AudioWorklet -> ~20 ms sample-clock PCM
+                         -> bounded WebSocket transport
+                         -> server energy VAD / endpointing
+                         -> mono PCM WAV
+                         -> durable TranscriptionUtterance
+```
+
+Realtime rules:
+
+- reuse the already-acquired microphone stream; no second `getUserMedia`;
+- PCM frames carry monotonic sample offsets, not browser-timer-derived timing;
+- realtime backpressure/discontinuity may degrade live intelligence but must not block or weaken archive capture;
+- a sample-offset discontinuity resets uncommitted VAD state rather than fabricating continuity;
+- server handshake and every durable utterance commit are fenced by active writer/capture epoch;
+- utterance output is independently decodable mono PCM WAV and is committed through the #33 durable work boundary;
+- realtime graph cleanup does not own/stop the shared microphone tracks;
+- operator UI exposes realtime `inactive / connecting / live / degraded` plus committed-utterance count separately from archive durability.
+
+### Real Windows Edge microphone witness — PASS
+
+Witness environment:
+
+- exact candidate head `b2210436f2321ddfde4ef033428ab06b3069dc4d`;
+- Windows 11 25H2 build `26200.9168`;
+- Microsoft Edge `152.0.4191.66`, Chromium `152.0.7977.83`;
+- ordinary Edge Default profile;
+- built-in laptop microphone;
+- local Docker Compose at `http://localhost:5173`;
+- PC remained awake while the whole Edge window was minimized/backgrounded during the bounded run.
+
+Foreground checkpoint at `00:01:10`:
+
+- archive `Emitted audio synced`;
+- pending local audio `0`;
+- ACK through sequence `34`;
+- explicit gaps `0`;
+- realtime `live`;
+- durable utterances `15`.
+
+Final checkpoint after restore and normal Stop at `00:07:09`:
+
+- `COMPLETE`;
+- `Server synced`;
+- pending local audio `0`;
+- ACK through sequence `211`;
+- explicit gaps `0`;
+- realtime `inactive` after Stop as expected;
+- durable utterances `71`.
+
+Server-side witness session `181b5dd8-41c8-49d8-86ea-f2e00ec74ae1`:
+
+- `state=complete`, `audio_completeness=full`;
+- `final_sequence=211`, `final_monotonic_end_ms=429737`;
+- 211 recording chunks;
+- 71 transcription utterance rows with sequence `1..71`;
+- timeline bounds `first_start_ms=1`, `last_end_ms=427761`;
+- all 71 rows are `audio/wav`;
+- filesystem contains 71 `.media` objects and 71 `.json` identity manifests;
+- sample `.media` object decodes as mono 16-bit PCM WAV at 48 kHz with 72,000 frames.
+
+Issue #34 contains the witness record. Do not generalize this evidence to sleep, lock suspension, or mobile background execution.
+
+`docs/ARCHITECTURE.md` was reviewed against the candidate and already describes the required dual-lane archive/realtime ownership model, durable utterance namespace, and failure-degradation invariant; no architecture-contract rewrite is required for this witness.
+
+PR #35 should remain unmerged until explicitly authorized. After the docs commit has its own green CI, it may be marked review-ready.
+
+## Exact next dependency after Phase 2C
+
+After #35 is merged and post-merge CI is green, the next bounded slice may wire an owned `STTProvider`/worker to committed utterance work and write canonical transcript segments using `utterance:<work-uuid>` producer keys.
+
+Before treating current VAD thresholds as product-quality defaults, run real-office speech/noise/latency tuning. Current energy thresholds, minimum voiced duration, silence endpoint, pre-roll, and hard maximum are explicit tuning defaults, not permanent guarantees.
+
+Groq is the intended primary live STT provider; local faster-whisper/CTranslate2 remains a planned fallback where deployment resources permit it. Provider failure must retain durable utterance work and must never participate in archive ACK semantics.
 
 ## Production exposure boundary
 
-Phase 1.5 authentication, authorization, retention, and deletion work remains required before Live Intelligence is exposed as a production service. Trusted local development of Phase 2 may continue before that deployment boundary is finished.
+Authentication, authorization, retention/deletion, abuse controls, and production deployment hardening remain required before exposing Live Intelligence as a production service. Trusted local development may continue before that exposure boundary is complete.
 
 ## Not implemented yet
 
 - Groq or local STT provider execution;
-- realtime PCM/Web Audio utterance producer;
-- VAD/endpointing implementation and tuning;
-- live STT Celery queue;
-- realtime transcript WebSocket delivery;
-- transcript UI/reconnect client;
-- diarization;
+- Celery live STT processing;
+- canonical transcript generation from utterance work;
+- realtime transcript fanout/UI/reconnect client;
+- diarization/speaker labels;
 - rolling/final summaries;
 - production authentication/authorization;
 - user-visible recording deletion/retention;
 - tus existing-recording upload pipeline;
-- production reverse-proxy/deployment hardening;
+- production reverse proxy/deployment hardening;
 - native Android/iOS recorder clients.
 
 Do not describe these as working until repository evidence proves them.
 
-## Known boundaries and deferred decisions
+## Known boundaries
 
-- Closing the browser, desktop sleep/shutdown, or mobile OS suspension cannot be treated as continuous capture.
-- Browser local storage remains best-effort unless persistence is granted; the UI must expose degraded/unsafe recovery state.
+- Browser close, desktop sleep/shutdown, execution-suspending lock behavior, and mobile OS suspension cannot be treated as continuous capture.
+- Browser local storage remains best-effort unless persistence is granted.
 - An open MediaRecorder fragment is not yet durable browser/server evidence; abrupt process/device loss can lose an un-emitted bounded tail.
-- Fenced old-generation evidence is retained locally but has no final operator recovery/export/expiry flow yet.
-- #12's same-epoch reconciliation guard is an interim safety measure, not a final multi-device identity contract.
+- Fenced old-generation evidence remains a recovery/retention policy problem.
 - Cross-device takeover/backlog semantics are not claimed.
-- Transcript revision/supersession semantics remain deferred; a producer-key retry may not silently change committed evidence.
-- Speaker/diarization semantics are intentionally absent from the first canonical transcript row.
-- The durable utterance contract does not choose the VAD algorithm, realtime transport framing, utterance codec, or provider model; those require the next implementation/benchmark slice.
-- Public upstream must remain free of organization secrets, private data, and downstream-only branding/infrastructure.
+- Transcript revision/supersession semantics remain deferred.
+- Speaker/diarization semantics are absent from the first canonical transcript row.
+- Realtime discontinuity is live-intelligence evidence loss, not automatically an archive gap.
 
 ## Local development
-
-The simplest runnable stack requires Docker with Docker Compose:
 
 ```bash
 git clone https://github.com/bohanyt/recantor.git
@@ -195,7 +218,7 @@ cd recantor
 docker compose -f infra/compose.yaml up --build
 ```
 
-Open exactly `http://localhost:5173`. The API is at `http://localhost:8000`.
+Open exactly `http://localhost:5173`; API is `http://localhost:8000`.
 
 `apps/api/tests/conftest.py` drops the entire test schema on teardown; never point pytest at a database used by a running API instance.
 
@@ -207,7 +230,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #32 and PR #33 (or their successors) plus current CI evidence;
+5. read Issue #34 and PR #35 (or their successors) plus current CI evidence;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
