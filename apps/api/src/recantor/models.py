@@ -124,22 +124,16 @@ class RecordingGap(Base):
 class TranscriptSegment(Base):
     __tablename__ = "transcript_segments"
     __table_args__ = (
-        UniqueConstraint(
-            "session_id", "sequence", name="uq_transcript_segment_session_sequence"
-        ),
+        UniqueConstraint("session_id", "sequence", name="uq_transcript_segment_session_sequence"),
         UniqueConstraint(
             "session_id", "producer_key", name="uq_transcript_segment_session_producer_key"
         ),
         CheckConstraint("sequence >= 1", name="ck_transcript_segment_sequence_positive"),
-        CheckConstraint(
-            "start_ms >= 0 AND end_ms > start_ms", name="ck_transcript_segment_timing"
-        ),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_transcript_segment_timing"),
         CheckConstraint(
             "length(btrim(producer_key)) > 0", name="ck_transcript_segment_producer_key_nonblank"
         ),
-        CheckConstraint(
-            "length(btrim(text)) > 0", name="ck_transcript_segment_text_nonblank"
-        ),
+        CheckConstraint("length(btrim(text)) > 0", name="ck_transcript_segment_text_nonblank"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
