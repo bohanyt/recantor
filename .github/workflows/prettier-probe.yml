@@ -1,0 +1,21 @@
+name: Prettier Probe
+
+on:
+  pull_request:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.7.0
+      - run: pnpm --dir apps/web install --frozen-lockfile
+      - name: Print Prettier diff
+        run: |
+          pnpm --dir apps/web exec prettier src/recorder/realtimeAudio.ts --write
+          git diff -- apps/web/src/recorder/realtimeAudio.ts
