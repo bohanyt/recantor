@@ -28,6 +28,7 @@ import {
   type SpoolChunk,
 } from './db';
 import { sha256Blob } from './hash';
+import { RealtimeAudioLane, type RealtimeAudioStatus } from './realtimeAudio';
 import { reconcileLocalSpool } from './reconcile';
 import { inspectStorageSafety, type StorageSafety } from './storageSafety';
 import { acquireCaptureTabLock, type CaptureTabLock } from './tabCoordinator';
@@ -47,6 +48,9 @@ export type RecorderSnapshot = {
   gapCount: number;
   missingSequences: number[];
   lockKind: CaptureTabLock['kind'] | null;
+  realtimeStatus: RealtimeAudioStatus;
+  realtimeUtterances: number;
+  realtimeError: string | null;
   message: string;
   error: string | null;
 };
@@ -71,6 +75,9 @@ function defaultSnapshot(): RecorderSnapshot {
     gapCount: 0,
     missingSequences: [],
     lockKind: null,
+    realtimeStatus: 'inactive',
+    realtimeUtterances: 0,
+    realtimeError: null,
     message: 'Ready to record.',
     error: null,
   };
@@ -154,6 +161,7 @@ export class RecorderController {
   private localSession: LocalRecordingSession | null = null;
   private recorder: MediaRecorder | null = null;
   private stream: MediaStream | null = null;
+  private realtimeLane: RealtimeAudioLane | null = null;
   private captureLock: CaptureTabLock | null = null;
   private captureStartedPerformance = 0;
   private captureBaseMonotonicMs = 0;
@@ -267,6 +275,7 @@ export class RecorderController {
     window.removeEventListener('offline', this.handleOffline);
     this.syncAbortController?.abort();
     this.finalizationAbortController?.abort();
+    this.stopRealtimeLane();
     this.initialized = false;
     this.lifecycleVersion += 1;
     if (!this.recorder) this.stopTimers();
@@ -285,6 +294,9 @@ export class RecorderController {
       error: null,
       localWriteFailed: false,
       missingSequences: [],
+      realtimeStatus: 'inactive',
+      realtimeUtterances: 0,
+      realtimeError: null,
       message: 'Requesting microphone access…',
     });
     await this.refreshStorage(true);
@@ -375,6 +387,9 @@ export class RecorderController {
     this.patch({
       phase: 'requesting',
       error: null,
+      realtimeStatus: 'inactive',
+      realtimeUtterances: 0,
+      realtimeError: null,
       message: 'Reconciling old recovery audio before claiming a new capture generation…',
     });
     await this.refreshStorage(true);
@@ -733,6 +748,44 @@ export class RecorderController {
       message: `Recording capture generation ${local.captureEpoch}. Emitted audio is kept locally until the server durably acknowledges it.`,
       elapsedMs: Math.max(0, Date.now() - local.recordingStartedWallMs),
     });
+    this.startRealtimeLane(stream, local);
+  }
+
+  private startRealtimeLane(stream: MediaStream, local: LocalRecordingSession): void {
+    this.stopRealtimeLane();
+    const timelineBaseMs = Math.max(
+      local.lastMonotonicEndMs,
+      Math.round(
+        this.captureBaseMonotonicMs + (performance.now() - this.captureStartedPerformance),
+      ),
+    );
+    const lane = new RealtimeAudioLane({
+      sessionId: local.sessionId,
+      writerId: local.writerId,
+      captureEpoch: local.captureEpoch,
+      timelineBaseMs,
+      onUpdate: ({ status, error }) => {
+        if (this.realtimeLane !== lane) return;
+        this.patch({ realtimeStatus: status, realtimeError: error });
+      },
+      onUtteranceCommitted: () => {
+        if (this.realtimeLane !== lane) return;
+        this.patch({ realtimeUtterances: this.snapshot.realtimeUtterances + 1 });
+      },
+    });
+    this.realtimeLane = lane;
+    void lane.start(stream).catch(() => {
+      // Realtime intelligence is explicitly downstream; archive capture keeps running.
+    });
+  }
+
+  private stopRealtimeLane(): void {
+    const lane = this.realtimeLane;
+    this.realtimeLane = null;
+    if (lane) void lane.stop();
+    if (this.snapshot.realtimeStatus !== 'inactive') {
+      this.patch({ realtimeStatus: 'inactive' });
+    }
   }
 
   private async persistCapturedBlob(
@@ -1060,8 +1113,13 @@ export class RecorderController {
   }
 
   private async stopMediaRecorder(): Promise<void> {
+    this.stopRealtimeLane();
     const recorder = this.recorder;
-    if (!recorder) return;
+    if (!recorder) {
+      stopStream(this.stream);
+      this.stream = null;
+      return;
+    }
     if (recorder.state !== 'inactive') {
       await new Promise<void>((resolve) => {
         recorder.addEventListener('stop', () => resolve(), { once: true });
