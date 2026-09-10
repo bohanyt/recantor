@@ -23,7 +23,9 @@ const STOP_GRACE_MS = 300;
 export function realtimeWebSocketUrl(sessionId: string): string {
   const base = new URL(env.apiBaseUrl);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
-  base.pathname = `${base.pathname.replace(/\/$/, '')}/api/v1/sessions/${encodeURIComponent(sessionId)}/realtime-audio`;
+  base.pathname = `${base.pathname.replace(/\/$/, '')}/api/v1/sessions/${encodeURIComponent(
+    sessionId,
+  )}/realtime-audio`;
   base.search = '';
   base.hash = '';
   return base.toString();
@@ -111,7 +113,8 @@ export class RealtimeAudioLane {
         );
         socket.addEventListener(
           'close',
-          () => settleReject(new Error('Realtime audio WebSocket closed before it became ready.')),
+          () =>
+            settleReject(new Error('Realtime audio WebSocket closed before it became ready.')),
           { once: true },
         );
         socket.addEventListener('message', (event) => {
@@ -122,7 +125,9 @@ export class RealtimeAudioLane {
               settled = true;
               resolve();
             } else if (message.type === 'error') {
-              settleReject(new Error(message.detail || 'Realtime audio server rejected the stream.'));
+              settleReject(
+                new Error(message.detail || 'Realtime audio server rejected the stream.'),
+              );
             }
           } catch {
             settleReject(new Error('Realtime audio server sent invalid control JSON.'));
@@ -172,7 +177,10 @@ export class RealtimeAudioLane {
 
     if (socket.bufferedAmount > MAX_BUFFERED_BYTES) {
       if (this.status !== 'degraded') {
-        this.publish('degraded', 'Realtime audio is dropping frames because transport is backlogged.');
+        this.publish(
+          'degraded',
+          'Realtime audio is dropping frames because transport is backlogged.',
+        );
       }
       return;
     }
