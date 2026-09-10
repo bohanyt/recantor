@@ -91,6 +91,26 @@ class RecordingStateResponse(BaseModel):
     gaps: list[RecordingGapResponse]
 
 
+class TranscriptSegmentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    sequence: int = Field(ge=1)
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    text: str
+    language: str | None
+    created_at: datetime
+
+
+class TranscriptPageResponse(BaseModel):
+    session_id: UUID
+    after_sequence: int = Field(ge=0)
+    next_after_sequence: int = Field(ge=0)
+    has_more: bool
+    segments: list[TranscriptSegmentResponse]
+
+
 class ChunkAckResponse(BaseModel):
     session_id: UUID
     sequence: int
