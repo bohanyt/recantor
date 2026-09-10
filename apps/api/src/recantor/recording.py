@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.models import (
+    AudioCompleteness,
     RecordingChunk,
     RecordingGap,
     RecordingSession,
@@ -467,6 +468,19 @@ def _group_sequences(sequences: list[int]) -> list[tuple[int, int]]:
     return [(item.start, item.end) for item in compress_sequences(sequences)]
 
 
+def _classify_audio_completeness(
+    *, final_sequence: int, accepted: set[int], covered_by_gaps: set[int]
+) -> AudioCompleteness:
+    if final_sequence == 0:
+        return AudioCompleteness.EMPTY
+    if any(
+        sequence not in accepted and sequence in covered_by_gaps
+        for sequence in range(1, final_sequence + 1)
+    ):
+        return AudioCompleteness.PARTIAL
+    return AudioCompleteness.FULL
+
+
 async def finalize_session(
     db: AsyncSession,
     *,
@@ -555,6 +569,11 @@ async def finalize_session(
                 session.finalized_writer_id = writer_id
                 session.finalized_capture_epoch = capture_epoch
                 session.active_writer_id = None
+                session.audio_completeness = _classify_audio_completeness(
+                    final_sequence=final_sequence,
+                    accepted=accepted,
+                    covered_by_gaps=covered,
+                ).value
                 session.finalized_at = utcnow()
                 session.updated_at = utcnow()
             await db.flush()
