@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -13,7 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 
 from recantor.db import get_sessionmaker
-from recantor.models import TranscriptSegment, TranscriptionUtterance
+from recantor.models import TranscriptionUtterance, TranscriptSegment
 from recantor.settings import get_settings
 from recantor.storage import AudioStorageError, FilesystemAudioStorage
 from recantor.transcript import commit_transcript_segment
@@ -205,10 +204,10 @@ class GroqSTTProvider:
             else:
                 category = STTErrorCategory.PERMANENT
             raise STTProviderError(category, f"Groq STT returned HTTP {exc.code}") from exc
-        except (TimeoutError, socket.timeout) as exc:
+        except TimeoutError as exc:
             raise STTProviderError(STTErrorCategory.TIMEOUT, "Groq STT request timed out") from exc
         except urllib.error.URLError as exc:
-            if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            if isinstance(exc.reason, TimeoutError):
                 category = STTErrorCategory.TIMEOUT
             else:
                 category = STTErrorCategory.TRANSIENT
