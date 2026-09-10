@@ -149,3 +149,44 @@ class TranscriptSegment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class TranscriptionUtterance(Base):
+    __tablename__ = "transcription_utterances"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "sequence", name="uq_transcription_utterance_session_sequence"
+        ),
+        UniqueConstraint(
+            "session_id", "producer_key", name="uq_transcription_utterance_session_producer_key"
+        ),
+        CheckConstraint("sequence >= 1", name="ck_transcription_utterance_sequence_positive"),
+        CheckConstraint(
+            "start_ms >= 0 AND end_ms > start_ms", name="ck_transcription_utterance_timing"
+        ),
+        CheckConstraint(
+            "length(btrim(producer_key)) > 0",
+            name="ck_transcription_utterance_producer_key_nonblank",
+        ),
+        CheckConstraint(
+            "length(btrim(content_type)) > 0",
+            name="ck_transcription_utterance_content_type_nonblank",
+        ),
+        CheckConstraint("byte_length > 0", name="ck_transcription_utterance_byte_length_positive"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    producer_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

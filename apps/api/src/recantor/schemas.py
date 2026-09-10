@@ -111,6 +111,28 @@ class TranscriptPageResponse(BaseModel):
     segments: list[TranscriptSegmentResponse]
 
 
+class UtteranceWorkResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    sequence: int = Field(ge=1)
+    producer_key: str
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    content_type: str
+    sha256: str
+    byte_length: int = Field(gt=0)
+    created_at: datetime
+
+
+class UtteranceWorkPageResponse(BaseModel):
+    session_id: UUID
+    after_sequence: int = Field(ge=0)
+    next_after_sequence: int = Field(ge=0)
+    has_more: bool
+    utterances: list[UtteranceWorkResponse]
+
+
 class ChunkAckResponse(BaseModel):
     session_id: UUID
     sequence: int
