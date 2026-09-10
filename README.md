@@ -26,7 +26,7 @@ The project is designed for two primary workflows:
 - Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
 - API contract: FastAPI OpenAPI -> generated TypeScript client
 
-Planned downstream capabilities include Celery/Redis processing, Groq Whisper STT, faster-whisper local fallback, realtime transcript delivery, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims unless `docs/CURRENT.md` says otherwise.
+The current Phase 2 core includes the realtime utterance/VAD path, canonical transcript storage, and a Groq Whisper STT provider boundary. Planned downstream capabilities include Celery/Redis live STT processing, realtime transcript delivery, faster-whisper local fallback, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims unless `docs/CURRENT.md` says otherwise.
 
 ## Quick start
 
@@ -65,22 +65,24 @@ The reliable archive recorder is implemented. It uses `MediaRecorder`, persists 
 
 A clean Stop declares a final high-water boundary; the server reaches `COMPLETE` only after expected sequences are durably present or explicitly represented as loss. Persisted `audio_completeness` distinguishes full, partial, and empty terminal audio evidence.
 
-The browser also has an independent realtime lane that taps the same microphone stream through Web Audio/AudioWorklet, sends sample-clock PCM to the server, endpoints speech with a bounded VAD baseline, and stores independently decodable durable utterance WAV work for downstream STT. Realtime failure is downstream degradation and does not participate in archive ACK semantics.
+The browser also has an independent realtime lane that taps the same microphone stream through Web Audio/AudioWorklet, sends sample-clock PCM to the server, endpoints speech with a bounded VAD baseline, and stores independently decodable durable utterance WAV work. The merged STT boundary can verify one of those durable utterances, send it to Groq Whisper, and commit one retry-safe canonical transcript segment. Realtime/STT failure remains downstream degradation and does not participate in archive ACK semantics.
 
 ## Current project status
 
 **Phase 1 capture reliability is closed.** The bounded real-platform witness used an ordinary Microsoft Edge window on an awake Windows 11 laptop with a real microphone and proved archive capture/ACK progress through a whole-window minimize interval. This does not claim continuous capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile browser suspension.
 
-**Phase 2 foundations through realtime utterance production are merged.** The repository now has:
+**Phase 2 foundations through real provider execution are merged.** The repository now has:
 
 - terminal audio completeness;
 - canonical PostgreSQL transcript segments with reconnect cursor semantics;
 - durable independently decodable `TranscriptionUtterance` work;
-- a real browser PCM/VAD utterance producer, validated on Windows/Edge with 71 durable WAV utterances while archive capture remained `COMPLETE`/`full`.
+- a real browser PCM/VAD utterance producer, validated on Windows/Edge with 71 durable WAV utterances while archive capture remained `COMPLETE`/`full`;
+- an owned provider-neutral STT boundary with Groq `whisper-large-v3-turbo` as the first adapter;
+- a bounded real-provider witness where durable real-microphone utterances produced canonical transcript rows without weakening archive capture.
 
-PR #35 merged as `7e0b2601ca17148db28df4b422d93c48273780cc`; post-merge CI run `34450139207` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
+PR #37 merged as `f0a0f2e068cb1003619010595928c0273912e61c`; post-merge CI run `34456347492` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
 
-**Issue #36 is the current Phase 2D slice:** connect committed durable utterances to an owned STT provider boundary and commit exactly one retry-safe canonical transcript segment per utterance. Groq Whisper is the intended first adapter. Celery live queueing, realtime transcript fanout/UI, local faster-whisper fallback, diarization, summaries, production auth, and native mobile recording remain downstream.
+**Issue #38 is the current Phase 2E slice:** add automatic durable live STT queueing, PostgreSQL-backed claim/reconciliation semantics, provider retry handling, and multi-session fairness using Celery/Redis only as delivery/coordination rather than durable truth. Realtime transcript fanout/UI, local faster-whisper fallback, diarization, summaries, production auth, and native mobile recording remain downstream.
 
 See [`docs/CURRENT.md`](docs/CURRENT.md) for exact evidence and immediate next work.
 
