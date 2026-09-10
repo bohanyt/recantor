@@ -12,38 +12,25 @@ The project is designed for two primary workflows:
 1. **Capture is infrastructure. Intelligence is downstream.** Recording must remain safe even if STT, diarization, an LLM, or the network is degraded.
 2. **The server owns the session.** Browsers and future native apps are clients of the same recording protocol.
 3. **Durable before clever.** Audio is persisted and acknowledged before downstream processing is considered successful.
-4. **Concurrent users are normal.** Work is isolated by session and processed through bounded queues and worker pools.
-5. **Failures must be visible.** Missing audio is reported as a gap; Recantor must never silently pretend a recording is complete.
-6. **Boring, documented technology wins.** Prefer mainstream tools with clear contracts, tests, and operational behavior.
+4. **Concurrent users are normal.** Work is isolated by session.
+5. **Failures must be visible.** Missing audio is reported honestly; Recantor must never silently pretend continuity.
 
-## Stack
-
-Current application foundation:
+## Current stack
 
 - Web: React + TypeScript + Vite + Tailwind CSS
 - Server state: TanStack Query
+- Browser recovery spool: Dexie / IndexedDB
 - API: Python + FastAPI + Pydantic
 - Database: PostgreSQL + SQLAlchemy 2 + Alembic
 - Development orchestration: Docker Compose
 - Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
 - API contract: FastAPI OpenAPI -> generated TypeScript client
 
-Planned downstream capabilities:
-
-- Browser recovery spool: IndexedDB via Dexie
-- Jobs: Celery + Redis
-- Realtime delivery: WebSocket where appropriate
-- Resumable guest uploads: Uppy + tus/tusd
-- Primary STT: Groq Whisper API
-- Local STT fallback: faster-whisper / CTranslate2
-- Audio normalization: FFmpeg
-- Default production reverse proxy: Caddy, replaceable downstream
-
-The public upstream stays deployment-agnostic. Organization-specific branding, domains, authentication policy, infrastructure, and secrets belong in deployment configuration or downstream forks/overlays.
+Planned downstream capabilities include Celery/Redis processing, Groq Whisper STT, faster-whisper local fallback, realtime transcript delivery, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims.
 
 ## Quick start
 
-The Phase 0 development stack requires Docker with Docker Compose.
+The development stack requires Docker with Docker Compose.
 
 ```bash
 git clone https://github.com/bohanyt/recantor.git
@@ -55,7 +42,7 @@ Compose starts PostgreSQL and Redis, runs Alembic migrations, then starts the AP
 
 Open:
 
-- Web: `http://localhost:5173`
+- Web recorder: `http://localhost:5173`
 - API docs: `http://localhost:8000/docs`
 - Process liveness: `http://localhost:8000/healthz`
 - PostgreSQL readiness: `http://localhost:8000/readyz`
@@ -66,19 +53,35 @@ Stop the stack:
 docker compose -f infra/compose.yaml down
 ```
 
-Delete the development database volume too:
+Delete development database/audio volumes too when you intentionally want a clean slate:
 
 ```bash
 docker compose -f infra/compose.yaml down -v
 ```
 
-The current UI is intentionally only a foundation/status shell. It does **not** record audio yet.
+## What the recorder currently does
+
+The Phase 1 web recorder is implemented. It uses `MediaRecorder`, persists emitted fragments to a Dexie/IndexedDB recovery spool, uploads sequenced audio to the API, keeps local evidence until durable server ACK, supports recovery/finalization, fences stale capture writers, and makes unresolved continuity/gaps explicit.
+
+A clean Stop declares a final high-water boundary; the server reaches `COMPLETE` only after expected sequences are durably present or explicitly represented as loss.
+
+Heartbeat/liveness interruption is tracked separately from proven audio discontinuity. Losing heartbeat does not automatically fabricate an audio gap.
+
+## Current project status
+
+The validated **Phase 1 code blockers are merged and CI-green**. The remaining Phase 1 exit item is a bounded real Windows/desktop Chrome or Edge witness with a real microphone while the ordinary browser window is backgrounded/minimized and the computer remains awake.
+
+After that witness is recorded and Issue #5 is reconciled, Phase 1 can close if no new defect appears.
+
+Issue #15 is the next downstream contract gate and must be resolved before writing the first STT/summary consumer. Groq/Whisper STT, diarization, LLM summaries, production auth, and native mobile recording are not implemented yet.
+
+See [`docs/CURRENT.md`](docs/CURRENT.md) for the exact operational state and next step.
 
 ## Development checks
 
-The repository pins dependency resolutions in `apps/api/uv.lock` and `apps/web/pnpm-lock.yaml`.
+Dependency resolutions are pinned in `apps/api/uv.lock` and `apps/web/pnpm-lock.yaml`.
 
-Typical checks are:
+Typical checks:
 
 ```bash
 uv sync --project apps/api --frozen --dev
@@ -96,28 +99,22 @@ pnpm --dir apps/web test
 pnpm --dir apps/web build
 ```
 
-GitHub Actions additionally proves PostgreSQL migrations/readiness, Redis reachability, a real Chromium web -> API -> PostgreSQL smoke path, and the Docker Compose development path.
+GitHub Actions additionally proves PostgreSQL migrations/readiness, Redis reachability, Chromium web -> API -> PostgreSQL smoke behavior, API restart durability, and the Docker Compose path.
 
 ## Reliability boundary
 
-Browser live recording will use a local recovery spool plus sequenced server ingestion. A server ACK is the durable boundary; browser IndexedDB may still be subject to browser persistence/quota behavior.
+Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web is useful while active, but Recantor does not claim continuous recording through mobile background suspension, desktop sleep, or shutdown.
 
-A clean Stop will declare a final sequence/high-water mark so completion can be proven rather than inferred from silence.
+The public upstream stays deployment-agnostic. Organization-specific branding, domains, authentication policy, infrastructure, and secrets belong in deployment configuration or downstream forks/overlays.
 
-Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains useful while active, while future Android/iOS recorder clients provide the stronger background/lock-screen capture path.
+## Documentation
 
-## Project status
-
-**Phase 0 application foundation.** The runnable web/API/database/Redis/Compose/CI baseline is implemented. Recording, STT, diarization, summaries, uploads, and production authentication remain intentionally unimplemented.
-
-Start here:
-
-- [`docs/CURRENT.md`](docs/CURRENT.md) — current project truth and immediate next step
+- [`docs/CURRENT.md`](docs/CURRENT.md) — operational source of truth and immediate next step
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) — product scope and user-facing behavior
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture and reliability contracts
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture and reliability contracts
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased delivery plan
 - [`docs/decisions/0001-foundation-stack.md`](docs/decisions/0001-foundation-stack.md) — initial stack decision
-- [`docs/decisions/0002-recording-access-guardrails.md`](docs/decisions/0002-recording-access-guardrails.md) — browser recording/access guardrails
+- [`docs/decisions/0002-recording-access-guardrails.md`](docs/decisions/0002-recording-access-guardrails.md) — recording/access guardrails
 - [`AGENTS.md`](AGENTS.md) — working contract for humans and coding agents
 
 ## License

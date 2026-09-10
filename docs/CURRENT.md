@@ -2,45 +2,24 @@
 
 Last updated: 2026-09-10
 
-This file is the short operational source of truth for the current Recantor state. Read it before planning implementation work, then verify GitHub fresh. Repository/PR/issue/CI state outranks this summary if the repository has moved since this file was written.
+This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, and CI state outrank this summary if the repository has moved.
 
-## Current product truth
+## Product truth
 
-Recantor is a public, self-hosted recording and meeting-intelligence project.
-
-The agreed product shape has two primary web workflows:
+Recantor is a public, self-hosted recording and meeting-intelligence project with two intended web workflows:
 
 1. **Live Intelligence** — authenticated live recording, transcript, speaker processing, and rolling meeting intelligence.
 2. **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then process/export it. A bounded guest path may operate without login.
 
-Desktop Chrome/Edge is the first reliability target for live web recording. Mobile web remains responsive and usable while active, but Recantor does not promise reliable mobile browser recording under screen lock/background suspension.
-
-Future Android/iOS recorder clients will reuse the same server session/ingest protocol for persistent mobile capture.
-
-## Current architecture truth
-
-Selected foundation:
-
-- React + TypeScript + Vite + Tailwind CSS web SPA;
-- TanStack Query for server state;
-- Python + FastAPI + Pydantic API;
-- PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
-- Celery + Redis background processing;
-- Dexie/IndexedDB browser recovery spool;
-- Uppy + tus/tusd resumable existing-recording upload;
-- Groq Whisper API as primary STT and faster-whisper/CTranslate2 as local fallback later;
-- FFmpeg for media normalization;
-- Docker Compose deployment baseline;
-- Caddy as the default/simple production reverse proxy;
-- Node.js 24 LTS and Python 3.13.
-
-Not every selected component is implemented. Architecture invariants are defined in `docs/ARCHITECTURE.md`, `docs/decisions/0002-recording-access-guardrails.md`, and `AGENTS.md`.
-
-Most important:
+The currently implemented production-critical work is the capture foundation. Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains usable while active, but Recantor does not promise continuous browser recording through screen lock, OS suspension, sleep, or shutdown.
 
 > Capture is infrastructure. Intelligence is downstream.
 
-Implemented durability path:
+STT, diarization, transcript intelligence, and LLM summaries remain downstream and are intentionally absent from Phase 1.
+
+## Implemented capture architecture
+
+The browser/server durability path is:
 
 ```text
 MediaRecorder
@@ -51,160 +30,137 @@ MediaRecorder
   -> local fragment deletion
 ```
 
-STT, diarization, live transcript delivery, and LLM summaries remain downstream and are intentionally absent from Phase 1.
+Selected foundation:
 
-Non-optional recording guardrails:
+- React + TypeScript + Vite + Tailwind CSS web SPA;
+- TanStack Query for server state;
+- Python + FastAPI + Pydantic API;
+- PostgreSQL + SQLAlchemy 2 + Alembic durable structured state;
+- Redis available for ephemeral coordination/background-job infrastructure;
+- Dexie/IndexedDB browser recovery spool;
+- Docker Compose development/deployment baseline;
+- Node.js 24 LTS and Python 3.13.
 
-- browser IndexedDB is a recovery spool, not the final durability boundary;
-- only one active capture writer may own a live session at once;
-- a resumed `MediaRecorder` is a new capture generation with a fresh writer and fenced epoch;
+Important capture guardrails:
+
+- IndexedDB is a recovery spool, not the final durability boundary;
+- a server ACK requires durable audio plus durable acceptance metadata;
+- one live session has one active capture generation at a time, fenced by writer identity + epoch;
 - already-spooled evidence must not be silently destroyed when ownership rotates;
+- raw MediaRecorder chunks are ordered media fragments and are not assumed independently decodable;
 - Stop/finalize declares a final sequence/high-water boundary;
 - every expected sequence through that boundary must be durably present or explicitly represented as loss before completion;
-- a server ACK requires durable audio plus durable acceptance metadata;
-- raw MediaRecorder chunks are ordered media fragments and must not be assumed independently decodable;
-- WebSocket/Redis are not durable source of truth;
-- raw audio is not stored as PostgreSQL blobs.
+- liveness interruption is not automatically audio loss;
+- PostgreSQL/audio storage are durable truth; Redis/WebSocket are not.
 
-## Repository state
+## Repository checkpoint
 
-Canonical `main` at this checkpoint: `3689d8a3431ef34a9106227cf99a3b48e78a245f`.
+Latest merged implementation checkpoint: `47a18f24f8a2eaa621669392c52185b816e1fc67` — PR #28, **liveness interruption semantics**.
 
-PR #27 was deliberately squash-merged into `main` on 2026-09-10, closing Issue #13. Post-merge CI run `34416444878` completed successfully across backend, frontend, Chromium E2E, and Compose smoke. The subsequent `docs/CURRENT.md` reconciliation commit `3689d8a3431ef34a9106227cf99a3b48e78a245f` is also CI-green in run `34416682816`.
+PR #28 was deliberately squash-merged on 2026-09-10 and closed Issue #10. Post-merge `main` CI run `34419675987` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+
+This document may itself live in a later docs-only commit; use GitHub `main` as the authoritative head rather than treating the implementation checkpoint above as a self-referential branch SHA.
 
 ### Merged Phase 1 deliveries
 
-- **PR #6** — server durability core: durable live-session lifecycle, writer/epoch fencing, sequenced binary ingest, crash-safe filesystem commit, PostgreSQL acceptance metadata, accepted-range reconciliation, explicit gaps, and final high-water enforcement.
-- **PR #7** — browser recovery recorder: MediaRecorder capture, Dexie/IndexedDB spool, atomic local high-water persistence, SHA-256 evidence, bounded retry/backoff, reconnect/manual sync, storage-safety reporting, recovery UX, and final-fragment flush.
-- **PR #9** — capture-generation fencing: recovery capability, fresh writer/epoch on resume, stale-writer rejection, persisted pending claim intent, and unexpected-capture-failure recovery.
+- **PR #6** — server durability core: lifecycle, writer/epoch fencing, sequenced ingest, crash-safe filesystem commit, PostgreSQL acceptance metadata, accepted-range reconciliation, explicit gaps, final high-water enforcement.
+- **PR #7** — browser recovery recorder: MediaRecorder, Dexie/IndexedDB spool, atomic local sequence/timing high-water persistence, SHA-256 evidence, bounded retry/backoff, reconnect/manual sync, storage-safety reporting, recovery UX, final fragment flush.
+- **PR #9** — capture-generation recovery/fencing with recovery capability, fresh writer/epoch on resume, stale-writer rejection, and persisted pending claim intent.
 - **PR #17 / Issue #14** — bounded recorder requests and escapable finalization.
-- **PR #19 / Issue #18** — deterministic clean Stop sync over a stable stopped spool.
-- **PR #20 / Issues #11 and #12** — terminal browser fencing for stale writers plus the bounded same-epoch reconciliation safety guard. The final multi-client identity contract remains deferred.
-- **PR #27 / Issue #13** — explicit missing-sequence resolution: unresolved sequences are visible, retry remains non-destructive, permanent loss requires an explicit user action, repeated failed Finish attempts do not amplify wall-clock gaps, and a late local fragment can still fill the hole normally. Deterministic E2E covers declared-gap completion, late-fill completion, and stable gap count.
+- **PR #19 / Issue #18** — deterministic clean Stop sync over the stable stopped spool.
+- **PR #20 / Issues #11 and #12** — terminal stale-writer browser fencing plus bounded same-epoch reconciliation safety.
+- **PR #27 / Issue #13** — explicit missing-sequence resolution, non-destructive retry, explicit permanent-loss declaration, late-fill completion, and stable gap accounting.
+- **PR #28 / Issue #10** — heartbeat checks stale liveness before refreshing `last_heartbeat_at`; `state == interrupted` means a current liveness hole while `interrupted_at` retains the latest historically observed interruption; heartbeat/claim recovery returns to `recording` without fabricating an audio gap.
 
-### Phase 1H — Issue #10 implementation candidate, not merged
+## Phase 1 status
 
-PR #28 on `phase1/liveness-interruption-semantics` is the bounded candidate for Issue #10. It is **not** delivered on `main` and must not be merged without explicit user instruction.
+All validated code blockers discovered by the executed Phase 1 re-review are now merged and closed: #10, #11, #12, #13, #14, and #18.
 
-Candidate semantics deliberately avoid a new persistence abstraction:
+Issue #5 remains open because one exit requirement is intentionally not automatable with the current CI environment:
 
-- `session.state == interrupted` is the **current** liveness-hole signal;
-- `interrupted_at` is the timestamp of the **latest historically observed** liveness interruption and intentionally remains populated after recovery;
-- heartbeat evaluates staleness before replacing the previous `last_heartbeat_at`, so a stall is recorded even when no GET/read occurred during it;
-- capture claim and heartbeat restoration both preserve the historical interruption timestamp while returning the active session to `recording`;
-- heartbeat/liveness interruption does **not** create a `RecordingGap`, because liveness loss is not proof of audio loss.
+### Real desktop Chrome/Edge witness — current next step
 
-Deterministic API coverage exercises stall → read → heartbeat, stall → heartbeat with no intervening read, and stall → claim, and verifies the no-audio-gap boundary.
+Run Recantor on an **awake real Windows/desktop machine** with an actual microphone and an ordinary Chrome or Edge build. Do not use Playwright/headless flags as evidence.
 
-## Validated Phase 1 blocker status
+Preferred witness setup is the entire Docker Compose development stack on the same laptop and the browser pointed at `http://localhost:5173`. This isolates the real-browser lifecycle behavior from unrelated deployment/network variables while still exercising the real web -> API -> PostgreSQL/audio-storage path.
 
-| Issue | Status | Current truth |
-| --- | --- | --- |
-| #10 | **open blocker — PR #28 candidate, unmerged** | PR #28 detects a stale heartbeat before refresh and makes current-vs-historical liveness evidence explicit using lifecycle state plus `interrupted_at`; it remains a candidate until review/CI and deliberate merge. |
-| #11 | **fixed / closed** | Stale-writer conflicts terminally fence active browser capture and retain orphaned evidence honestly. |
-| #12 | **fixed for Phase 1 / closed** | Reconciliation has the interim same-capture-epoch deletion guard; final multi-client identity remains deferred. |
-| #13 | **fixed / closed by PR #27** | Missing-sequence finalization now has explicit declared-gap and late-fill exits with stable retry accounting. |
-| #14 | **fixed / closed** | Recorder requests are bounded and finalization can be deferred safely. |
-| #18 | **fixed / closed** | Clean Stop performs a fresh stable-spool sync before finalization. |
+Suggested bounded witness:
 
-Issue #5 remains open as the umbrella for **Phase 1: reliable desktop browser recording and recovery**.
+1. record for about 1 minute with the browser visible;
+2. note elapsed time and the current server-ACK sequence;
+3. minimize the entire browser window for about 5 minutes while keeping the computer awake and unlocked enough that the OS does not suspend it;
+4. restore the window and confirm elapsed time/capture advanced;
+5. allow any pending local audio to synchronize;
+6. Stop normally;
+7. record exact Git commit, Windows version/build, browser/version, minimized interval, terminal session state, final sequence/accepted continuity, pending-local count, and explicit gaps.
 
-## Immediate Phase 1 order
+Passing evidence should show capture continued during the tested minimized interval and the resulting recording reconciled honestly. Do not generalize the result to laptop sleep/shutdown or mobile browser suspension.
 
-1. **Issue #10 / PR #28** — finish review and CI reconciliation for liveness/interruption semantics; do not treat it as delivered until an explicitly authorized merge.
-2. **Real desktop Chrome/Edge witness** on an awake Windows/desktop machine using a real microphone, with the browser backgrounded/minimized for a bounded interval, then returned and stopped. Record exact OS/browser/version/test duration plus final ACK/continuity evidence.
-3. Reconcile Issue #5 against its acceptance matrix and close it only when #10 and the real-platform witness are satisfied.
-4. After Phase 1 closes, resolve **Issue #15** before writing the first downstream STT/summary consumer.
+After a successful real-platform witness, reconcile Issue #5 against its acceptance matrix and close Phase 1 if no new defect is revealed.
 
-Do not pull Groq, Whisper, diarization, or LLM summaries into Phase 1.
+## Liveness semantics after PR #28
 
-## Issue #10 bounded contract
+- `session.state == interrupted` means the session is **currently** considered inside a liveness hole.
+- `interrupted_at` is historical evidence: the latest heartbeat timestamp at which an observed timeout began. It may remain populated after the session returns to `recording` or later completes.
+- a valid heartbeat evaluates the previous heartbeat timestamp before replacing it, so a timeout is recorded even when no GET/read occurred during the stall;
+- capture claim and heartbeat recovery preserve the same historical evidence semantics;
+- no heartbeat/liveness stall automatically creates a `RecordingGap`; locally retained audio can still later prove continuity.
 
-On canonical `main` before PR #28, `_mark_interrupted_if_stale()` only runs on selected read/claim paths. `heartbeat()` overwrites `last_heartbeat_at` before preserving evidence of a stall, so a stall can disappear if no read occurs during it. `claim_capture()` also clears `interrupted_at`, while heartbeat restoration leaves it populated, giving the field inconsistent meaning.
+## Phase 2 gate
 
-PR #28's candidate guarantee is:
+Issue #15 is **not a Phase 1 blocker**, but it must be resolved before the first downstream STT/summary consumer is implemented.
 
-- a heartbeat request first evaluates the previous heartbeat timestamp against `recording_heartbeat_timeout_seconds`, before refreshing it;
-- current interruption is represented by `session.state == interrupted`;
-- `interrupted_at` has one meaning only: the latest historically observed liveness interruption timestamp, and therefore remains available after heartbeat or claim recovery;
-- a restored session reports `recording`, not `interrupted`, while still exposing historical interruption evidence;
-- both a normal read-path detection and a no-read heartbeat-path detection converge on the same current/historical semantics;
-- claim of a new capture generation preserves the same historical evidence semantics;
-- no heartbeat stall is automatically represented as an audio `RecordingGap`.
-
-Important boundary:
-
-> A liveness interruption is not automatically an audio gap.
-
-The browser may still hold that interval in its local recovery spool and later prove continuity. Do not manufacture `RecordingGap` evidence merely because heartbeat delivery stalled. A background sweep/job is also not required by #10 if write-path detection satisfies the contract.
-
-## What automated background-tab tests do not prove
-
-The pinned Playwright environment disables normal background throttling and runs headless. Automated browser tests therefore do **not** prove real OS-minimized Chrome/Edge behavior, laptop sleep, browser termination, or mobile background suspension. The real desktop witness remains a Phase 1 exit requirement.
-
-## Phase 2 / downstream gate
-
-Issue #15 is not a Phase 1 blocker, but it must land before the first actual STT/summary consumer. Today `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 must persist a terminal completeness/continuity classification so downstream intelligence does not infer more than capture evidence proves.
+Today lifecycle `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 will establish a persisted terminal completeness/continuity classification so downstream intelligence cannot infer more than capture evidence proves.
 
 ## Not implemented yet
 
-- background/Celery processing workers;
 - Groq or local STT;
 - realtime transcript delivery;
 - diarization;
 - rolling/final summaries;
-- tus upload pipeline;
-- authentication/authorization;
+- production Celery processing consumers;
+- tus existing-recording upload pipeline;
+- production authentication/authorization;
 - recording deletion/retention UI;
-- production deployment/reverse proxy;
-- native Android/iOS clients.
+- production reverse-proxy/deployment hardening;
+- native Android/iOS recorder clients.
 
 Do not describe those as working until repository evidence proves them.
 
-## Open decisions intentionally deferred
+## Known boundaries and deferred decisions
 
-Resolve these by evidence/ADR when their implementation phase begins:
-
-- exact authentication implementation;
-- exact LLM provider(s) for rolling summaries;
-- final live/offline diarization backends and speaker embedding model;
-- production object storage and queue concurrency/routing;
-- exact VAD/utterance timing;
-- exact native mobile framework;
-- whether a server-side liveness stall implies any audio discontinuity (#10; currently explicitly **not assumed**);
-- how a fenced/offline client may deliver backlog under a new generation;
-- the final multi-client reconciliation identity contract beyond #12's interim epoch guard;
-- terminal-state vocabulary for clean / partial-gapped / empty results (#15);
-- which real-world mechanisms can leave an expected middle fragment absent from the local spool;
-- whether `claim_capture` should ever accept a non-complete `FINALIZING` session.
-
-## Known design boundaries
-
-- Browser background/minimized recording on an awake desktop is a core web use case requiring a real-platform witness.
-- Closing the browser, sleeping/shutting down the computer, or mobile OS suspension cannot be treated as continuous capture.
-- Browser local storage may be best-effort unless persistent storage is granted; UI must reflect degraded/unsafe recovery state.
-- An open MediaRecorder fragment is not yet durable IndexedDB/server evidence; abrupt process/device loss can lose an un-emitted bounded tail even when earlier emitted fragments are safe.
-- Multiple simultaneous sessions are normal; one live session has one active capture generation at a time.
-- Fenced old-generation evidence is retained locally but currently has no operator recovery/export/expiry flow.
+- Closing the browser, desktop sleep/shutdown, or mobile OS suspension cannot be treated as continuous capture.
+- Browser local storage remains best-effort unless persistence is granted; the UI must expose degraded/unsafe recovery state.
+- An open MediaRecorder fragment is not yet durable browser/server evidence; abrupt process/device loss can lose an un-emitted bounded tail.
+- Fenced old-generation evidence is retained locally but has no final operator recovery/export/expiry flow yet.
+- #12's same-epoch reconciliation guard is an interim Phase 1 safety measure, not a final multi-device identity contract.
 - Cross-device takeover/backlog semantics are not claimed.
-- Public upstream must remain free of deployment secrets and organization-private data.
+- Whether `claim_capture` should ever accept a non-complete `FINALIZING` session remains deferred.
+- Public upstream must remain free of organization secrets, private data, and downstream-only branding/infrastructure.
 
-## Local development notes
+## Local development
 
-- `apps/api/tests/conftest.py` drops the entire schema on teardown. Use a dedicated test database; do not point pytest at a database an API process is using.
-- `apps/web/openapi-ts.config.ts` defaults to `http://localhost:8000`. On IPv6-first hosts, set `OPENAPI_INPUT` explicitly if the API is bound only to `127.0.0.1`.
+The simplest runnable stack requires Docker with Docker Compose:
+
+```bash
+git clone https://github.com/bohanyt/recantor.git
+cd recantor
+docker compose -f infra/compose.yaml up --build
+```
+
+Open exactly `http://localhost:5173` for the web UI. The API is exposed at `http://localhost:8000`.
+
+`apps/api/tests/conftest.py` drops the entire test schema on teardown; never point pytest at a database used by a running API instance.
 
 ## Handoff rule
 
-Control-tower work is intentionally transferable between chats. GitHub is technical source of truth; chat history is convenience only.
-
-For a new control-tower chat:
+For a new Control Tower chat:
 
 1. inspect GitHub fresh;
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/`;
-5. read Issue #5 and the current next blocker/PR;
+5. read Issue #5 and the current next blocker/witness evidence;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
