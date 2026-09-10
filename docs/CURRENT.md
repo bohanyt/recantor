@@ -57,7 +57,9 @@ Important capture guardrails:
 
 Phase 1 closed after the real-platform witness. The witness ran against `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`; closure docs landed as `cd9c35543be8881acd682b14b031b0786a81a1a7` and CI `34430899348` succeeded.
 
-Phase 2 gate Issue #15 was then resolved by PR #29, squash-merged to `main` as `ba5c91145d70334335f06e8447f9310d8dac165b`. Post-merge CI run `34437634299` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+Phase 2 gate Issue #15 was resolved by PR #29, squash-merged to `main` as `ba5c91145d70334335f06e8447f9310d8dac165b`. Post-merge CI run `34437634299` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+
+Phase 2A Issue #30 was resolved by PR #31, squash-merged to `main` as `1aba22e22b859e84dfb016bc2bd211e067467e9c`. Post-merge CI run `34439502585` completed successfully. That merge established the canonical transcript segment store and reconnect-safe HTTP read model.
 
 This document may itself live in a later branch/commit; use GitHub `main` as the authoritative integration head rather than treating a checkpoint above as a self-referential branch SHA.
 
@@ -93,11 +95,9 @@ Wall-clock-only liveness/interruption evidence does not by itself downgrade `ful
 
 Downstream consumers must use `audio_completeness` rather than treating lifecycle `COMPLETE` as proof that audio exists or is gap-free.
 
-## Current Phase 2 slice — Issue #30 / PR #31
+## Canonical transcript foundation — MERGED
 
-Issue #30 is the current bounded Phase 2A task: establish the provider-neutral canonical transcript source of truth and reconnect-safe HTTP read model **before** Groq, VAD, Celery queue wiring, or WebSocket transcript delivery.
-
-PR #31 on branch `phase2/canonical-transcript-foundation` is the implementation candidate. Its intended contract is:
+PR #31 / Issue #30 established the provider-neutral canonical transcript source of truth before any provider execution:
 
 - PostgreSQL-backed immutable committed `TranscriptSegment` rows;
 - stable segment ID plus owning `session_id`;
@@ -106,25 +106,49 @@ PR #31 on branch `phase2/canonical-transcript-foundation` is the implementation 
 - explicit `start_ms` / `end_ms` on the recording timeline;
 - canonical text and optional language;
 - database uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`;
-- internal retry-safe commit function: identical producer-key retries return the existing segment, conflicting retries fail explicitly;
-- sequence allocation serialized by locking only the owning session row so independent meetings do not globally block each other;
-- reconnect-safe `GET /api/v1/sessions/{session_id}/transcript?after_sequence=...&limit=...` returning ordered canonical segments and a continuation cursor.
+- identical producer-key retries return the existing segment while conflicting retries fail explicitly;
+- sequence allocation locks only the owning session row, so independent meetings do not globally block each other;
+- reconnect-safe `GET /api/v1/sessions/{session_id}/transcript?after_sequence=...&limit=...` returns ordered canonical segments and a continuation cursor.
 
-Transcript `sequence` is a publication/reconnect namespace, not the recording-chunk sequence and not an implicit timestamp. Timeline ordering evidence remains explicit in `start_ms` / `end_ms`.
+Transcript `sequence` is a publication/reconnect namespace, not the recording-chunk sequence and not an implicit timestamp. Timeline evidence remains explicit in `start_ms` / `end_ms`.
 
-This slice deliberately does **not** call Groq/Whisper, run VAD, create Celery workers, push WebSockets, perform diarization, or invoke an LLM. Those remain downstream of a stable canonical transcript contract.
+No Groq/Whisper, VAD, Celery worker, WebSocket transcript delivery, diarization, or LLM was added by this slice.
 
-## Exact next dependency after Issue #30
+## Current Phase 2 slice — Issue #32 / PR #33
 
-After #30 is merged and post-merge CI is green, the next bounded Phase 2 design/implementation slice should establish the **utterance/audio-work contract** that feeds STT:
+Issue #32 is the current Phase 2B task. Draft PR #33 on branch `phase2/durable-utterance-work` establishes the durable provider-neutral speech-sized audio-work contract that future VAD/repair producers create and future STT workers consume.
 
-- define how speech-sized work is identified from live audio without weakening the archive lane;
-- retain timeline/source evidence needed to associate provider output with the recording;
-- define retry/idempotency identity from utterance work into canonical transcript producer keys;
-- benchmark/tune VAD/endpoint boundaries against real office audio;
-- only then wire the Groq `STTProvider` and live queue against that contract.
+The candidate contract is:
 
-Do not send arbitrary standalone MediaRecorder fragments directly to STT merely because they are convenient; archive fragments are not assumed independently decodable and their timeslice is not a semantic utterance boundary.
+- PostgreSQL-backed `TranscriptionUtterance` work rows;
+- deterministic work UUID derived from `(session_id, canonical producer_key)` so a retry after a process crash addresses the same storage object;
+- session-local monotonically increasing utterance `sequence` with sequence allocation serialized by locking only the owning session row;
+- explicit `start_ms` / `end_ms` on the recording timeline;
+- normalized audio `content_type`, SHA-256, byte length, and durable storage key;
+- independently decodable utterance media stored through the owned filesystem audio-storage boundary before the database row is acknowledged;
+- stable storage path `sessions/<session-id>/utterances/<work-uuid>.media`, so a matching object left by a crash before DB commit is safely reusable on retry;
+- identical producer-key retries are idempotent; timing/content-type/byte conflicts fail explicitly;
+- inspection read `GET /api/v1/sessions/{session_id}/utterances?after_sequence=...&limit=...`; the HTTP response does not expose the filesystem storage key;
+- deterministic future canonical transcript producer key `utterance:<work-uuid>` so provider retries cannot create duplicate transcript rows for one work item.
+
+Archive `MediaRecorder` fragments and transcription utterance work remain different things. Archive fragments are durability evidence and are not assumed independently decodable or semantically aligned to speech. The utterance producer is responsible for creating an independently decodable speech-sized object; this contract does not reconstruct arbitrary raw-fragment subsets into standalone media.
+
+The recording ingest/ACK path does not call the utterance path. Capture remains safe even if utterance creation or all downstream intelligence is unavailable.
+
+PR #33 deliberately does **not** implement Groq/Whisper/faster-whisper calls, a VAD algorithm, Celery execution, realtime PCM/WebSocket ingress, diarization, or LLM summaries.
+
+## Exact next dependency after Issue #32
+
+After #32 is merged and post-merge evidence is green, the next bounded Phase 2 slice should build the **realtime utterance producer**:
+
+- capture a realtime PCM/Web Audio lane independently from the archive lane;
+- run VAD/endpoint detection to identify speech-sized intervals;
+- encode each committed interval as independently decodable media and commit it through the durable utterance-work contract;
+- preserve recording-timeline evidence and deterministic producer identity;
+- benchmark and tune minimum speech, silence endpoint, and hard maximum boundaries against real office audio;
+- prove realtime-lane degradation cannot weaken archive recording or durable chunk ACKs.
+
+Only after that producer boundary is proven should the Groq `STTProvider` and live queue consume committed utterance work and write canonical transcript segments using `utterance:<work-uuid>` producer keys.
 
 ## Production exposure boundary
 
@@ -133,7 +157,8 @@ Phase 1.5 authentication, authorization, retention, and deletion work remains re
 ## Not implemented yet
 
 - Groq or local STT provider execution;
-- utterance/VAD audio-work pipeline;
+- realtime PCM/Web Audio utterance producer;
+- VAD/endpointing implementation and tuning;
 - live STT Celery queue;
 - realtime transcript WebSocket delivery;
 - transcript UI/reconnect client;
@@ -155,8 +180,9 @@ Do not describe these as working until repository evidence proves them.
 - Fenced old-generation evidence is retained locally but has no final operator recovery/export/expiry flow yet.
 - #12's same-epoch reconciliation guard is an interim safety measure, not a final multi-device identity contract.
 - Cross-device takeover/backlog semantics are not claimed.
-- Transcript revision/supersession semantics are not part of #30; a producer-key retry may not silently change committed evidence.
+- Transcript revision/supersession semantics remain deferred; a producer-key retry may not silently change committed evidence.
 - Speaker/diarization semantics are intentionally absent from the first canonical transcript row.
+- The durable utterance contract does not choose the VAD algorithm, realtime transport framing, utterance codec, or provider model; those require the next implementation/benchmark slice.
 - Public upstream must remain free of organization secrets, private data, and downstream-only branding/infrastructure.
 
 ## Local development
@@ -181,7 +207,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #30 and PR #31 (or their successors) plus current CI evidence;
+5. read Issue #32 and PR #33 (or their successors) plus current CI evidence;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
