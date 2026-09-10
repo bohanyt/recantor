@@ -69,7 +69,7 @@ def test_pcm_packet_preserves_uint64_offset_and_s16_samples() -> None:
     with pytest.raises(RealtimeAudioProtocolError, match="too short"):
         parse_pcm_packet(b"tiny")
     with pytest.raises(RealtimeAudioProtocolError, match="whole samples"):
-        parse_pcm_packet(struct.pack("<Q", 0) + b"\x00")
+        parse_pcm_packet(struct.pack("<Q", 0) + b"\x00\x00\x00")
 
 
 def test_vad_commits_voiced_interval_after_silence_with_preroll() -> None:
