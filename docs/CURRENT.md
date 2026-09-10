@@ -15,7 +15,7 @@ The implemented foundation is reliable capture first. Desktop Chrome/Edge on an 
 
 > Capture is infrastructure. Intelligence is downstream.
 
-STT, diarization, transcript intelligence, and LLM summaries remain downstream and are intentionally absent from Phase 1.
+STT, diarization, transcript intelligence, and LLM summaries remain downstream and were intentionally absent from Phase 1.
 
 ## Implemented capture architecture
 
@@ -59,9 +59,9 @@ Latest merged implementation checkpoint: `47a18f24f8a2eaa621669392c52185b816e1fc
 
 PR #28 was squash-merged on 2026-09-10 and closed Issue #10. Post-merge implementation CI run `34419675987` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
 
-The real-platform witness was executed against `main` commit `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`. Its docs-only CI run `34419972995` also completed successfully.
+The real-platform witness was executed against `main` commit `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`. Its docs-only CI run `34419972995` also completed successfully. Phase 1 closure docs are on `main` at `cd9c35543be8881acd682b14b031b0786a81a1a7`, whose CI run `34430899348` completed successfully.
 
-This document may itself live in a later docs-only commit; use GitHub `main` as the authoritative head rather than treating the implementation checkpoint above as a self-referential branch SHA.
+This document may itself live in a later branch/commit; use GitHub `main` as the authoritative production-integration head rather than treating a checkpoint above as a self-referential branch SHA.
 
 ### Merged Phase 1 deliveries
 
@@ -104,13 +104,23 @@ Issue #5 is closed as the Phase 1 umbrella. Phase 1 capture reliability is compl
 - capture claim and heartbeat recovery preserve the same historical evidence semantics;
 - no heartbeat/liveness stall automatically creates a `RecordingGap`; locally retained audio can still later prove continuity.
 
-## Next gate — Issue #15
+## Current gate — Issue #15 / draft PR #29
 
-Issue #15 is now the next product/architecture gate and must be resolved **before the first downstream STT/summary consumer is implemented**.
+Issue #15 is the first Phase 2 product/architecture gate and must be resolved **before the first downstream STT/summary consumer is implemented**. Draft PR #29 on branch `phase2/terminal-audio-completeness` is the current bounded implementation candidate; it is not merged yet.
 
-Today lifecycle `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 must establish a persisted terminal completeness/continuity classification so downstream intelligence cannot infer more than capture evidence proves.
+The candidate separates lifecycle completion from audio completeness. `state == complete` continues to mean that the declared final sequence boundary is fully accounted for, while the session persists `audio_completeness` at the same finalize transaction:
 
-Do not start Groq/Whisper/faster-whisper STT, VAD, diarization, rolling/final LLM summaries, or other downstream intelligence consumers until #15 is resolved.
+- `full` — the declared boundary is non-zero and every expected sequence is durably present;
+- `partial` — the declared boundary is non-zero and at least one expected sequence is satisfied by an explicit sequence-loss gap, including an all-gap result;
+- `empty` — the declared sequence boundary is zero and no audio sequence was captured.
+
+Wall-clock-only interruption/liveness evidence does not by itself downgrade `full`; #10 established that liveness interruption is not equivalent to proven audio loss. A retry of an already-`COMPLETE` finalize preserves the persisted classification instead of recomputing it.
+
+The candidate retains `FinalizeSessionResponse.complete` for compatibility, but its meaning is only **final boundary fully accounted for**. Downstream consumers must use `audio_completeness` rather than interpreting `complete == true` or lifecycle `COMPLETE` as proof of gap-free audio.
+
+The candidate also prevents a zero-audio browser completion from displaying the misleading message that every expected audio sequence was durably acknowledged.
+
+No Groq/Whisper/faster-whisper STT, VAD, diarization, rolling/final LLM summary, or other downstream intelligence consumer has been started in this gate.
 
 ## Not implemented yet
 
@@ -160,7 +170,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #15 and any fresh downstream-gate evidence;
+5. read Issue #15 and PR #29 (or their successors) plus current CI evidence;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
