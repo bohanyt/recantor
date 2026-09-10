@@ -322,9 +322,7 @@ async def transcribe_utterance(
             "STT provider returned blank transcript text",
         )
     canonical_language = (
-        result.language.strip().lower()
-        if result.language and result.language.strip()
-        else None
+        result.language.strip().lower() if result.language and result.language.strip() else None
     )
 
     async with get_sessionmaker()() as db:
