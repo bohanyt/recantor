@@ -334,6 +334,22 @@ Not every session type traverses every state.
 
 Subsystem health/degradation should be modeled separately from the main lifecycle when useful. A recording can be healthy while live STT is degraded.
 
+### Terminal audio completeness
+
+Lifecycle completion and audio completeness are separate consumer-facing facts. `state == COMPLETE` means Recantor has fully accounted for the declared final sequence boundary; it does **not** by itself mean the result contains gap-free audio.
+
+When a recording first becomes `COMPLETE`, Recantor persists `audio_completeness` in the same database transaction that proves there are no unaccounted expected sequences:
+
+- `full` — the final sequence boundary is non-zero and every expected sequence through it is durably present;
+- `partial` — the final sequence boundary is non-zero and at least one expected sequence is represented by an explicit sequence-loss gap; an all-gap boundary is therefore `partial`, not `empty`;
+- `empty` — the declared final sequence boundary is zero, so no audio sequence was captured.
+
+Wall-clock-only interruption/liveness evidence does not by itself downgrade `full`. Liveness evidence is not proof of audio loss; only a sequence interval that must be satisfied by an explicit gap changes the audio completeness category.
+
+`audio_completeness` is terminal evidence. Retry of an already-`COMPLETE` finalize preserves the persisted value rather than recomputing it from mutable read-time state. Historical rows are backfilled once by migration; normal API reads do not derive the field.
+
+`FinalizeSessionResponse.complete` is retained as a compatibility signal meaning **the declared boundary is fully accounted for**. Downstream consumers must inspect `audio_completeness` before deciding whether a finished session is eligible for transcription, summarization, export, or any other operation that assumes actual audio exists or continuity is gap-free.
+
 ## Heartbeats and recovery
 
 The live client sends periodic liveness/recording status.
@@ -413,6 +429,7 @@ Finalization reconciles durable evidence after recording/upload completion.
 Responsibilities may include:
 
 - ensure all accepted chunks are accounted for;
+- persist the terminal audio-completeness classification before downstream consumers run;
 - process pending STT work;
 - reconstruct/normalize final audio where required;
 - run final/offline diarization;

@@ -61,6 +61,17 @@ function pendingAudioLabel(snapshot: FencedRecorderSnapshot): string {
     : `${snapshot.pendingChunks} ${noun}`;
 }
 
+export function recorderMessage(snapshot: FencedRecorderSnapshot): string {
+  if (
+    snapshot.phase === 'complete' &&
+    snapshot.highestAckedSequence === 0 &&
+    snapshot.gapCount === 0
+  ) {
+    return 'Recording finalized with no durable audio captured.';
+  }
+  return snapshot.message;
+}
+
 export function RecorderPanel() {
   const controller = useMemo(() => new FencedRecorderController(), []);
   const snapshot = useSyncExternalStore(
@@ -221,7 +232,7 @@ export function RecorderPanel() {
 
       <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm">
         <p className="font-medium" data-testid="recorder-message">
-          {snapshot.message}
+          {recorderMessage(snapshot)}
         </p>
         <p className="mt-2 text-[var(--muted)]">
           Browser storage: {snapshot.storage?.persisted ? 'persistent' : 'best effort'} · estimated
