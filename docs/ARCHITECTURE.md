@@ -160,6 +160,7 @@ Expected entities include:
 - sessions;
 - recording chunks / accepted sequence metadata;
 - interruption/gap events;
+- transcription utterance/audio-work items;
 - transcript segments;
 - speakers / speaker aliases;
 - summary snapshots / meeting state;
@@ -194,12 +195,16 @@ sessions/<session-id>/
   raw/
     00000001.webm
     00000002.webm
+  utterances/
+    <work-uuid>.media
   normalized/
   final/
   exports/
 ```
 
-The exact layout is an implementation detail; database metadata remains the index and state model.
+`raw/` contains archive-lane recording fragments. `utterances/` contains independently decodable speech-sized media objects produced for downstream transcription work. They are different evidence namespaces and must not be treated as interchangeable merely because both contain audio bytes.
+
+The exact layout is an implementation detail; database metadata remains the index and state model. Filesystem storage keys are internal implementation metadata and are not public API identifiers.
 
 ### FFmpeg
 
@@ -269,18 +274,18 @@ A target design is:
                  |                           |
           local IndexedDB                    | WebSocket
                  |                           v
-      sequenced HTTP upload             server VAD/STT
+      sequenced HTTP upload           VAD / endpointing
                  |                           |
-        durable server write                v
-                 |                    provisional text
+        durable server write                 v
+                 |                  durable utterance work
                 ACK                          |
                  |                           v
-      delete local spool item          browser updates
+      delete local spool item          STT -> transcript
 ```
 
-The realtime lane must never be the only copy of audio required to recover the meeting.
+The realtime lane must never be the only copy of audio required to recover the meeting. Failure to create utterance work, queue STT, call a provider, or deliver transcript updates must not participate in the archive chunk ACK boundary.
 
-A simpler implementation may initially derive more processing from the durable archive path if latency remains acceptable, but the durability invariant remains the same.
+A simpler implementation may initially derive more processing from the durable archive path if latency remains acceptable, but the durability invariant remains the same. Raw MediaRecorder fragments remain ordered container fragments; do not assume an arbitrary subset is independently decodable simply because it is durably stored.
 
 ## Chunk protocol
 
@@ -368,6 +373,40 @@ Exact timeout values are configuration/tuning, not architecture invariants.
 
 ## Live transcription
 
+### Durable utterance audio work
+
+Archive recording fragments are durability evidence, not semantic utterances. A browser `MediaRecorder` timeslice is neither a voice-activity boundary nor guaranteed to be a standalone-decodable media file. STT therefore consumes a separate durable utterance/audio-work contract rather than treating raw archive chunks as provider requests.
+
+A committed transcription utterance carries:
+
+- a deterministic work UUID derived from the owning `session_id` and canonical per-session producer key;
+- a session-local monotonically increasing work `sequence` for deterministic inspection and processing order;
+- explicit `start_ms` / `end_ms` on the recording timeline;
+- media `content_type`;
+- SHA-256 and byte length;
+- an internal durable storage key;
+- creation time.
+
+The producer key represents the identity assigned by the future VAD/repair producer. Sequence allocation locks only the owning session row, so concurrent unrelated meetings do not globally serialize. Database uniqueness backs both `(session_id, producer_key)` idempotency and `(session_id, sequence)` ordering.
+
+The work UUID is stable before storage or database insertion. Filesystem audio is durably committed to `sessions/<session-id>/utterances/<work-uuid>.media` before the metadata row is acknowledged. If a process crashes after the object becomes durable but before the database transaction commits, retrying the same producer identity addresses the same object; matching bytes are reused, while conflicting bytes fail explicitly instead of creating an orphaned alternative identity.
+
+The utterance producer is responsible for supplying an **independently decodable** media object for the declared recording-timeline interval. This contract does not infer that property from an archive fragment and does not reconstruct arbitrary raw-fragment subsets as standalone media.
+
+Identical producer-key retries return the existing committed work item after verifying its durable object. Reusing the same producer key with different timing, content type, hash, or byte length is a conflict.
+
+`GET /api/v1/sessions/{session_id}/utterances` provides bounded sequence-cursor inspection of committed work. Its public response omits the internal filesystem storage key. There is intentionally no public utterance write endpoint in this contract; future VAD and repair producers call the domain boundary.
+
+The deterministic canonical transcript producer key for one committed work item is:
+
+```text
+utterance:<work-uuid>
+```
+
+This lets STT/provider retries feed the canonical transcript store without duplicating committed transcript rows for the same utterance work.
+
+Most importantly, the archive ingest/ACK path does not call the utterance-work path. Realtime utterance production and STT may degrade or stop while capture continues safely.
+
 ### Canonical transcript segments and reconnect
 
 Committed transcript text is durable PostgreSQL state, independent from any WebSocket or Redis delivery path. The first canonical transcript contract stores immutable committed segments with:
@@ -380,7 +419,7 @@ Committed transcript text is durable PostgreSQL state, independent from any WebS
 - canonical text and optional language metadata;
 - a durable creation timestamp.
 
-Transcript `sequence` is not the same namespace as recording-chunk sequence. It orders committed transcript publication for one session. Timeline placement remains explicit in `start_ms` / `end_ms` so later STT, reconciliation, and diarization work do not have to infer time from commit order.
+Transcript `sequence` is not the same namespace as recording-chunk sequence or utterance-work sequence. It orders committed transcript publication for one session. Timeline placement remains explicit in `start_ms` / `end_ms` so later STT, reconciliation, and diarization work do not have to infer time from commit order.
 
 Sequence allocation is serialized by locking only the owning session row. This prevents duplicate per-session publication sequences without globally serializing unrelated meetings. The database also enforces uniqueness for `(session_id, sequence)` and `(session_id, producer_key)`.
 
@@ -388,7 +427,7 @@ Retrying a producer key with the same canonical payload returns the already-comm
 
 Normal HTTP reads are the recovery path for canonical transcript state. `GET /api/v1/sessions/{session_id}/transcript` returns segments after an `after_sequence` cursor with a bounded page size. Future WebSocket delivery may notify clients about new transcript segments, but reconnecting clients must recover through this canonical read model rather than depending on WebSocket history.
 
-The initial low-latency STT approach should use voice activity / endpoint detection to create utterance-sized transcription work rather than sending arbitrary fixed windows without speech awareness.
+The next low-latency STT slice should use voice activity / endpoint detection on a realtime PCM/Web Audio lane to create speech-sized, independently decodable utterance work without weakening the archive lane.
 
 Initial benchmark defaults may start near:
 
@@ -398,7 +437,7 @@ Initial benchmark defaults may start near:
 
 These are tuning starting points, not permanent contracts. Real office audio and provider limits must drive final values.
 
-Groq is the primary live provider. Local STT remains warm enough to serve as fallback where deployment resources permit.
+Groq remains the intended primary live provider. Local STT remains the planned fallback where deployment resources permit it. Neither provider is part of the durable utterance-work contract itself.
 
 ## Provider routing and degradation
 
@@ -420,7 +459,7 @@ LOCAL
 
 Do not race providers by default unless measurements prove the latency benefit is worth duplicated compute/cost.
 
-Provider failure does not remove audio from the processing backlog.
+Provider failure does not remove durable utterance audio from the processing backlog and does not affect archive capture ACKs.
 
 ## Rolling meeting intelligence
 
@@ -522,7 +561,7 @@ Concurrency is bounded deliberately:
 ### Groq failure
 
 - continue capture;
-- persist STT backlog;
+- retain durable utterance/STT backlog;
 - retry/fallback according to policy;
 - expose degraded live transcript state.
 
@@ -530,11 +569,11 @@ Concurrency is bounded deliberately:
 
 - mark worker unhealthy;
 - route elsewhere when possible;
-- do not lose queued source audio.
+- do not lose durable utterance source audio.
 
 ### Redis restart/loss
 
-- durable session/audio/transcript truth remains in PostgreSQL/audio storage;
+- durable session/audio/utterance/transcript truth remains in PostgreSQL/audio storage;
 - reconciliation must be able to rediscover unfinished durable work where necessary.
 
 This means job state cannot exist only as an unrecoverable Redis message.
@@ -542,6 +581,7 @@ This means job state cannot exist only as an unrecoverable Redis message.
 ### API/server restart
 
 - acknowledged chunks remain present;
+- durable utterance work remains present;
 - clients reconnect/reconcile;
 - unfinished processing is rediscoverable/retryable.
 
@@ -573,7 +613,7 @@ This means job state cannot exist only as an unrecoverable Redis message.
 - Guest upload/session identifiers must be unguessable.
 - Validate content type and actual media handling; do not trust filenames alone.
 - Apply upload limits and rate limits.
-- Do not expose filesystem paths as public identifiers.
+- Do not expose filesystem paths or internal audio storage keys as public identifiers.
 - Treat voice embeddings/voiceprints as sensitive data when speaker identification is introduced.
 - Public upstream configuration must not contain deployment secrets.
 
@@ -585,6 +625,7 @@ At minimum, make the following measurable before production claims:
 - accepted/rejected chunk counts;
 - client sync backlog;
 - detected gaps/interruption events;
+- durable utterance work backlog/age;
 - STT queue depth and age;
 - summary queue depth and age;
 - provider latency/error/rate-limit counts;
