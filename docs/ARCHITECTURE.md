@@ -368,6 +368,26 @@ Exact timeout values are configuration/tuning, not architecture invariants.
 
 ## Live transcription
 
+### Canonical transcript segments and reconnect
+
+Committed transcript text is durable PostgreSQL state, independent from any WebSocket or Redis delivery path. The first canonical transcript contract stores immutable committed segments with:
+
+- a stable segment identifier;
+- the owning `session_id`;
+- a session-local monotonically increasing `sequence` used as a publication/reconnect cursor;
+- an opaque producer key used to make downstream worker retries idempotent;
+- `start_ms` and `end_ms` on the recording timeline;
+- canonical text and optional language metadata;
+- a durable creation timestamp.
+
+Transcript `sequence` is not the same namespace as recording-chunk sequence. It orders committed transcript publication for one session. Timeline placement remains explicit in `start_ms` / `end_ms` so later STT, reconciliation, and diarization work do not have to infer time from commit order.
+
+Sequence allocation is serialized by locking only the owning session row. This prevents duplicate per-session publication sequences without globally serializing unrelated meetings. The database also enforces uniqueness for `(session_id, sequence)` and `(session_id, producer_key)`.
+
+Retrying a producer key with the same canonical payload returns the already-committed segment. Reusing that producer key with different text, timing, or language is a conflict rather than an overwrite. Later final-transcript reconciliation may introduce explicit revision/supersession semantics; it must not silently mutate a retry identity into different evidence.
+
+Normal HTTP reads are the recovery path for canonical transcript state. `GET /api/v1/sessions/{session_id}/transcript` returns segments after an `after_sequence` cursor with a bounded page size. Future WebSocket delivery may notify clients about new transcript segments, but reconnecting clients must recover through this canonical read model rather than depending on WebSocket history.
+
 The initial low-latency STT approach should use voice activity / endpoint detection to create utterance-sized transcription work rather than sending arbitrary fixed windows without speech awareness.
 
 Initial benchmark defaults may start near:
