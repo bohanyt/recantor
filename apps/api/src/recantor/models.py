@@ -4,7 +4,17 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from recantor.db import Base
@@ -106,6 +116,42 @@ class RecordingGap(Base):
     wall_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     wall_ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reason: Mapped[str] = mapped_column(String(160), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class TranscriptSegment(Base):
+    __tablename__ = "transcript_segments"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "sequence", name="uq_transcript_segment_session_sequence"
+        ),
+        UniqueConstraint(
+            "session_id", "producer_key", name="uq_transcript_segment_session_producer_key"
+        ),
+        CheckConstraint("sequence >= 1", name="ck_transcript_segment_sequence_positive"),
+        CheckConstraint(
+            "start_ms >= 0 AND end_ms > start_ms", name="ck_transcript_segment_timing"
+        ),
+        CheckConstraint(
+            "length(btrim(producer_key)) > 0", name="ck_transcript_segment_producer_key_nonblank"
+        ),
+        CheckConstraint(
+            "length(btrim(text)) > 0", name="ck_transcript_segment_text_nonblank"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    producer_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
