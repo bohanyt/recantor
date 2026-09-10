@@ -134,13 +134,19 @@ async def commit_utterance_work(
                 raise UtteranceWorkConflict(
                     "utterance producer-key retry conflicts with the committed work item"
                 )
-            if not storage.verify(
-                existing.storage_key,
+            if not storage.verify_utterance(
+                session_id=session_id,
+                work_id=existing.id,
+                producer_key=existing.producer_key,
+                start_ms=existing.start_ms,
+                end_ms=existing.end_ms,
+                content_type=existing.content_type,
+                storage_key=existing.storage_key,
                 sha256=existing.sha256,
                 byte_length=existing.byte_length,
             ):
                 raise UtteranceWorkStorageError(
-                    "committed utterance storage object failed verification"
+                    "committed utterance storage evidence failed verification"
                 )
             return existing, True
 
@@ -154,12 +160,16 @@ async def commit_utterance_work(
             stored = storage.commit_utterance_bytes(
                 session_id=session_id,
                 work_id=work_id,
+                producer_key=key,
+                start_ms=start,
+                end_ms=end,
+                content_type=canonical_content_type,
                 payload=canonical_payload,
                 sha256=digest,
             )
         except AudioStorageConflict as exc:
             raise UtteranceWorkConflict(
-                "utterance producer-key retry conflicts with an existing storage object"
+                "utterance producer-key retry conflicts with existing durable storage evidence"
             ) from exc
         except AudioStorageError as exc:
             raise UtteranceWorkStorageError("utterance audio storage failed") from exc
