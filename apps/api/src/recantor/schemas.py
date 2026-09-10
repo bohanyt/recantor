@@ -55,10 +55,10 @@ class RecordingSessionResponse(BaseModel):
     final_monotonic_end_ms: int | None
     audio_completeness: AudioCompleteness | None = Field(
         description=(
-            "Persisted terminal audio classification. Null until the session first reaches COMPLETE; "
-            "full means a non-zero declared boundary is durably present, partial means at least one "
-            "expected sequence is represented by an explicit sequence-loss gap, and empty means the "
-            "declared sequence boundary is zero."
+            "Persisted terminal audio classification. Null until the session first reaches "
+            "COMPLETE; full means a non-zero declared boundary is durably present, partial means "
+            "at least one expected sequence is represented by an explicit sequence-loss gap, and "
+            "empty means the declared sequence boundary is zero."
         )
     )
     finalized_at: datetime | None
@@ -143,9 +143,9 @@ class FinalizeSessionResponse(BaseModel):
     session: RecordingSessionResponse
     complete: bool = Field(
         description=(
-            "True when every expected sequence through the declared final boundary is accounted for "
-            "by durable audio or an explicit sequence-loss gap. This does not imply gap-free or "
-            "non-empty audio; consumers must inspect audio_completeness."
+            "True when every expected sequence through the declared final boundary is accounted "
+            "for by durable audio or an explicit sequence-loss gap. This does not imply gap-free "
+            "or non-empty audio; consumers must inspect audio_completeness."
         )
     )
     audio_completeness: AudioCompleteness | None = Field(
