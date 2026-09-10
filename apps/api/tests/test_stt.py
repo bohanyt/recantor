@@ -244,6 +244,7 @@ async def test_groq_adapter_builds_expected_multipart_request(monkeypatch) -> No
     assert request.full_url == "https://api.groq.com/openai/v1/audio/transcriptions"
     assert request.get_header("Authorization") == "Bearer secret-test-key"
     assert request.get_header("Content-type").startswith("multipart/form-data; boundary=")
+    assert request.get_header("User-agent") == "Recantor/0.1 (+https://github.com/bohanyt/recantor)"
     assert captured["timeout"] == 12.5
     assert b'name="model"' in body and b"whisper-large-v3-turbo" in body
     assert b'name="response_format"' in body and b"json" in body
