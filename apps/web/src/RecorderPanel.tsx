@@ -238,8 +238,16 @@ export function RecorderPanel() {
           Browser storage: {snapshot.storage?.persisted ? 'persistent' : 'best effort'} · estimated
           free {bytesLabel(snapshot.storage?.remainingBytes ?? null)} · capture lock{' '}
           <span data-testid="capture-lock-state">{snapshot.lockKind ?? 'not held'}</span> · explicit
-          gaps {snapshot.gapCount}
+          gaps {snapshot.gapCount} · realtime{' '}
+          <span data-testid="realtime-status">{snapshot.realtimeStatus}</span> · durable utterances{' '}
+          <span data-testid="realtime-utterances">{snapshot.realtimeUtterances}</span>
         </p>
+        {snapshot.realtimeError && (
+          <p className="mt-2 text-[var(--muted)]" data-testid="realtime-error">
+            Live intelligence degraded: {snapshot.realtimeError} Archive recording continues
+            independently.
+          </p>
+        )}
         {snapshot.error && (
           <p className="mt-2 font-medium text-[var(--danger)]" role="alert">
             {snapshot.error}
