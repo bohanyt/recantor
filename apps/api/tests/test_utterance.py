@@ -141,9 +141,24 @@ async def test_identical_retry_is_idempotent_and_conflicting_retries_fail(
     assert retry.content_type == "audio/wav"
 
     conflicts = [
-        {"start_ms": 101, "end_ms": 900, "content_type": "audio/wav", "payload": b"same encoded audio"},
-        {"start_ms": 100, "end_ms": 900, "content_type": "audio/ogg", "payload": b"same encoded audio"},
-        {"start_ms": 100, "end_ms": 900, "content_type": "audio/wav", "payload": b"different audio"},
+        {
+            "start_ms": 101,
+            "end_ms": 900,
+            "content_type": "audio/wav",
+            "payload": b"same encoded audio",
+        },
+        {
+            "start_ms": 100,
+            "end_ms": 900,
+            "content_type": "audio/ogg",
+            "payload": b"same encoded audio",
+        },
+        {
+            "start_ms": 100,
+            "end_ms": 900,
+            "content_type": "audio/wav",
+            "payload": b"different audio",
+        },
     ]
     for conflict in conflicts:
         with pytest.raises(UtteranceWorkConflict, match="retry conflicts"):
