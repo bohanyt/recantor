@@ -125,7 +125,9 @@ class FilesystemAudioStorage:
         if final_path.exists():
             existing_hash, existing_length = self._digest_file(final_path)
             if existing_hash != sha256 or existing_length != len(payload):
-                raise AudioStorageConflict("existing utterance storage object has different content")
+                raise AudioStorageConflict(
+                    "existing utterance storage object has different content"
+                )
             return StoredAudio(self._key_for(final_path), existing_hash, existing_length)
 
         temp_path = final_path.with_name(f".{final_path.name}.{uuid4().hex}.tmp")
