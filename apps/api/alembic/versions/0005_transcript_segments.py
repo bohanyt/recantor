@@ -44,9 +44,7 @@ def upgrade() -> None:
             "start_ms >= 0 AND end_ms > start_ms",
             name="ck_transcript_segment_timing",
         ),
-        sa.ForeignKeyConstraint(
-            ["session_id"], ["recording_sessions.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["session_id"], ["recording_sessions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "session_id", "producer_key", name="uq_transcript_segment_session_producer_key"
