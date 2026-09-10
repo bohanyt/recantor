@@ -99,17 +99,15 @@ The Phase 2C witness used session `181b5dd8-41c8-49d8-86ea-f2e00ec74ae1` on Wind
 
 Current VAD thresholds are tuning defaults, not product-quality guarantees.
 
-## Current Phase 2 slice — Issue #36 / PR #37
+## STT provider boundary — MERGED / Phase 2D CLOSED
 
-Issue #36 is the active Phase 2D dependency: **STT provider boundary and durable utterance-to-transcript execution**.
+Issue #36 / PR #37 was squash-merged to `main` as:
 
-Current candidate PR #37 is `phase2/stt-provider-executor`. Implementation head before this documentation reconciliation was:
+`f0a0f2e068cb1003619010595928c0273912e61c`
 
-`a0af7124f6389a4800010feb7ef62dc1b514f335`
+Post-merge CI run `34456347492` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
 
-Exact-head CI run `34454490245` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
-
-Candidate causal path:
+Merged causal path:
 
 ```text
 durable TranscriptionUtterance
@@ -121,7 +119,7 @@ durable TranscriptionUtterance
            producer_key = utterance:<work-uuid>
 ```
 
-Candidate rules:
+Merged rules:
 
 - STT consumes only committed durable utterance work, never arbitrary raw MediaRecorder chunks;
 - durable manifest/path/hash/length evidence is verified before provider execution;
@@ -131,18 +129,18 @@ Candidate rules:
 - already-committed canonical work short-circuits provider execution on sequential retry;
 - blank/malformed/provider failure creates no fake transcript evidence and leaves durable utterance work intact;
 - Groq API key is server-side only and Compose forwards local environment configuration without committing secrets;
-- Groq transport uses an explicit non-browser API `User-Agent` because the default Python `urllib` signature was rejected by Groq's Cloudflare edge with Error 1010.
+- Groq transport sends an explicit non-browser API `User-Agent` because the default Python `urllib` signature was rejected by Groq's Cloudflare edge with Error 1010.
 
 ### Real Groq provider witness — PASS
 
-The provider boundary has now been exercised twice against the previously validated real-microphone session.
+The provider boundary was exercised twice against the previously validated real-microphone session.
 
 First work item:
 
 - utterance `87aec8c6-f11a-50b5-84d8-160d448eec1c`, sequence 29;
 - timing `152321..155621 ms`, duration 3300 ms, 316844 bytes, `audio/wav`;
-- initial request with default `urllib` client signature reached `api.groq.com` but Cloudflare returned HTTP 403 Error 1010 `browser_signature_banned`;
-- the same durable work succeeded when the request used an explicit non-browser API `User-Agent`;
+- initial request with default `urllib` signature reached `api.groq.com` but Cloudflare returned HTTP 403 Error 1010 `browser_signature_banned`;
+- the same durable work succeeded with an explicit non-browser API `User-Agent`;
 - Groq `whisper-large-v3-turbo` returned non-empty Indonesian text;
 - Recantor committed canonical segment `845ce524-0b1d-4b66-b700-45ff2d2221ed`, transcript sequence 1, preserving `152321..155621 ms`, `language=id`, `idempotent=False`.
 
@@ -152,35 +150,56 @@ Second work item, using the permanent adapter with no runtime monkeypatch:
 
 - utterance `ad71e495-cdd6-5ae0-814b-758ba5133f85`, sequence 39;
 - timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
-- Groq call succeeded directly from the rebuilt PR #37 API container;
+- Groq call succeeded directly from the rebuilt API container;
 - canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
 - PostgreSQL contained exactly the two expected canonical `utterance:<work-uuid>` rows from these witnesses.
 
 The API key remained local/server-side and was not committed or posted. This proves provider-path mechanics, not transcript accuracy: the sampled utterances did not have recorded ground-truth text, so accuracy remains a later benchmark concern.
 
-## Exit / next dependency
+## Current Phase 2 slice — Issue #38 / Phase 2E
 
-If the docs-reconciled PR #37 head remains CI-green and review finds no new blocker, #37 is ready for merge authorization. Merging #37 should close Issue #36.
+Issue #38 is now the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**.
 
-The next Phase 2 dependency after #37 is **durable live STT queue/reconciliation/fairness** so newly committed utterances are automatically discovered and processed without making Redis/Celery the source of truth. Realtime transcript fanout/reconnect UI follows after that.
+The missing causal link is now automatic scheduling:
+
+```text
+durable TranscriptionUtterance
+        -> PostgreSQL-backed eligible/claim state
+        -> Celery/Redis delivery hint
+        -> STT worker
+        -> merged Phase 2D executor/provider
+        -> canonical TranscriptSegment
+```
+
+Required semantics for #38:
+
+- PostgreSQL + audio storage remain durable truth; Redis/Celery are delivery/coordination only;
+- losing a queue message cannot lose transcription work because unfinished durable utterances are rediscoverable;
+- duplicate Celery delivery must be safe and two workers must not concurrently call the provider for the same active claim;
+- claims must expire/recover after worker death without holding a DB transaction across the provider network call;
+- provider retry policy must consume Phase 2D error categories and avoid hot loops;
+- canonical transcript evidence remains authoritative for success;
+- a large backlog from one session must not starve another session;
+- enqueue/Redis/provider failure must not weaken archive capture or durable utterance commit;
+- local Compose should run the minimum worker/reconciler services needed to exercise the automatic path;
+- ordinary CI must remain independent from real Groq secrets/network.
+
+A bounded real witness is required before merge-ready: fresh Windows/Edge recording, known Indonesian phrases, no manual `transcribe_utterance` invocation, automatic canonical transcript rows, coarse queue/provider latency evidence, and healthy independent archive finalization.
+
+Realtime transcript WebSocket delivery/UI is explicitly the next slice after #38, not part of #38.
 
 ## Roadmap alignment / drift guard
 
-The repository is still following `docs/ROADMAP.md` dependency order. Phase 2 calls for utterance/VAD pipeline, Groq provider, canonical transcript model, live STT queue, retry/rate-limit handling, realtime transcript updates/recovery, local provider contract, and benchmark evidence.
+The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
 
-Already landed or proven in the current candidate chain:
-
-- canonical transcript model/reconnect read foundation;
-- durable transcription utterance work;
-- realtime PCM/VAD utterance producer;
-- provider-neutral STT boundary + real Groq utterance-to-canonical-transcript path in PR #37.
-
-Still later Phase 2 work:
-
-- automatic durable live queue/reconciliation/fairness;
-- realtime transcript delivery/reconnect UI;
-- local faster-whisper provider/fallback;
-- provider/VAD latency and accuracy benchmark/tuning.
+1. utterance/VAD pipeline — landed;
+2. Groq STT provider — landed;
+3. canonical transcript segment model — landed;
+4. live STT queue — **current #38**;
+5. provider retry/rate-limit handling — included in #38 scheduling semantics;
+6. WebSocket transcript updates/recovery — next;
+7. local STT provider/fallback — later;
+8. latency/accuracy/provider benchmark harness — later.
 
 Do not pull diarization, summaries, native mobile, existing-file upload, or production exposure concerns into the Phase 2 critical path unless a concrete dependency forces it.
 
@@ -190,10 +209,11 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 
 ## Not implemented yet
 
-- merged automatic/live Groq STT execution from each new utterance;
+- automatic/live STT scheduling from each newly committed utterance;
 - durable live STT queue/reconciliation/fairness;
 - realtime transcript fanout/UI;
 - local faster-whisper fallback;
+- final ground-truth STT/VAD latency/accuracy benchmark harness;
 - diarization/speaker labels;
 - rolling/final summaries;
 - production auth/authorization;
@@ -237,7 +257,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #36 and PR #37 (or successors);
+5. read Issue #38 and its current implementation PR if one exists;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
