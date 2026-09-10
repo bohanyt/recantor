@@ -20,7 +20,6 @@ from recantor.realtime_audio import (
 )
 from recantor.utterance import UtteranceWorkConflict, commit_utterance_work
 
-
 SAMPLE_RATE = 8_000
 FRAME_SAMPLES = 160
 
