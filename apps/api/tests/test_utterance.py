@@ -183,6 +183,10 @@ async def test_retry_reuses_matching_storage_object_left_before_database_commit(
     preexisting = storage.commit_utterance_bytes(
         session_id=session_id,
         work_id=expected_id,
+        producer_key=producer_key,
+        start_ms=2000,
+        end_ms=3200,
+        content_type="audio/wav",
         payload=payload,
         sha256=digest,
     )
@@ -201,6 +205,17 @@ async def test_retry_reuses_matching_storage_object_left_before_database_commit(
     assert work.sha256 == digest
     assert work.byte_length == len(payload)
     assert storage.verify(work.storage_key, sha256=digest, byte_length=len(payload))
+    assert storage.verify_utterance(
+        session_id=session_id,
+        work_id=work.id,
+        producer_key=producer_key,
+        start_ms=2000,
+        end_ms=3200,
+        content_type="audio/wav",
+        storage_key=work.storage_key,
+        sha256=digest,
+        byte_length=len(payload),
+    )
 
     retry, retry_idempotent = await commit_work(
         session_id=session_id,
@@ -223,17 +238,61 @@ async def test_conflicting_preexisting_storage_object_is_rejected(client: AsyncC
     storage.commit_utterance_bytes(
         session_id=session_id,
         work_id=work_id,
+        producer_key=producer_key,
+        start_ms=0,
+        end_ms=1000,
+        content_type="audio/wav",
         payload=existing_payload,
         sha256=hashlib.sha256(existing_payload).hexdigest(),
     )
 
-    with pytest.raises(UtteranceWorkConflict, match="existing storage object"):
+    with pytest.raises(UtteranceWorkConflict, match="durable storage evidence"):
         await commit_work(
             session_id=session_id,
             producer_key=producer_key,
             start_ms=0,
             end_ms=1000,
             payload=b"different retry bytes",
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("retry_start_ms", "retry_content_type"),
+    [
+        (1, "audio/wav"),
+        (0, "audio/ogg"),
+    ],
+)
+async def test_crash_residue_rejects_changed_metadata_even_when_bytes_match(
+    client: AsyncClient,
+    retry_start_ms: int,
+    retry_content_type: str,
+) -> None:
+    session_id = await create_session(client, f"writer-utterance-meta-{uuid4().hex[:8]}")
+    producer_key = "metadata-conflict"
+    work_id = utterance_work_id(session_id, producer_key)
+    payload = b"same durable bytes"
+    storage = FilesystemAudioStorage(get_settings().audio_storage_path)
+    storage.commit_utterance_bytes(
+        session_id=session_id,
+        work_id=work_id,
+        producer_key=producer_key,
+        start_ms=0,
+        end_ms=1000,
+        content_type="audio/wav",
+        payload=payload,
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    with pytest.raises(UtteranceWorkConflict, match="durable storage evidence"):
+        await commit_work(
+            session_id=session_id,
+            producer_key=producer_key,
+            start_ms=retry_start_ms,
+            end_ms=1000,
+            content_type=retry_content_type,
+            payload=payload,
         )
 
 
