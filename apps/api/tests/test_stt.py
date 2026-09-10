@@ -119,7 +119,10 @@ async def test_executor_reads_durable_work_and_commits_one_canonical_segment(
     assert provider.requests[0].language == "id"
 
     retry_provider = FailingProvider(
-        STTProviderError(STTErrorCategory.TRANSIENT, "provider must not be called on committed retry")
+        STTProviderError(
+            STTErrorCategory.TRANSIENT,
+            "provider must not be called on committed retry",
+        )
     )
     retry, retry_idempotent = await transcribe_utterance(
         session_id=session_id,
@@ -132,7 +135,9 @@ async def test_executor_reads_durable_work_and_commits_one_canonical_segment(
 
     async with get_sessionmaker()() as db:
         count = await db.scalar(
-            select(func.count(TranscriptSegment.id)).where(TranscriptSegment.session_id == session_id)
+            select(func.count(TranscriptSegment.id)).where(
+                TranscriptSegment.session_id == session_id
+            )
         )
     assert count == 1
 
@@ -149,7 +154,9 @@ async def test_blank_provider_text_is_not_committed(client: AsyncClient) -> None
 
     async with get_sessionmaker()() as db:
         count = await db.scalar(
-            select(func.count(TranscriptSegment.id)).where(TranscriptSegment.session_id == session_id)
+            select(func.count(TranscriptSegment.id)).where(
+                TranscriptSegment.session_id == session_id
+            )
         )
     assert count == 0
 
@@ -182,7 +189,9 @@ async def test_provider_failure_leaves_session_and_canonical_transcript_untouche
     async with get_sessionmaker()() as db:
         session = await db.scalar(select(RecordingSession).where(RecordingSession.id == session_id))
         count = await db.scalar(
-            select(func.count(TranscriptSegment.id)).where(TranscriptSegment.session_id == session_id)
+            select(func.count(TranscriptSegment.id)).where(
+                TranscriptSegment.session_id == session_id
+            )
         )
     assert session is not None
     assert session.state == "recording"
