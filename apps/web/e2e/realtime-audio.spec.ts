@@ -21,7 +21,16 @@ test('starts the realtime PCM lane from the same recording flow without weakenin
 });
 
 test('archive recording still succeeds when realtime worklet startup fails', async ({ page }) => {
-  await page.route('**/realtime-pcm-worklet.js', async (route) => route.abort('failed'));
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'AudioWorkletNode', {
+      configurable: true,
+      value: class FailingAudioWorkletNode {
+        constructor() {
+          throw new Error('forced realtime worklet startup failure');
+        }
+      },
+    });
+  });
   await page.goto('/');
   await page.getByTestId('start-recording').click();
 
