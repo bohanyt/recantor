@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from recantor.models import SessionKind, SessionState
+from recantor.models import AudioCompleteness, SessionKind, SessionState
 
 
 class HealthResponse(BaseModel):
@@ -53,6 +53,7 @@ class RecordingSessionResponse(BaseModel):
     interrupted_at: datetime | None
     final_sequence: int | None
     final_monotonic_end_ms: int | None
+    audio_completeness: AudioCompleteness | None
     finalized_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -134,5 +135,6 @@ class FinalizeSessionRequest(BaseModel):
 class FinalizeSessionResponse(BaseModel):
     session: RecordingSessionResponse
     complete: bool
+    audio_completeness: AudioCompleteness | None
     missing_sequences: list[int]
     gaps: list[RecordingGapResponse]
