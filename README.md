@@ -26,7 +26,7 @@ The project is designed for two primary workflows:
 - Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
 - API contract: FastAPI OpenAPI -> generated TypeScript client
 
-Planned downstream capabilities include Celery/Redis processing, Groq Whisper STT, faster-whisper local fallback, realtime transcript delivery, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims.
+Planned downstream capabilities include Celery/Redis processing, Groq Whisper STT, faster-whisper local fallback, realtime transcript delivery, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims unless `docs/CURRENT.md` says otherwise.
 
 ## Quick start
 
@@ -61,21 +61,28 @@ docker compose -f infra/compose.yaml down -v
 
 ## What the recorder currently does
 
-The Phase 1 web recorder is implemented. It uses `MediaRecorder`, persists emitted fragments to a Dexie/IndexedDB recovery spool, uploads sequenced audio to the API, keeps local evidence until durable server ACK, supports recovery/finalization, fences stale capture writers, and makes unresolved continuity/gaps explicit.
+The reliable archive recorder is implemented. It uses `MediaRecorder`, persists emitted fragments to a Dexie/IndexedDB recovery spool, uploads sequenced audio to the API, keeps local evidence until durable server ACK, supports recovery/finalization, fences stale capture writers, and makes unresolved continuity/gaps explicit.
 
-A clean Stop declares a final high-water boundary; the server reaches `COMPLETE` only after expected sequences are durably present or explicitly represented as loss.
+A clean Stop declares a final high-water boundary; the server reaches `COMPLETE` only after expected sequences are durably present or explicitly represented as loss. Persisted `audio_completeness` distinguishes full, partial, and empty terminal audio evidence.
 
-Heartbeat/liveness interruption is tracked separately from proven audio discontinuity. Losing heartbeat does not automatically fabricate an audio gap.
+The browser also has an independent realtime lane that taps the same microphone stream through Web Audio/AudioWorklet, sends sample-clock PCM to the server, endpoints speech with a bounded VAD baseline, and stores independently decodable durable utterance WAV work for downstream STT. Realtime failure is downstream degradation and does not participate in archive ACK semantics.
 
 ## Current project status
 
-**Phase 1 capture reliability is closed.** Issue #5 passed its final bounded real-platform witness on 2026-09-10 using an ordinary Microsoft Edge window on an awake Windows 11 laptop with a real microphone. The whole browser window was minimized for about five minutes; capture/ACK progress continued, finalization reached `COMPLETE`, the browser had zero pending local fragments and zero explicit gaps, and the PostgreSQL ledger was contiguous through the final sequence.
+**Phase 1 capture reliability is closed.** The bounded real-platform witness used an ordinary Microsoft Edge window on an awake Windows 11 laptop with a real microphone and proved archive capture/ACK progress through a whole-window minimize interval. This does not claim continuous capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile browser suspension.
 
-That witness is deliberately narrow: it proves the tested awake desktop Edge behavior only. It does not claim continuous capture through desktop sleep/shutdown, screen lock that suspends execution, or mobile browser background suspension.
+**Phase 2 foundations through realtime utterance production are merged.** The repository now has:
 
-**Issue #15 is the next gate** and must establish persisted terminal completeness/continuity classification before the first downstream STT/summary consumer is implemented. Groq/Whisper STT, diarization, LLM summaries, production auth, and native mobile recording are not implemented yet.
+- terminal audio completeness;
+- canonical PostgreSQL transcript segments with reconnect cursor semantics;
+- durable independently decodable `TranscriptionUtterance` work;
+- a real browser PCM/VAD utterance producer, validated on Windows/Edge with 71 durable WAV utterances while archive capture remained `COMPLETE`/`full`.
 
-See [`docs/CURRENT.md`](docs/CURRENT.md) for the exact witness evidence, operational state, and next step.
+PR #35 merged as `7e0b2601ca17148db28df4b422d93c48273780cc`; post-merge CI run `34450139207` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
+
+**Issue #36 is the current Phase 2D slice:** connect committed durable utterances to an owned STT provider boundary and commit exactly one retry-safe canonical transcript segment per utterance. Groq Whisper is the intended first adapter. Celery live queueing, realtime transcript fanout/UI, local faster-whisper fallback, diarization, summaries, production auth, and native mobile recording remain downstream.
+
+See [`docs/CURRENT.md`](docs/CURRENT.md) for exact evidence and immediate next work.
 
 ## Development checks
 
