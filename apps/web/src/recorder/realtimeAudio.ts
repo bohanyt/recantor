@@ -153,7 +153,11 @@ export class RealtimeAudioLane {
       }
       this.publish('live');
     } catch (error) {
-      await this.cleanup(false);
+      await this.cleanup(true);
+      if (this.stopped) {
+        this.publish('inactive');
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Realtime audio startup failed.';
       this.publish('degraded', message);
       throw error;
@@ -193,7 +197,10 @@ export class RealtimeAudioLane {
       if (message.type === 'utterance_committed') {
         this.options.onUtteranceCommitted();
       } else if (message.type === 'discontinuity') {
-        this.publish('degraded', 'Realtime audio transport discontinuity detected; archive capture continues.');
+        this.publish(
+          'degraded',
+          'Realtime audio transport discontinuity detected; archive capture continues.',
+        );
       } else if (message.type === 'stopped') {
         this.stopAcknowledged?.();
       } else if (message.type === 'error') {
