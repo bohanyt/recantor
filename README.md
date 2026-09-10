@@ -69,13 +69,13 @@ Heartbeat/liveness interruption is tracked separately from proven audio disconti
 
 ## Current project status
 
-The validated **Phase 1 code blockers are merged and CI-green**. The remaining Phase 1 exit item is a bounded real Windows/desktop Chrome or Edge witness with a real microphone while the ordinary browser window is backgrounded/minimized and the computer remains awake.
+**Phase 1 capture reliability is closed.** Issue #5 passed its final bounded real-platform witness on 2026-09-10 using an ordinary Microsoft Edge window on an awake Windows 11 laptop with a real microphone. The whole browser window was minimized for about five minutes; capture/ACK progress continued, finalization reached `COMPLETE`, the browser had zero pending local fragments and zero explicit gaps, and the PostgreSQL ledger was contiguous through the final sequence.
 
-After that witness is recorded and Issue #5 is reconciled, Phase 1 can close if no new defect appears.
+That witness is deliberately narrow: it proves the tested awake desktop Edge behavior only. It does not claim continuous capture through desktop sleep/shutdown, screen lock that suspends execution, or mobile browser background suspension.
 
-Issue #15 is the next downstream contract gate and must be resolved before writing the first STT/summary consumer. Groq/Whisper STT, diarization, LLM summaries, production auth, and native mobile recording are not implemented yet.
+**Issue #15 is the next gate** and must establish persisted terminal completeness/continuity classification before the first downstream STT/summary consumer is implemented. Groq/Whisper STT, diarization, LLM summaries, production auth, and native mobile recording are not implemented yet.
 
-See [`docs/CURRENT.md`](docs/CURRENT.md) for the exact operational state and next step.
+See [`docs/CURRENT.md`](docs/CURRENT.md) for the exact witness evidence, operational state, and next step.
 
 ## Development checks
 

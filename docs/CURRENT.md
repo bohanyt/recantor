@@ -11,7 +11,7 @@ Recantor is a public, self-hosted recording and meeting-intelligence project wit
 1. **Live Intelligence** — authenticated live recording, transcript, speaker processing, and rolling meeting intelligence.
 2. **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then process/export it. A bounded guest path may operate without login.
 
-The currently implemented production-critical work is the capture foundation. Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains usable while active, but Recantor does not promise continuous browser recording through screen lock, OS suspension, sleep, or shutdown.
+The implemented foundation is reliable capture first. Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web remains usable while active, but Recantor does not promise continuous browser recording through screen lock, OS suspension, sleep, or shutdown.
 
 > Capture is infrastructure. Intelligence is downstream.
 
@@ -57,7 +57,9 @@ Important capture guardrails:
 
 Latest merged implementation checkpoint: `47a18f24f8a2eaa621669392c52185b816e1fc67` — PR #28, **liveness interruption semantics**.
 
-PR #28 was deliberately squash-merged on 2026-09-10 and closed Issue #10. Post-merge `main` CI run `34419675987` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+PR #28 was squash-merged on 2026-09-10 and closed Issue #10. Post-merge implementation CI run `34419675987` completed successfully across backend, frontend, Chromium E2E, and Compose smoke.
+
+The real-platform witness was executed against `main` commit `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`. Its docs-only CI run `34419972995` also completed successfully.
 
 This document may itself live in a later docs-only commit; use GitHub `main` as the authoritative head rather than treating the implementation checkpoint above as a self-referential branch SHA.
 
@@ -72,31 +74,27 @@ This document may itself live in a later docs-only commit; use GitHub `main` as 
 - **PR #27 / Issue #13** — explicit missing-sequence resolution, non-destructive retry, explicit permanent-loss declaration, late-fill completion, and stable gap accounting.
 - **PR #28 / Issue #10** — heartbeat checks stale liveness before refreshing `last_heartbeat_at`; `state == interrupted` means a current liveness hole while `interrupted_at` retains the latest historically observed interruption; heartbeat/claim recovery returns to `recording` without fabricating an audio gap.
 
-## Phase 1 status
+## Phase 1 status — CLOSED
 
-All validated code blockers discovered by the executed Phase 1 re-review are now merged and closed: #10, #11, #12, #13, #14, and #18.
+All validated code blockers discovered by the executed Phase 1 re-review are merged and closed: #10, #11, #12, #13, #14, and #18.
 
-Issue #5 remains open because one exit requirement is intentionally not automatable with the current CI environment:
+Issue #5's final remaining acceptance item, Case K (real desktop background/minimized behavior), passed on 2026-09-10 with the following bounded witness:
 
-### Real desktop Chrome/Edge witness — current next step
+- checkout under test: `9a1d27bfaf19d14cacd17d89d8c9f8a7eaf2c1d7`;
+- full local Docker Compose stack on the same laptop; web origin `http://localhost:5173`;
+- actual built-in laptop microphone, with audible microphone capture confirmed in an immediately preceding local smoke recording;
+- Microsoft Edge `152.0.4191.66` (64-bit), Chromium `152.0.7977.83`;
+- Edge reported Windows 11 Version 25H2, build `26200.9168`; PowerShell reported Microsoft Windows 11 Pro for Workstations, version `10.0.26200`, build number `26200`;
+- ordinary Edge Default profile; `edge://version` showed no special headless/background-throttling-disabling flags;
+- recording visible checkpoint at `00:01:05`: server ACK through sequence `31`, one pending local fragment, network online, explicit gaps `0`;
+- entire Edge window then minimized for about five minutes while the laptop remained awake;
+- restored/finalized checkpoint at `00:06:05`: state `COMPLETE`, durability `Server synced`, server ACK through sequence `179`, pending local audio `0`, network online, explicit gaps `0`;
+- PostgreSQL session `a776e0d5-4e5b-4ef7-b087-16bdd6328e04`: state `complete`, `final_sequence=179`, `chunks=179`, `min_seq=1`, `max_seq=179`, `gaps=0`;
+- `recording_chunks` has a unique `(session_id, sequence)` constraint, so 179 accepted rows spanning sequence 1 through 179 establishes a contiguous accepted ledger for this witness.
 
-Run Recantor on an **awake real Windows/desktop machine** with an actual microphone and an ordinary Chrome or Edge build. Do not use Playwright/headless flags as evidence.
+Result: Case K is satisfied for this exact awake Windows 11 + Edge configuration and approximately five-minute minimized interval. Do **not** generalize this result to desktop sleep/shutdown, execution-suspending lock behavior, or mobile browser suspension.
 
-Preferred witness setup is the entire Docker Compose development stack on the same laptop and the browser pointed at `http://localhost:5173`. This isolates the real-browser lifecycle behavior from unrelated deployment/network variables while still exercising the real web -> API -> PostgreSQL/audio-storage path.
-
-Suggested bounded witness:
-
-1. record for about 1 minute with the browser visible;
-2. note elapsed time and the current server-ACK sequence;
-3. minimize the entire browser window for about 5 minutes while keeping the computer awake and unlocked enough that the OS does not suspend it;
-4. restore the window and confirm elapsed time/capture advanced;
-5. allow any pending local audio to synchronize;
-6. Stop normally;
-7. record exact Git commit, Windows version/build, browser/version, minimized interval, terminal session state, final sequence/accepted continuity, pending-local count, and explicit gaps.
-
-Passing evidence should show capture continued during the tested minimized interval and the resulting recording reconciled honestly. Do not generalize the result to laptop sleep/shutdown or mobile browser suspension.
-
-After a successful real-platform witness, reconcile Issue #5 against its acceptance matrix and close Phase 1 if no new defect is revealed.
+Issue #5 is closed as the Phase 1 umbrella. Phase 1 capture reliability is complete at its stated boundary.
 
 ## Liveness semantics after PR #28
 
@@ -106,11 +104,13 @@ After a successful real-platform witness, reconcile Issue #5 against its accepta
 - capture claim and heartbeat recovery preserve the same historical evidence semantics;
 - no heartbeat/liveness stall automatically creates a `RecordingGap`; locally retained audio can still later prove continuity.
 
-## Phase 2 gate
+## Next gate — Issue #15
 
-Issue #15 is **not a Phase 1 blocker**, but it must be resolved before the first downstream STT/summary consumer is implemented.
+Issue #15 is now the next product/architecture gate and must be resolved **before the first downstream STT/summary consumer is implemented**.
 
-Today lifecycle `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 will establish a persisted terminal completeness/continuity classification so downstream intelligence cannot infer more than capture evidence proves.
+Today lifecycle `COMPLETE` alone does not distinguish fully durable audio, partial/gapped audio, and zero-audio completion. #15 must establish a persisted terminal completeness/continuity classification so downstream intelligence cannot infer more than capture evidence proves.
+
+Do not start Groq/Whisper/faster-whisper STT, VAD, diarization, rolling/final LLM summaries, or other downstream intelligence consumers until #15 is resolved.
 
 ## Not implemented yet
 
@@ -159,8 +159,8 @@ For a new Control Tower chat:
 1. inspect GitHub fresh;
 2. read `AGENTS.md`;
 3. read this file;
-4. read the latest dated file under `docs/handoff/`;
-5. read Issue #5 and the current next blocker/witness evidence;
+4. read the latest dated file under `docs/handoff/` if present;
+5. read Issue #15 and any fresh downstream-gate evidence;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
