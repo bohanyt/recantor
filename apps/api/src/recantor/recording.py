@@ -106,6 +106,8 @@ def _mark_interrupted_if_stale(session: RecordingSession) -> bool:
     if last_heartbeat is None or utcnow() - last_heartbeat <= timeout:
         return False
     session.state = SessionState.INTERRUPTED.value
+    # `state == interrupted` is the current-liveness signal. `interrupted_at`
+    # intentionally persists as the latest historical interruption evidence.
     session.interrupted_at = last_heartbeat
     session.updated_at = utcnow()
     return True
@@ -205,7 +207,6 @@ async def claim_capture(
         session.capture_epoch = expected_epoch + 1
         session.state = SessionState.RECORDING.value
         session.last_heartbeat_at = utcnow()
-        session.interrupted_at = None
         session.updated_at = utcnow()
     return session
 
@@ -222,6 +223,9 @@ async def heartbeat(
         _validate_writer(session, writer_id, capture_epoch)
         if session.state in {SessionState.COMPLETE.value, SessionState.FAILED.value}:
             raise RecordingConflict(f"session in state {session.state} cannot heartbeat")
+        # Detect a liveness hole before overwriting the prior heartbeat. This also
+        # preserves historical evidence when no read happened during the stall.
+        _mark_interrupted_if_stale(session)
         session.last_heartbeat_at = utcnow()
         if session.state == SessionState.INTERRUPTED.value:
             session.state = SessionState.RECORDING.value
