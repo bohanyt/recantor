@@ -3,9 +3,9 @@ import wave
 from io import BytesIO
 from uuid import UUID, uuid4
 
+from httpx import ASGITransport, AsyncClient
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
