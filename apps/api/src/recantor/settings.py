@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     audio_storage_path: str = "./data/audio"
     recording_heartbeat_timeout_seconds: int = 20
     recording_max_chunk_bytes: int = 16 * 1024 * 1024
+    realtime_max_pcm_packet_bytes: int = 64 * 1024
+    realtime_vad_pre_roll_ms: int = 200
+    realtime_vad_min_voiced_ms: int = 160
+    realtime_vad_silence_ms: int = 600
+    realtime_vad_hard_max_ms: int = 8_000
+    realtime_vad_absolute_threshold_dbfs: float = -50.0
+    realtime_vad_noise_margin_db: float = 12.0
     log_level: str = "INFO"
 
     @property

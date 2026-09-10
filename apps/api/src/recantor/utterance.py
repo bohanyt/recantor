@@ -6,7 +6,7 @@ from uuid import UUID, uuid5
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recantor.models import RecordingSession, TranscriptionUtterance
+from recantor.models import RecordingSession, SessionState, TranscriptionUtterance
 from recantor.settings import get_settings
 from recantor.storage import AudioStorageConflict, AudioStorageError, FilesystemAudioStorage
 
@@ -88,6 +88,31 @@ def _audio_storage() -> FilesystemAudioStorage:
     return FilesystemAudioStorage(get_settings().audio_storage_path)
 
 
+def _validate_expected_capture(
+    session: RecordingSession,
+    *,
+    expected_writer_id: str | None,
+    expected_capture_epoch: int | None,
+) -> None:
+    if (expected_writer_id is None) != (expected_capture_epoch is None):
+        raise UtteranceWorkConflict(
+            "live utterance fencing requires both writer_id and capture_epoch"
+        )
+    if expected_writer_id is None or expected_capture_epoch is None:
+        return
+    if (
+        session.active_writer_id != expected_writer_id
+        or session.capture_epoch != expected_capture_epoch
+    ):
+        raise UtteranceWorkConflict("capture writer or epoch is no longer active")
+    if session.state not in {
+        SessionState.RECORDING.value,
+        SessionState.RECOVERING.value,
+        SessionState.INTERRUPTED.value,
+    }:
+        raise UtteranceWorkConflict("recording session is not accepting live utterance work")
+
+
 async def commit_utterance_work(
     db: AsyncSession,
     *,
@@ -97,6 +122,8 @@ async def commit_utterance_work(
     end_ms: int,
     content_type: str,
     payload: bytes,
+    expected_writer_id: str | None = None,
+    expected_capture_epoch: int | None = None,
 ) -> tuple[TranscriptionUtterance, bool]:
     key, start, end, canonical_content_type, canonical_payload, digest = _canonical_payload(
         producer_key=producer_key,
@@ -114,6 +141,11 @@ async def commit_utterance_work(
         )
         if session is None:
             raise UtteranceWorkNotFound("recording session not found")
+        _validate_expected_capture(
+            session,
+            expected_writer_id=expected_writer_id,
+            expected_capture_epoch=expected_capture_epoch,
+        )
 
         existing = await db.scalar(
             select(TranscriptionUtterance).where(
