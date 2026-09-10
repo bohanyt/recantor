@@ -113,8 +113,7 @@ export class RealtimeAudioLane {
         );
         socket.addEventListener(
           'close',
-          () =>
-            settleReject(new Error('Realtime audio WebSocket closed before it became ready.')),
+          () => settleReject(new Error('Realtime audio WebSocket closed before it became ready.')),
           { once: true },
         );
         socket.addEventListener('message', (event) => {
