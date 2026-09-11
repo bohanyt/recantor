@@ -50,7 +50,7 @@ class TusUploadInfo(BaseModel):
     size_is_deferred: bool = Field(default=False, alias="SizeIsDeferred")
     offset: int = Field(default=0, alias="Offset", ge=0)
     metadata: dict[str, str] = Field(default_factory=dict, alias="MetaData")
-    storage: dict[str, Any] = Field(default_factory=dict, alias="Storage")
+    storage: dict[str, Any] | None = Field(default=None, alias="Storage")
 
 
 class TusHttpRequest(BaseModel):
