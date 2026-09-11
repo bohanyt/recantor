@@ -171,7 +171,7 @@ durable TranscriptionUtterance
         -> canonical TranscriptSegment
 ```
 
-DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, session-fair reconciliation, Celery/Redis wake-up hints, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Durable utterance commit does not call Redis, Celery, or the provider; queue/provider availability therefore cannot roll back archive or utterance durability.
+DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, bounded outstanding admission across reconciliation passes, expiring PostgreSQL delivery hints, least-recently-admitted session rotation, Celery/Redis wake-up hints, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Canonical convergence filters for authoritative transcript evidence before applying its batch bound, so a large non-canonical terminal prefix cannot starve recovery. Production claim/retry eligibility samples PostgreSQL `clock_timestamp()` after the relevant row lock, and scheduler configuration rejects non-positive/pathological values. Durable utterance commit does not call Redis, Celery, or the provider; queue/provider availability therefore cannot roll back archive or utterance durability.
 
 Required semantics for #38:
 
@@ -181,7 +181,7 @@ Required semantics for #38:
 - claims must expire/recover after worker death without holding a DB transaction across the provider network call;
 - provider retry policy must consume Phase 2D error categories and avoid hot loops;
 - canonical transcript evidence remains authoritative for success;
-- a large backlog from one session must not starve another session;
+- broker admission is bounded globally and per session across reconciliation passes; expiring delivery hints keep PostgreSQL as backlog truth, and session rotation prevents fixed-order starvation when active sessions exceed one batch;
 - enqueue/Redis/provider failure must not weaken archive capture or durable utterance commit;
 - local Compose should run the minimum worker/reconciler services needed to exercise the automatic path;
 - ordinary CI must remain independent from real Groq secrets/network.
