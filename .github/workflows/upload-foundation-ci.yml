@@ -57,9 +57,12 @@ jobs:
         run: |
           uv sync --project apps/api --frozen --dev
           pnpm --dir apps/web install --frozen-lockfile
-      - name: Prepare durable upload storage and database
+      - name: Prepare tusd-owned durable upload storage and database
         run: |
-          mkdir -p /tmp/recantor-upload-audio/uploads/tus
+          docker run --rm --entrypoint sh tusproject/tusd:v2.10.0 \
+            -c 'test "$(id -u)" = 1000 && test "$(id -g)" = 1000'
+          sudo install -d -o 1000 -g 1000 -m 0775 /tmp/recantor-upload-audio/uploads/tus
+          test "$(stat -c '%u:%g %a' /tmp/recantor-upload-audio/uploads/tus)" = "1000:1000 775"
           uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
       - name: Start API
         run: |
@@ -74,6 +77,7 @@ jobs:
       - name: Start real tusd against shared durable storage
         run: |
           docker run --detach --name recantor-upload-tusd --network host \
+            --user 1000:1000 \
             --volume /tmp/recantor-upload-audio:/data/audio \
             tusproject/tusd:v2.10.0 \
             -host=127.0.0.1 \

@@ -41,6 +41,19 @@ services:
         condition: service_healthy
     restart: "no"
 
+  upload-storage-init:
+    image: alpine:3.23.4
+    user: "0:0"
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /data/audio/uploads/tus && chown 1000:1000 /data/audio/uploads/tus && chmod 0775 /data/audio/uploads/tus",
+      ]
+    volumes:
+      - recantor-audio:/data/audio
+    restart: "no"
+
   api:
     build:
       context: ../apps/api
@@ -68,6 +81,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      upload-storage-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -82,6 +97,7 @@ services:
 
   tusd:
     image: tusproject/tusd:v2.10.0
+    user: "1000:1000"
     command:
       [
         "-host=0.0.0.0",
@@ -108,6 +124,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      upload-storage-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   stt-worker:
