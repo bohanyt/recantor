@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Reconcile legacy fairness regression with outstanding admission contract
-        run: python -c 'from pathlib import Path; p=Path("apps/api/tests/test_stt_jobs.py"); s=p.read_text(); old="    assert second.dispatched == 3\n    assert b_work.id in second_dispatch\n    assert len(set(second_dispatch).intersection(a_ids)) == 2\n"; new="    # Session A already owns both outstanding admission slots from pass 1.\n    # Only newly-active session B may be published until A hints clear or claim.\n    assert second.dispatched == 1\n    assert second_dispatch == [b_work.id]\n    assert len(set(second_dispatch).intersection(a_ids)) == 0\n"; assert old in s; p.write_text(s.replace(old,new,1))'
+        run: python -c 'from pathlib import Path; p=Path("apps/api/tests/test_stt_jobs.py"); s=p.read_text(); old="    assert second.dispatched == 3\n    assert b_work.id in second_dispatch\n    assert len(set(second_dispatch).intersection(a_ids)) == 2\n"; new="    # Session A already owns both outstanding admission slots from pass 1.\n    # Only newly-active session B may publish until those expiring hints clear or claim.\n    assert second.dispatched == 1\n    assert second_dispatch == [b_work.id]\n    assert len(set(second_dispatch).intersection(a_ids)) == 0\n"; assert old in s; p.write_text(s.replace(old,new,1))'
       - name: Commit assertion reconciliation
         run: |
           git config user.name 'github-actions[bot]'
