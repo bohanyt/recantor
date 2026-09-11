@@ -125,9 +125,7 @@ async def test_fake_adapter_proves_safe_command_shape_and_structured_result() ->
     assert configs['permissions.recantor_meeting_intelligence.filesystem.":root"'] == '"deny"'
     assert configs['permissions.recantor_meeting_intelligence.filesystem.":minimal"'] == '"read"'
     assert (
-        configs[
-            'permissions.recantor_meeting_intelligence.filesystem.":workspace_roots"."."'
-        ]
+        configs['permissions.recantor_meeting_intelligence.filesystem.":workspace_roots"."."']
         == '"read"'
     )
     assert configs["permissions.recantor_meeting_intelligence.network.enabled"] == "false"
@@ -191,9 +189,7 @@ async def test_adversarial_sentinel_secrets_stay_outside_exec_boundary(tmp_path:
     assert sentinel_secret not in "\n".join(exec_call.env.values())
     assert configs['permissions.recantor_meeting_intelligence.filesystem.":root"'] == '"deny"'
     assert (
-        configs[
-            'permissions.recantor_meeting_intelligence.filesystem.":workspace_roots"."."'
-        ]
+        configs['permissions.recantor_meeting_intelligence.filesystem.":workspace_roots"."."']
         == '"read"'
     )
     assert configs["features.shell_tool"] == "false"

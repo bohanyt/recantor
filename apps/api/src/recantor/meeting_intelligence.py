@@ -139,6 +139,7 @@ class MeetingIntelligenceResult:
 class MeetingIntelligenceProvider(Protocol):
     async def derive(self, request: MeetingIntelligenceRequest) -> MeetingIntelligenceResult: ...
 
+
 def _codex_parent_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
     source_env = os.environ if source is None else source
     allowed = {key.casefold() for key in _PARENT_ENV_ALLOWLIST}
@@ -224,9 +225,7 @@ def _classify_process_failure(result: ProcessResult) -> MeetingIntelligenceError
         for marker in ("not available", "unavailable", "not found", "unsupported", "does not exist")
     ):
         return MeetingIntelligenceErrorCategory.MODEL_UNAVAILABLE
-    if "forced login" in diagnostic or (
-        "login method" in diagnostic and "chatgpt" in diagnostic
-    ):
+    if "forced login" in diagnostic or ("login method" in diagnostic and "chatgpt" in diagnostic):
         return MeetingIntelligenceErrorCategory.UNSUPPORTED_AUTH_MODE
     if any(
         marker in diagnostic
