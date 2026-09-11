@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34658588858
+snapshot_seq: 34658600970
 
-collected_at: 2026-09-11T23:34:48.568353Z
+collected_at: 2026-09-11T23:35:02.258202Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -635,7 +635,7 @@ Current candidates:
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #42 state=open updated=2026-09-11T23:34:39Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
+ISSUE #42 state=open updated=2026-09-11T23:34:49Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
 ISSUE #41 state=open updated=2026-09-11T23:19:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #44 state=open updated=2026-09-11T23:19:30Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
@@ -656,4 +656,4 @@ PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34658588858 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34658600970 sections=6
