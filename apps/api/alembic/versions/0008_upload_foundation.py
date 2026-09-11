@@ -8,6 +8,7 @@ Create Date: 2026-09-11
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0008"
@@ -33,9 +34,22 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("failure_code", sa.String(length=64), nullable=True),
         sa.Column("failure_message", sa.String(length=512), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("declared_byte_length > 0", name="ck_upload_declared_byte_length_positive"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "declared_byte_length > 0",
+            name="ck_upload_declared_byte_length_positive",
+        ),
         sa.CheckConstraint("received_bytes >= 0", name="ck_upload_received_bytes_nonnegative"),
         sa.CheckConstraint(
             "received_bytes <= declared_byte_length",
