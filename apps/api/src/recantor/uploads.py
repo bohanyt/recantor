@@ -400,10 +400,15 @@ async def _process_hook_locked(
             expected_bytes=record.declared_byte_length,
         )
         if record.completed_at is not None:
-            if record.storage_key != stored.key or record.byte_length != stored.byte_length:
+            if (
+                record.storage_key != stored.key
+                or record.byte_length != stored.byte_length
+                or record.sha256 != stored.sha256
+            ):
                 raise UploadConflict("duplicate completion does not match durable upload evidence")
         else:
             record.storage_key = stored.key
+            record.sha256 = stored.sha256
             record.byte_length = stored.byte_length
             record.received_bytes = stored.byte_length
             record.completed_at = utcnow()
