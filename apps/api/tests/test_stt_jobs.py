@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,8 +13,8 @@ from recantor.models import (
     RecordingSession,
     STTJob,
     STTJobState,
-    TranscriptSegment,
     TranscriptionUtterance,
+    TranscriptSegment,
 )
 from recantor.settings import get_settings
 from recantor.stt import STTErrorCategory, STTProviderError, STTRequest, STTResult
@@ -136,7 +136,9 @@ async def test_durable_utterance_has_exactly_one_scheduling_identity(client: Asy
 
 
 @pytest.mark.asyncio
-async def test_duplicate_delivery_short_circuits_after_canonical_success(client: AsyncClient) -> None:
+async def test_duplicate_delivery_short_circuits_after_canonical_success(
+    client: AsyncClient,
+) -> None:
     session_id = await create_session(client, "writer-stt-job-duplicate-0001")
     work, _ = await create_work(session_id=session_id, producer_key="live:duplicate")
     provider = FakeProvider([STTResult(text="sekali saja", language="id")])
@@ -187,7 +189,7 @@ async def test_expired_claim_is_reclaimable_and_stale_completion_is_fenced(
 ) -> None:
     session_id = await create_session(client, "writer-stt-job-expiry-0001")
     work, _ = await create_work(session_id=session_id, producer_key="live:expiry")
-    t0 = datetime(2026, 9, 11, 2, 0, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 11, 2, 0, tzinfo=UTC)
 
     first = await claim_stt_job(utterance_id=work.id, now=t0, lease_seconds=1)
     assert first is not None
@@ -255,7 +257,7 @@ async def test_enqueue_failure_cannot_undo_durable_work(client: AsyncClient) -> 
 
     result = await reconcile_stt_jobs(
         enqueue=fail_enqueue,
-        now=datetime(2026, 9, 11, 2, 10, tzinfo=timezone.utc),
+        now=datetime(2026, 9, 11, 2, 10, tzinfo=UTC),
     )
     assert result.enqueue_failures == 1
 
@@ -277,7 +279,7 @@ async def test_missing_job_and_lost_delivery_are_rediscovered(client: AsyncClien
         await db.execute(delete(STTJob).where(STTJob.utterance_id == work.id))
         await db.commit()
 
-    t0 = datetime(2026, 9, 11, 2, 20, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 11, 2, 20, tzinfo=UTC)
     deliveries: list[UUID] = []
     first = await reconcile_stt_jobs(
         enqueue=deliveries.append,
@@ -328,7 +330,7 @@ async def test_retryable_provider_failures_back_off_and_cap(
             STTProviderError(category, "retryable"),
         ]
     )
-    t0 = datetime(2026, 9, 11, 3, 0, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 11, 3, 0, tzinfo=UTC)
 
     first = await execute_stt_job(utterance_id=work.id, provider=provider, now=t0)
     assert first.status == STTExecutionStatus.RETRY_SCHEDULED
@@ -363,7 +365,7 @@ async def test_configuration_is_delayed_and_permanent_categories_are_terminal(
         session_id=session_id,
         producer_key="live:config",
     )
-    t0 = datetime(2026, 9, 11, 3, 30, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 11, 3, 30, tzinfo=UTC)
     config_provider = FakeProvider(
         [STTProviderError(STTErrorCategory.CONFIGURATION, "key missing")]
     )
@@ -412,7 +414,7 @@ async def test_successful_retry_commits_once_and_clears_retry_error(
             STTResult(text="akhirnya berhasil", language="id"),
         ]
     )
-    t0 = datetime(2026, 9, 11, 4, 0, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 11, 4, 0, tzinfo=UTC)
 
     first = await execute_stt_job(utterance_id=work.id, provider=provider, now=t0)
     assert first.next_attempt_at is not None
@@ -432,8 +434,7 @@ async def test_successful_retry_commits_once_and_clears_retry_error(
         count = await db.scalar(
             select(func.count(TranscriptSegment.id)).where(
                 TranscriptSegment.session_id == session_id,
-                TranscriptSegment.producer_key
-                == transcript_producer_key_for_utterance(work.id),
+                TranscriptSegment.producer_key == transcript_producer_key_for_utterance(work.id),
             )
         )
     assert count == 1
@@ -488,18 +489,14 @@ async def test_concurrent_sessions_remain_isolated(client: AsyncClient) -> None:
         texts_a = list(
             (
                 await db.scalars(
-                    select(TranscriptSegment.text).where(
-                        TranscriptSegment.session_id == session_a
-                    )
+                    select(TranscriptSegment.text).where(TranscriptSegment.session_id == session_a)
                 )
             ).all()
         )
         texts_b = list(
             (
                 await db.scalars(
-                    select(TranscriptSegment.text).where(
-                        TranscriptSegment.session_id == session_b
-                    )
+                    select(TranscriptSegment.text).where(TranscriptSegment.session_id == session_b)
                 )
             ).all()
         )
@@ -513,9 +510,7 @@ async def test_failed_work_is_inspectable_replayable_and_diagnostics_hide_storag
 ) -> None:
     session_id = await create_session(client, "writer-stt-job-diagnostics-0001")
     work, _ = await create_work(session_id=session_id, producer_key="live:diagnostics")
-    provider = FakeProvider(
-        [STTProviderError(STTErrorCategory.PERMANENT, "bad request")]
-    )
+    provider = FakeProvider([STTProviderError(STTErrorCategory.PERMANENT, "bad request")])
     failed = await execute_stt_job(utterance_id=work.id, provider=provider)
     assert failed.status == STTExecutionStatus.FAILED
 

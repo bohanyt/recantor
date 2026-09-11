@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -15,8 +15,8 @@ from recantor.models import (
     RecordingSession,
     STTJob,
     STTJobState,
-    TranscriptSegment,
     TranscriptionUtterance,
+    TranscriptSegment,
 )
 from recantor.settings import get_settings
 from recantor.stt import (
@@ -79,7 +79,7 @@ _RETRYABLE_PROVIDER_CATEGORIES = {
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _safe_message(message: str, *, fallback: str) -> str:
@@ -153,76 +153,68 @@ async def claim_stt_job(
     if lease <= 0:
         raise STTJobError("STT claim lease must be positive")
 
-    async with get_sessionmaker()() as db:
-        async with db.begin():
-            job = await db.scalar(
-                select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update()
-            )
-            if job is None:
-                return None
+    async with get_sessionmaker()() as db, db.begin():
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update()
+        )
+        if job is None:
+            return None
 
-            if await _canonical_exists(
-                db,
-                session_id=job.session_id,
-                utterance_id=job.utterance_id,
-            ):
-                _mark_succeeded(job)
-                return None
+        if await _canonical_exists(
+            db,
+            session_id=job.session_id,
+            utterance_id=job.utterance_id,
+        ):
+            _mark_succeeded(job)
+            return None
 
-            if job.state in {STTJobState.SUCCEEDED.value, STTJobState.FAILED.value}:
-                return None
-            if (
-                job.state == STTJobState.CLAIMED.value
-                and job.claim_expires_at is not None
-                and job.claim_expires_at > current
-            ):
-                return None
-            if (
-                job.state == STTJobState.RETRY_WAIT.value
-                and job.next_attempt_at is not None
-                and job.next_attempt_at > current
-            ):
-                return None
+        if job.state in {STTJobState.SUCCEEDED.value, STTJobState.FAILED.value}:
+            return None
+        if (
+            job.state == STTJobState.CLAIMED.value
+            and job.claim_expires_at is not None
+            and job.claim_expires_at > current
+        ):
+            return None
+        if (
+            job.state == STTJobState.RETRY_WAIT.value
+            and job.next_attempt_at is not None
+            and job.next_attempt_at > current
+        ):
+            return None
 
-            token = uuid4().hex
-            expires_at = current + timedelta(seconds=lease)
-            job.state = STTJobState.CLAIMED.value
-            job.attempt_count += 1
-            job.next_attempt_at = None
-            job.claim_token = token
-            job.claim_expires_at = expires_at
-            await db.flush()
-            return STTClaim(
-                utterance_id=job.utterance_id,
-                session_id=job.session_id,
-                token=token,
-                attempt_count=job.attempt_count,
-                expires_at=expires_at,
-            )
+        token = uuid4().hex
+        expires_at = current + timedelta(seconds=lease)
+        job.state = STTJobState.CLAIMED.value
+        job.attempt_count += 1
+        job.next_attempt_at = None
+        job.claim_token = token
+        job.claim_expires_at = expires_at
+        await db.flush()
+        return STTClaim(
+            utterance_id=job.utterance_id,
+            session_id=job.session_id,
+            token=token,
+            attempt_count=job.attempt_count,
+            expires_at=expires_at,
+        )
 
 
 async def _complete_claim_success(claim: STTClaim) -> bool:
-    async with get_sessionmaker()() as db:
-        async with db.begin():
-            job = await db.scalar(
-                select(STTJob)
-                .where(STTJob.utterance_id == claim.utterance_id)
-                .with_for_update()
-            )
-            if (
-                job is None
-                or job.state != STTJobState.CLAIMED.value
-                or job.claim_token != claim.token
-            ):
-                return False
-            if not await _canonical_exists(
-                db,
-                session_id=claim.session_id,
-                utterance_id=claim.utterance_id,
-            ):
-                return False
-            _mark_succeeded(job)
-            return True
+    async with get_sessionmaker()() as db, db.begin():
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+        )
+        if job is None or job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
+            return False
+        if not await _canonical_exists(
+            db,
+            session_id=claim.session_id,
+            utterance_id=claim.utterance_id,
+        ):
+            return False
+        _mark_succeeded(job)
+        return True
 
 
 async def _record_claim_failure(
@@ -237,51 +229,44 @@ async def _record_claim_failure(
     current = now or utcnow()
     settings = get_settings()
 
-    async with get_sessionmaker()() as db:
-        async with db.begin():
-            job = await db.scalar(
-                select(STTJob)
-                .where(STTJob.utterance_id == claim.utterance_id)
-                .with_for_update()
-            )
-            if (
-                job is None
-                or job.state != STTJobState.CLAIMED.value
-                or job.claim_token != claim.token
-            ):
-                return STTExecutionResult(
-                    status=STTExecutionStatus.STALE,
-                    state=None if job is None else STTJobState(job.state),
-                    attempt_count=0 if job is None else job.attempt_count,
-                    next_attempt_at=None if job is None else job.next_attempt_at,
-                )
-
-            job.last_error_category = category[:64]
-            job.last_error_code = code[:96]
-            job.last_error_message = _safe_message(message, fallback=code)
-            _clear_claim(job)
-
-            retryable = retry_category in _RETRYABLE_PROVIDER_CATEGORIES or (
-                retry_category == STTErrorCategory.CONFIGURATION
-            )
-            if retryable and job.attempt_count < settings.stt_max_attempts:
-                delay = _retry_delay_seconds(retry_category, job.attempt_count)
-                job.state = STTJobState.RETRY_WAIT.value
-                job.next_attempt_at = current + timedelta(seconds=delay)
-                return STTExecutionResult(
-                    status=STTExecutionStatus.RETRY_SCHEDULED,
-                    state=STTJobState.RETRY_WAIT,
-                    attempt_count=job.attempt_count,
-                    next_attempt_at=job.next_attempt_at,
-                )
-
-            job.state = STTJobState.FAILED.value
-            job.next_attempt_at = None
+    async with get_sessionmaker()() as db, db.begin():
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+        )
+        if job is None or job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
             return STTExecutionResult(
-                status=STTExecutionStatus.FAILED,
-                state=STTJobState.FAILED,
-                attempt_count=job.attempt_count,
+                status=STTExecutionStatus.STALE,
+                state=None if job is None else STTJobState(job.state),
+                attempt_count=0 if job is None else job.attempt_count,
+                next_attempt_at=None if job is None else job.next_attempt_at,
             )
+
+        job.last_error_category = category[:64]
+        job.last_error_code = code[:96]
+        job.last_error_message = _safe_message(message, fallback=code)
+        _clear_claim(job)
+
+        retryable = retry_category in _RETRYABLE_PROVIDER_CATEGORIES or (
+            retry_category == STTErrorCategory.CONFIGURATION
+        )
+        if retryable and job.attempt_count < settings.stt_max_attempts:
+            delay = _retry_delay_seconds(retry_category, job.attempt_count)
+            job.state = STTJobState.RETRY_WAIT.value
+            job.next_attempt_at = current + timedelta(seconds=delay)
+            return STTExecutionResult(
+                status=STTExecutionStatus.RETRY_SCHEDULED,
+                state=STTJobState.RETRY_WAIT,
+                attempt_count=job.attempt_count,
+                next_attempt_at=job.next_attempt_at,
+            )
+
+        job.state = STTJobState.FAILED.value
+        job.next_attempt_at = None
+        return STTExecutionResult(
+            status=STTExecutionStatus.FAILED,
+            state=STTJobState.FAILED,
+            attempt_count=job.attempt_count,
+        )
 
 
 async def execute_stt_job(
@@ -442,54 +427,49 @@ async def _ensure_missing_jobs(batch_size: int) -> int:
 
 
 async def _converge_canonical(batch_size: int) -> int:
-    async with get_sessionmaker()() as db:
-        async with db.begin():
-            jobs = list(
-                (
-                    await db.scalars(
-                        select(STTJob)
-                        .where(STTJob.state != STTJobState.SUCCEEDED.value)
-                        .order_by(STTJob.updated_at, STTJob.utterance_id)
-                        .limit(batch_size)
-                    )
-                ).all()
-            )
-            if not jobs:
-                return 0
-
-            keys = {
-                job.utterance_id: transcript_producer_key_for_utterance(job.utterance_id)
-                for job in jobs
-            }
-            segments = list(
-                (
-                    await db.scalars(
-                        select(TranscriptSegment).where(
-                            TranscriptSegment.producer_key.in_(list(keys.values()))
-                        )
-                    )
-                ).all()
-            )
-            canonical_pairs = {
-                (segment.session_id, segment.producer_key) for segment in segments
-            }
-            converged = 0
-            for job in jobs:
-                if (
-                    job.session_id,
-                    keys[job.utterance_id],
-                ) not in canonical_pairs:
-                    continue
-                locked = await db.scalar(
+    async with get_sessionmaker()() as db, db.begin():
+        jobs = list(
+            (
+                await db.scalars(
                     select(STTJob)
-                    .where(STTJob.utterance_id == job.utterance_id)
-                    .with_for_update()
+                    .where(STTJob.state != STTJobState.SUCCEEDED.value)
+                    .order_by(STTJob.updated_at, STTJob.utterance_id)
+                    .limit(batch_size)
                 )
-                if locked is None or locked.state == STTJobState.SUCCEEDED.value:
-                    continue
-                _mark_succeeded(locked)
-                converged += 1
-            return converged
+            ).all()
+        )
+        if not jobs:
+            return 0
+
+        keys = {
+            job.utterance_id: transcript_producer_key_for_utterance(job.utterance_id)
+            for job in jobs
+        }
+        segments = list(
+            (
+                await db.scalars(
+                    select(TranscriptSegment).where(
+                        TranscriptSegment.producer_key.in_(list(keys.values()))
+                    )
+                )
+            ).all()
+        )
+        canonical_pairs = {(segment.session_id, segment.producer_key) for segment in segments}
+        converged = 0
+        for job in jobs:
+            if (
+                job.session_id,
+                keys[job.utterance_id],
+            ) not in canonical_pairs:
+                continue
+            locked = await db.scalar(
+                select(STTJob).where(STTJob.utterance_id == job.utterance_id).with_for_update()
+            )
+            if locked is None or locked.state == STTJobState.SUCCEEDED.value:
+                continue
+            _mark_succeeded(locked)
+            converged += 1
+        return converged
 
 
 def _eligible_expression(current: datetime, cooldown_before: datetime):
@@ -557,14 +537,13 @@ async def _fair_candidates(
 
 
 async def _mark_delivery_attempt(utterance_id: UUID, attempted_at: datetime) -> None:
-    async with get_sessionmaker()() as db:
-        async with db.begin():
-            job = await db.get(STTJob, utterance_id)
-            if job is not None and job.state not in {
-                STTJobState.SUCCEEDED.value,
-                STTJobState.FAILED.value,
-            }:
-                job.last_delivery_attempt_at = attempted_at
+    async with get_sessionmaker()() as db, db.begin():
+        job = await db.get(STTJob, utterance_id)
+        if job is not None and job.state not in {
+            STTJobState.SUCCEEDED.value,
+            STTJobState.FAILED.value,
+        }:
+            job.last_delivery_attempt_at = attempted_at
 
 
 async def reconcile_stt_jobs(

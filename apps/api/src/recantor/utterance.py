@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.models import (
     RecordingSession,
+    SessionState,
     STTJob,
     STTJobState,
-    SessionState,
     TranscriptionUtterance,
 )
 from recantor.settings import get_settings

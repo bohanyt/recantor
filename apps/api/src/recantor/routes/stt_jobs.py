@@ -39,7 +39,5 @@ async def get_session_stt_scheduling(
         session_id=session_id,
         total=sum(counts.values()),
         counts=counts,
-        recent_failures=[
-            STTJobFailureResponse.model_validate(failure) for failure in failures
-        ],
+        recent_failures=[STTJobFailureResponse.model_validate(failure) for failure in failures],
     )
