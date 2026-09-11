@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34659878877
+snapshot_seq: 34659907819
 
-collected_at: 2026-09-11T23:56:29.705343Z
+collected_at: 2026-09-11T23:56:51.793942Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T23:55:18Z
+issue_updated_at: 2026-09-11T23:56:38Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,25 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641457373 author=bohanyt
-## ACC_ACTIVATION_RERUN_TRIGGER_V1
-
-Fresh Control Tower activation check after `bohanyt/agent-context-compiler` became PUBLIC.
-
-Authority checkpoint before trigger:
-- `main`: `59ff57502a9a1d84ad332cab106c46c256482d23` (merged PR #52 official Recantor ACC caller/config)
-- canonical integration branch: `integration/cloud-alpha-2026-09-11` @ `e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`
-- central reusable repo verified public
-- existing caller uses public reusable `bohanyt/agent-context-compiler/.github/workflows/compile.yml@main`
-- prior run `34650559993` had no jobs and is not retryable; this new issue comment intentionally triggers a fresh caller run through the merged `issue_comment` event.
-
-Do not change IAM/WIF unless the fresh run produces a concrete auth/permission failure.
-Do not manually overwrite Drive to manufacture activation evidence.
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5641474140 author=bohanyt
 ## ACC_ACTIVATION_BLOCKED — official caller reaches Drive, CURRENT replacement blocked by sequence namespace
 
@@ -650,11 +631,33 @@ Because CI only runs on `push: main` or `pull_request`, CT opened DRAFT integrat
 Exact-head proof on `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`:
 - standard CI run `34659603660` / #31
 ...[COMMENT_5641968750_TRUNCATED chars=1235]
+
+---
+
+comment_id=5641976528 author=bohanyt
+## CONTROL_TOWER_HANDOFF_GATE_2026_09_12_V1 — successor CT must consume independent strategic review first
+
+Current product frontier is now intentionally simple:
+
+- canonical integration branch: `integration/cloud-alpha-2026-09-11`
+- exact integrated/cloud-green head: `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
+- persistent DRAFT integration-checkpoint PR: #53 -> `main`; DO NOT merge without explicit Bohan authorization
+- exact-head CI #312 / `34659603660`: SUCCESS (backend/frontend/Compose/Chromium E2E)
+- exact-head Upload foundation CI #13 / `34659603680`: SUCCESS (real tusd proof)
+- Issue #42: completed/closed after integration
+- Issue #44: completed/closed after integration
+- Issue #47: optional/nonblocking, still has one security blocker; PARK unless owner explicitly reprioritizes
+- ACC Drive activation: tooling/nonblocking; official GitHub `agent-context/CURRENT.md` fallback is sufficient orientation for product work
+
+Remaining alpha path:
+1. #43 — desktop product UX/setup: Live/Upload shell, human status, diagnostics hidden by default, truthful minimal Groq setup.
+2. #45 — uploaded-media FFmpeg/ffprobe normalization + durable processing -> existing STT/Groq -> canonical Trans
+...[COMMENT_5641976528_TRUNCATED chars=1417]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T23:55:18Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T23:56:38Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -671,4 +674,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34659878877 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34659907819 sections=6
