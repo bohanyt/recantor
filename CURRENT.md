@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34656766446
+snapshot_seq: 34657235159
 
-collected_at: 2026-09-11T23:06:36.849740Z
+collected_at: 2026-09-11T23:13:46.451092Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -642,10 +642,10 @@ lease_expires_at: 2026-09-11T23:45:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #44 state=open updated=2026-09-11T23:13:35Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
+PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #41 state=open updated=2026-09-11T23:06:20Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #51 state=open updated=2026-09-11T23:02:33Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
-ISSUE #44 state=open updated=2026-09-11T21:15:46Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T21:15:35Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #42 state=open updated=2026-09-11T21:15:26Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
@@ -657,10 +657,10 @@ ISSUE #43 state=open updated=2026-09-11T06:49:41Z title=Desktop product UX: Live
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #51 draft=True updated=2026-09-11T23:02:33Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
+PR #51 draft=True updated=2026-09-11T23:10:34Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026-09-11 head=agent-g/issue-42-live-transcript-ui title=Phase 2F: realtime transcript delivery and live UI
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34656766446 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34657235159 sections=6
