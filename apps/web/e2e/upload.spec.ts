@@ -61,18 +61,24 @@ test.describe('existing recording resumable upload', () => {
     });
 
     await page.getByTestId('upload-file-input').setInputFiles(uploadFixture!);
-    await expect(page.getByTestId('upload-selected-file')).toContainText(path.basename(uploadFixture!));
+    await expect(page.getByTestId('upload-selected-file')).toContainText(
+      path.basename(uploadFixture!),
+    );
     await page.getByTestId('upload-start').click();
 
     await expect
-      .poll(async () => Number.parseInt((await page.getByTestId('upload-progress').textContent()) ?? '0'))
+      .poll(async () =>
+        Number.parseInt((await page.getByTestId('upload-progress').textContent()) ?? '0'),
+      )
       .toBeGreaterThan(0);
     await page.getByTestId('upload-pause').click();
     await expect(page.getByTestId('upload-message')).toContainText('Paused');
 
     const recovery = await activeRecovery(page);
     expect(recovery.capabilityToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    await expect.poll(async () => (await statusFor(request, recovery)).received_bytes).toBeGreaterThan(0);
+    await expect
+      .poll(async () => (await statusFor(request, recovery)).received_bytes)
+      .toBeGreaterThan(0);
     const beforeReload = await statusFor(request, recovery);
     expect(beforeReload.state).toBe('uploading');
 
