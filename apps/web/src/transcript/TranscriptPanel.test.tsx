@@ -41,7 +41,10 @@ function segment(sequence: number, text: string): TranscriptSegmentResponse {
   };
 }
 
-function page(afterSequence: number, segments: TranscriptSegmentResponse[]): TranscriptPageResponse {
+function page(
+  afterSequence: number,
+  segments: TranscriptSegmentResponse[],
+): TranscriptPageResponse {
   const next = segments.reduce(
     (highest, item) => Math.max(highest, item.sequence),
     afterSequence,
