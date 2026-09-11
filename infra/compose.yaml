@@ -26,6 +26,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   migrate:
     build:
@@ -84,7 +85,7 @@ services:
         "recantor.stt_tasks:celery_app",
         "worker",
         "-Q",
-        "stt-live",
+        "${STT_QUEUE_NAME:-stt-live}",
         "--concurrency=2",
         "--prefetch-multiplier=1",
         "--loglevel=INFO",
@@ -98,19 +99,21 @@ services:
       GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
       GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
       GROQ_STT_TIMEOUT_SECONDS: "${GROQ_STT_TIMEOUT_SECONDS:-30}"
-      STT_QUEUE_NAME: stt-live
+      STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
       STT_CLAIM_LEASE_SECONDS: "${STT_CLAIM_LEASE_SECONDS:-60}"
       STT_MAX_ATTEMPTS: "${STT_MAX_ATTEMPTS:-5}"
       STT_RETRY_BASE_SECONDS: "${STT_RETRY_BASE_SECONDS:-2}"
       STT_RETRY_MAX_SECONDS: "${STT_RETRY_MAX_SECONDS:-60}"
       STT_CONFIGURATION_RETRY_SECONDS: "${STT_CONFIGURATION_RETRY_SECONDS:-300}"
+      STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
     volumes:
-      - recantor-audio:/data/audio
+      - recantor-audio:/data/audio:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   stt-reconciler:
     build:
@@ -120,7 +123,7 @@ services:
       RECANTOR_ENV: development
       DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
       REDIS_URL: redis://redis:6379/0
-      STT_QUEUE_NAME: stt-live
+      STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
       STT_RECONCILE_INTERVAL_SECONDS: "${STT_RECONCILE_INTERVAL_SECONDS:-1}"
       STT_RECONCILE_BATCH_SIZE: "${STT_RECONCILE_BATCH_SIZE:-100}"
       STT_RECONCILE_PER_SESSION_LIMIT: "${STT_RECONCILE_PER_SESSION_LIMIT:-2}"
@@ -130,6 +133,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   web:
     build:

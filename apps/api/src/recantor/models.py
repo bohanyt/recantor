@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -218,17 +219,20 @@ class STTJob(Base):
             name="ck_stt_job_state",
         ),
         CheckConstraint(
-            "(state = 'claimed' AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL) "
+            "(state = 'claimed' AND claim_token IS NOT NULL "
+            "AND length(btrim(claim_token)) > 0 AND claim_expires_at IS NOT NULL) "
             "OR (state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
             name="ck_stt_job_claim_shape",
         ),
         CheckConstraint(
-            "state <> 'retry_wait' OR next_attempt_at IS NOT NULL",
-            name="ck_stt_job_retry_wait_has_time",
+            "(state = 'retry_wait' AND next_attempt_at IS NOT NULL) "
+            "OR (state <> 'retry_wait' AND next_attempt_at IS NULL)",
+            name="ck_stt_job_retry_time_shape",
         ),
         Index("ix_stt_jobs_session_state", "session_id", "state"),
         Index("ix_stt_jobs_state_next_attempt", "state", "next_attempt_at"),
         Index("ix_stt_jobs_claim_expiry", "state", "claim_expires_at"),
+        Index("ix_stt_jobs_session_delivery", "session_id", "last_delivery_attempt_at"),
     )
 
     utterance_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -236,9 +240,17 @@ class STTJob(Base):
         Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
     )
     state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=STTJobState.PENDING.value
+        String(32),
+        nullable=False,
+        default=STTJobState.PENDING.value,
+        server_default=text("'pending'"),
     )
-    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     claim_expires_at: Mapped[datetime | None] = mapped_column(

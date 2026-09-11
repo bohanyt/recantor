@@ -164,24 +164,24 @@ The DRAFT candidate implements automatic scheduling as:
 
 ```text
 durable TranscriptionUtterance
-        -> PostgreSQL-backed eligible/claim state
-        -> Celery/Redis delivery hint
-        -> STT worker
-        -> merged Phase 2D executor/provider
+        -> PostgreSQL eligibility/capacity/reservation
+        -> coalesced generic Celery/Redis wake
+        -> PostgreSQL-selected fenced claim
+        -> STT worker / merged Phase 2D executor/provider
         -> canonical TranscriptSegment
 ```
 
-DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, bounded outstanding admission across reconciliation passes, expiring PostgreSQL delivery hints, least-recently-admitted session rotation, Celery/Redis wake-up hints, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Canonical convergence filters for authoritative transcript evidence before applying its batch bound, so a large non-canonical terminal prefix cannot starve recovery. Production claim/retry eligibility samples PostgreSQL `clock_timestamp()` after the relevant row lock, and scheduler configuration rejects non-positive/pathological values. Durable utterance commit does not call Redis, Celery, or the provider; queue/provider availability therefore cannot roll back archive or utterance durability.
+DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Broker messages do not encode service order or durable work identity: an old wake asks PostgreSQL for whichever reserved job is currently authoritative, while reconciliation tops Redis only up to current reservation demand. Redis loss can therefore be replenished without letting stale broker history become the backlog. Canonical convergence is bidirectional: authoritative transcript evidence promotes success, while a false durable `succeeded` projection without canonical evidence is automatically repaired to runnable work. Production capacity/selection/reservation samples PostgreSQL `clock_timestamp()` inside a transaction-scoped scheduler advisory lock and releases that DB authority before Redis publication; reservation timestamps never regress. Durable utterance commit does not call Redis, Celery, or the provider, so queue/provider availability cannot roll back archive or utterance durability.
 
 Required semantics for #38:
 
 - PostgreSQL + audio storage remain durable truth; Redis/Celery are delivery/coordination only;
 - losing a queue message cannot lose transcription work because unfinished durable utterances are rediscoverable;
-- duplicate Celery delivery must be safe and two workers must not concurrently call the provider for the same active claim;
+- stale/duplicate Celery wakes carry no durable service-order authority and two workers must not concurrently call the provider for the same active claim;
 - claims must expire/recover after worker death without holding a DB transaction across the provider network call;
 - provider retry policy must consume Phase 2D error categories and avoid hot loops;
-- canonical transcript evidence remains authoritative for success;
-- broker admission is bounded globally and per session across reconciliation passes; expiring delivery hints keep PostgreSQL as backlog truth, and session rotation prevents fixed-order starvation when active sessions exceed one batch;
+- canonical transcript evidence remains authoritative for success, including repair of false scheduling success;
+- broker admission is bounded globally and per session across reconciliation passes; PostgreSQL reservations are serialized before publication, and session service-turn ordering prevents fixed-order or continuous-new-session starvation;
 - enqueue/Redis/provider failure must not weaken archive capture or durable utterance commit;
 - local Compose should run the minimum worker/reconciler services needed to exercise the automatic path;
 - ordinary CI must remain independent from real Groq secrets/network.

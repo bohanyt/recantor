@@ -57,13 +57,15 @@ def upgrade() -> None:
             name="ck_stt_job_state",
         ),
         sa.CheckConstraint(
-            "(state = 'claimed' AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL) "
+            "(state = 'claimed' AND claim_token IS NOT NULL "
+            "AND length(btrim(claim_token)) > 0 AND claim_expires_at IS NOT NULL) "
             "OR (state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
             name="ck_stt_job_claim_shape",
         ),
         sa.CheckConstraint(
-            "state <> 'retry_wait' OR next_attempt_at IS NOT NULL",
-            name="ck_stt_job_retry_wait_has_time",
+            "(state = 'retry_wait' AND next_attempt_at IS NOT NULL) "
+            "OR (state <> 'retry_wait' AND next_attempt_at IS NULL)",
+            name="ck_stt_job_retry_time_shape",
         ),
         sa.ForeignKeyConstraint(
             ["session_id"],
@@ -96,6 +98,12 @@ def upgrade() -> None:
         ["state", "claim_expires_at"],
         unique=False,
     )
+    op.create_index(
+        "ix_stt_jobs_session_delivery",
+        "stt_jobs",
+        ["session_id", "last_delivery_attempt_at"],
+        unique=False,
+    )
 
     # Backfill every already-durable utterance. Canonical transcript evidence is authoritative:
     # historical utterances that already have it enter scheduling as succeeded.
@@ -125,6 +133,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_stt_jobs_session_delivery", table_name="stt_jobs")
     op.drop_index("ix_stt_jobs_claim_expiry", table_name="stt_jobs")
     op.drop_index("ix_stt_jobs_state_next_attempt", table_name="stt_jobs")
     op.drop_index("ix_stt_jobs_session_state", table_name="stt_jobs")

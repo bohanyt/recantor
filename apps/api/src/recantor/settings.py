@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 
 from pydantic import Field, field_validator, model_validator
@@ -30,17 +31,17 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     groq_stt_endpoint: str = "https://api.groq.com/openai/v1/audio/transcriptions"
     groq_stt_model: str = "whisper-large-v3-turbo"
-    groq_stt_timeout_seconds: float = Field(default=30.0, gt=0)
+    groq_stt_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     stt_queue_name: str = "stt-live"
-    stt_claim_lease_seconds: float = Field(default=60.0, gt=0)
-    stt_max_attempts: int = Field(default=5, ge=1)
-    stt_retry_base_seconds: float = Field(default=2.0, gt=0)
-    stt_retry_max_seconds: float = Field(default=60.0, gt=0)
-    stt_configuration_retry_seconds: float = Field(default=300.0, gt=0)
-    stt_reconcile_interval_seconds: float = Field(default=1.0, gt=0)
-    stt_reconcile_batch_size: int = Field(default=100, ge=1)
-    stt_reconcile_per_session_limit: int = Field(default=2, ge=1)
-    stt_dispatch_reenqueue_seconds: float = Field(default=15.0, gt=0)
+    stt_claim_lease_seconds: float = Field(default=60.0, ge=1, le=3600)
+    stt_max_attempts: int = Field(default=5, ge=1, le=20)
+    stt_retry_base_seconds: float = Field(default=2.0, ge=0.1, le=300)
+    stt_retry_max_seconds: float = Field(default=60.0, ge=0.1, le=3600)
+    stt_configuration_retry_seconds: float = Field(default=300.0, ge=1, le=86400)
+    stt_reconcile_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
+    stt_reconcile_batch_size: int = Field(default=100, ge=1, le=256)
+    stt_reconcile_per_session_limit: int = Field(default=2, ge=1, le=32)
+    stt_dispatch_reenqueue_seconds: float = Field(default=15.0, ge=1, le=3600)
     log_level: str = "INFO"
 
     @field_validator("stt_queue_name")
@@ -49,6 +50,8 @@ class Settings(BaseSettings):
         normalized = value.strip()
         if not normalized:
             raise ValueError("STT queue name must not be blank")
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", normalized) is None:
+            raise ValueError("STT queue name must use only A-Z, a-z, 0-9, dot, dash, underscore")
         return normalized
 
     @model_validator(mode="after")

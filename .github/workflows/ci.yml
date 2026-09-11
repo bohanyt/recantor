@@ -79,13 +79,17 @@ jobs:
                           "SELECT conname FROM pg_constraint "
                           "WHERE conname IN "
                           "('fk_stt_job_utterance_session', "
-                          "'uq_transcription_utterance_id_session')"
+                          "'uq_transcription_utterance_id_session', "
+                          "'ck_stt_job_claim_shape', "
+                          "'ck_stt_job_retry_time_shape')"
                       )
                   ).scalars()
               )
           assert names == {
               "fk_stt_job_utterance_session",
               "uq_transcription_utterance_id_session",
+              "ck_stt_job_claim_shape",
+              "ck_stt_job_retry_time_shape",
           }, names
           PY
       - name: Redis protocol check
@@ -316,19 +320,137 @@ jobs:
                   text=True,
               ).strip()
               assert running == "true", (service_name, running)
+              assert services[service_name].get("restart") == "unless-stopped"
 
-          def audio_source(service_name: str) -> str:
+          def audio_mount(service_name: str) -> dict:
               mounts = services[service_name].get("volumes", [])
               matches = [mount for mount in mounts if mount.get("target") == "/data/audio"]
               assert len(matches) == 1, (service_name, mounts)
               assert matches[0].get("type") == "volume", matches[0]
-              return matches[0]["source"]
+              return matches[0]
 
-          assert audio_source("api") == audio_source("stt-worker")
-          worker_command = services["stt-worker"]["command"]
+          api_audio = audio_mount("api")
+          worker_audio = audio_mount("stt-worker")
+          assert api_audio["source"] == worker_audio["source"]
+          assert worker_audio.get("read_only") is True, worker_audio
+
+          worker = services["stt-worker"]
+          reconciler = services["stt-reconciler"]
+          queue_name = worker.get("environment", {}).get("STT_QUEUE_NAME")
+          assert queue_name == "stt-live", queue_name
+          assert reconciler.get("environment", {}).get("STT_QUEUE_NAME") == queue_name
+          worker_command = worker["command"]
           assert "--prefetch-multiplier=1" in worker_command, worker_command
-          assert services["stt-worker"].get("environment", {}).get("GROQ_API_KEY", "") == ""
+          assert "-Q" in worker_command and queue_name in worker_command, worker_command
+          assert worker.get("environment", {}).get("GROQ_API_KEY", "") == ""
           PY
+      - name: Verify Celery active queue and broker-backed scheduler execution
+        run: |
+          docker compose -f infra/compose.yaml exec -T stt-worker python - <<'PY'
+          from recantor.settings import get_settings
+          from recantor.stt_tasks import celery_app
+
+          inspector = celery_app.control.inspect(timeout=5)
+          pings = inspector.ping() or {}
+          queues = inspector.active_queues() or {}
+          assert pings, "no Celery worker answered ping"
+          expected = get_settings().stt_queue_name
+          assert any(
+              queue.get("name") == expected
+              for worker_queues in queues.values()
+              for queue in worker_queues
+          ), (expected, queues)
+          PY
+
+          work_id=$(docker compose -f infra/compose.yaml exec -T api python - <<'PY'
+          import asyncio
+          import json
+          import urllib.request
+          from uuid import UUID, uuid4
+
+          from recantor.db import get_sessionmaker
+          from recantor.utterance import commit_utterance_work
+
+          body = json.dumps(
+              {
+                  "client_request_id": str(uuid4()),
+                  "writer_id": "ci-compose-stt-writer-0001",
+                  "recovery_token": "ci-compose-stt-recovery-capability-0001",
+              }
+          ).encode()
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/api/v1/sessions/live",
+              data=body,
+              headers={"content-type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=5) as response:
+              session_id = UUID(json.load(response)["id"])
+
+          async def seed() -> None:
+              async with get_sessionmaker()() as db:
+                  work, _ = await commit_utterance_work(
+                      db,
+                      session_id=session_id,
+                      producer_key="ci:compose:broker-backed-stt",
+                      start_ms=0,
+                      end_ms=1000,
+                      content_type="audio/wav",
+                      payload=b"ci-compose-durable-stt-audio",
+                  )
+              print(work.id)
+
+          asyncio.run(seed())
+          PY
+          )
+          test -n "$work_id"
+
+          observed=""
+          for i in {1..30}; do
+            observed=$(docker compose -f infra/compose.yaml exec -T -e WORK_ID="$work_id" api python - <<'PY'
+          import asyncio
+          import os
+          from uuid import UUID
+
+          from sqlalchemy import func, select
+          from recantor.db import get_sessionmaker
+          from recantor.models import STTJob, TranscriptSegment
+          from recantor.utterance import transcript_producer_key_for_utterance
+
+          async def read_state() -> None:
+              work_id = UUID(os.environ["WORK_ID"])
+              async with get_sessionmaker()() as db:
+                  job = await db.get(STTJob, work_id)
+                  if job is None:
+                      print("missing")
+                      return
+                  canonical = int(
+                      await db.scalar(
+                          select(func.count(TranscriptSegment.id)).where(
+                              TranscriptSegment.producer_key
+                              == transcript_producer_key_for_utterance(work_id)
+                          )
+                      )
+                      or 0
+                  )
+                  print(
+                      f"{job.state}:{job.attempt_count}:"
+                      f"{job.last_error_category or ''}:{canonical}"
+                  )
+
+          asyncio.run(read_state())
+          PY
+            )
+            if [ "$observed" = "retry_wait:1:configuration:0" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$observed" = "retry_wait:1:configuration:0" || {
+            docker compose -f infra/compose.yaml logs stt-worker stt-reconciler api
+            echo "unexpected STT scheduler state: $observed"
+            exit 1
+          }
       - name: Stop development stack
         if: always()
         run: docker compose -f infra/compose.yaml down -v

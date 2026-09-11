@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy import String, and_, case, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,8 +68,16 @@ class STTExecutionResult:
 class STTReconcileResult:
     created: int = 0
     converged: int = 0
+    reserved: int = 0
+    wake_target: int = 0
     dispatched: int = 0
     enqueue_failures: int = 0
+
+
+@dataclass(frozen=True)
+class _ReservationBatch:
+    reserved_ids: tuple[UUID, ...]
+    wake_target: int
 
 
 _RETRYABLE_PROVIDER_CATEGORIES = {
@@ -77,6 +85,10 @@ _RETRYABLE_PROVIDER_CATEGORIES = {
     STTErrorCategory.TIMEOUT,
     STTErrorCategory.TRANSIENT,
 }
+
+# Transaction-scoped PostgreSQL scheduler mutex. It serializes only the short
+# capacity/selection/reservation section and is released before Redis publication.
+_STT_SCHEDULER_ADVISORY_LOCK = 0x524543414E544F52  # "RECANTOR" within signed bigint range.
 
 
 def utcnow() -> datetime:
@@ -92,8 +104,6 @@ def _safe_message(message: str, *, fallback: str) -> str:
 
 def _effective_lease_seconds() -> float:
     settings = get_settings()
-    # A claim should normally outlive a single provider timeout so duplicate delivery cannot
-    # create concurrent provider calls merely because the provider is slow.
     return max(
         float(settings.stt_claim_lease_seconds),
         float(settings.groq_stt_timeout_seconds) + 10.0,
@@ -116,13 +126,6 @@ async def _database_now(db: AsyncSession) -> datetime:
     if current is None:
         raise STTJobError("database did not return a scheduling clock")
     return current
-
-
-async def _scheduler_now(now: datetime | None) -> datetime:
-    if now is not None:
-        return now
-    async with get_sessionmaker()() as db:
-        return await _database_now(db)
 
 
 async def _canonical_exists(
@@ -157,6 +160,20 @@ def _mark_succeeded(job: STTJob) -> None:
     job.last_error_message = None
 
 
+def _repair_false_success(job: STTJob) -> None:
+    # A scheduling success without canonical TranscriptSegment evidence is not success.
+    # Reset the automatic budget too: manual/table-selective recovery must not leave a
+    # false terminal projection that remains silently suppressed by an old attempt count.
+    job.state = STTJobState.PENDING.value
+    job.attempt_count = 0
+    job.next_attempt_at = None
+    _clear_claim(job)
+    job.last_delivery_attempt_at = None
+    job.last_error_category = None
+    job.last_error_code = None
+    job.last_error_message = None
+
+
 def _mark_retry_budget_exhausted(job: STTJob) -> None:
     job.state = STTJobState.FAILED.value
     job.next_attempt_at = None
@@ -166,13 +183,67 @@ def _mark_retry_budget_exhausted(job: STTJob) -> None:
     job.last_error_message = "automatic STT attempt budget exhausted"
 
 
+async def _claim_locked_job(
+    db: AsyncSession,
+    *,
+    job: STTJob,
+    current: datetime,
+    lease_seconds: float,
+) -> STTClaim | None:
+    settings = get_settings()
+
+    canonical = await _canonical_exists(
+        db,
+        session_id=job.session_id,
+        utterance_id=job.utterance_id,
+    )
+    if canonical:
+        _mark_succeeded(job)
+        return None
+    if job.state == STTJobState.SUCCEEDED.value:
+        _repair_false_success(job)
+
+    if job.state == STTJobState.FAILED.value:
+        return None
+    if (
+        job.state == STTJobState.CLAIMED.value
+        and job.claim_expires_at is not None
+        and job.claim_expires_at > current
+    ):
+        return None
+    if (
+        job.state == STTJobState.RETRY_WAIT.value
+        and job.next_attempt_at is not None
+        and job.next_attempt_at > current
+    ):
+        return None
+    if job.attempt_count >= settings.stt_max_attempts:
+        _mark_retry_budget_exhausted(job)
+        return None
+
+    token = uuid4().hex
+    expires_at = current + timedelta(seconds=lease_seconds)
+    job.state = STTJobState.CLAIMED.value
+    job.attempt_count += 1
+    job.next_attempt_at = None
+    job.claim_token = token
+    job.claim_expires_at = expires_at
+    await db.flush()
+    return STTClaim(
+        utterance_id=job.utterance_id,
+        session_id=job.session_id,
+        token=token,
+        attempt_count=job.attempt_count,
+        expires_at=expires_at,
+    )
+
+
 async def claim_stt_job(
     *,
     utterance_id: UUID,
     now: datetime | None = None,
     lease_seconds: float | None = None,
 ) -> STTClaim | None:
-    settings = get_settings()
     lease = lease_seconds if lease_seconds is not None else _effective_lease_seconds()
     if lease <= 0:
         raise STTJobError("STT claim lease must be positive")
@@ -184,48 +255,69 @@ async def claim_stt_job(
         if job is None:
             return None
         current = now or await _database_now(db)
-
-        if await _canonical_exists(
+        return await _claim_locked_job(
             db,
-            session_id=job.session_id,
-            utterance_id=job.utterance_id,
-        ):
-            _mark_succeeded(job)
-            return None
-
-        if job.state in {STTJobState.SUCCEEDED.value, STTJobState.FAILED.value}:
-            return None
-        if (
-            job.state == STTJobState.CLAIMED.value
-            and job.claim_expires_at is not None
-            and job.claim_expires_at > current
-        ):
-            return None
-        if (
-            job.state == STTJobState.RETRY_WAIT.value
-            and job.next_attempt_at is not None
-            and job.next_attempt_at > current
-        ):
-            return None
-        if job.attempt_count >= settings.stt_max_attempts:
-            _mark_retry_budget_exhausted(job)
-            return None
-
-        token = uuid4().hex
-        expires_at = current + timedelta(seconds=lease)
-        job.state = STTJobState.CLAIMED.value
-        job.attempt_count += 1
-        job.next_attempt_at = None
-        job.claim_token = token
-        job.claim_expires_at = expires_at
-        await db.flush()
-        return STTClaim(
-            utterance_id=job.utterance_id,
-            session_id=job.session_id,
-            token=token,
-            attempt_count=job.attempt_count,
-            expires_at=expires_at,
+            job=job,
+            current=current,
+            lease_seconds=lease,
         )
+
+
+async def _claim_next_reserved_stt_job(
+    *,
+    now: datetime | None = None,
+    lease_seconds: float | None = None,
+    cooldown_seconds: float | None = None,
+) -> STTClaim | None:
+    settings = get_settings()
+    lease = lease_seconds if lease_seconds is not None else _effective_lease_seconds()
+    if lease <= 0:
+        raise STTJobError("STT claim lease must be positive")
+    cooldown = (
+        float(settings.stt_dispatch_reenqueue_seconds)
+        if cooldown_seconds is None
+        else cooldown_seconds
+    )
+    if cooldown < 0:
+        raise STTJobError("STT dispatch cooldown must be non-negative")
+
+    # A generic wake carries no utterance identity. PostgreSQL chooses the currently
+    # reserved work, so an old broker message cannot retain authority over an old job.
+    for _ in range(8):
+        async with get_sessionmaker()() as db, db.begin():
+            current = now or await _database_now(db)
+            cooldown_before = current - timedelta(seconds=cooldown)
+            job = await db.scalar(
+                select(STTJob)
+                .join(
+                    TranscriptionUtterance,
+                    TranscriptionUtterance.id == STTJob.utterance_id,
+                )
+                .where(_delivery_reservation_expression(current, cooldown_before))
+                .order_by(
+                    STTJob.last_delivery_attempt_at,
+                    TranscriptionUtterance.created_at,
+                    STTJob.session_id,
+                    TranscriptionUtterance.sequence,
+                    STTJob.utterance_id,
+                )
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+            if job is None:
+                return None
+            claim = await _claim_locked_job(
+                db,
+                job=job,
+                current=current,
+                lease_seconds=lease,
+            )
+            if claim is not None:
+                return claim
+            # Canonical/terminal projection was repaired while consuming the wake.
+            # Try another current reservation rather than letting a stale projection
+            # waste broker capacity indefinitely.
+    return None
 
 
 async def _claim_commit_is_current(db: AsyncSession, claim: STTClaim) -> bool:
@@ -341,28 +433,12 @@ async def _stale_execution_result(claim: STTClaim) -> STTExecutionResult:
     )
 
 
-async def execute_stt_job(
+async def _execute_claim(
     *,
-    utterance_id: UUID,
+    claim: STTClaim,
     provider: STTProvider,
     now: datetime | None = None,
-    lease_seconds: float | None = None,
 ) -> STTExecutionResult:
-    claim = await claim_stt_job(
-        utterance_id=utterance_id,
-        now=now,
-        lease_seconds=lease_seconds,
-    )
-    if claim is None:
-        async with get_sessionmaker()() as db:
-            job = await db.get(STTJob, utterance_id)
-        return STTExecutionResult(
-            status=STTExecutionStatus.NOT_CLAIMED,
-            state=None if job is None else STTJobState(job.state),
-            attempt_count=0 if job is None else job.attempt_count,
-            next_attempt_at=None if job is None else job.next_attempt_at,
-        )
-
     async def commit_guard(db: AsyncSession) -> bool:
         return await _claim_commit_is_current(db, claim)
 
@@ -420,6 +496,51 @@ async def execute_stt_job(
         state=STTJobState.SUCCEEDED,
         attempt_count=claim.attempt_count,
     )
+
+
+async def execute_stt_job(
+    *,
+    utterance_id: UUID,
+    provider: STTProvider,
+    now: datetime | None = None,
+    lease_seconds: float | None = None,
+) -> STTExecutionResult:
+    claim = await claim_stt_job(
+        utterance_id=utterance_id,
+        now=now,
+        lease_seconds=lease_seconds,
+    )
+    if claim is None:
+        async with get_sessionmaker()() as db:
+            job = await db.get(STTJob, utterance_id)
+        return STTExecutionResult(
+            status=STTExecutionStatus.NOT_CLAIMED,
+            state=None if job is None else STTJobState(job.state),
+            attempt_count=0 if job is None else job.attempt_count,
+            next_attempt_at=None if job is None else job.next_attempt_at,
+        )
+    return await _execute_claim(claim=claim, provider=provider, now=now)
+
+
+async def execute_next_reserved_stt_job(
+    *,
+    provider: STTProvider,
+    now: datetime | None = None,
+    lease_seconds: float | None = None,
+    cooldown_seconds: float | None = None,
+) -> STTExecutionResult:
+    claim = await _claim_next_reserved_stt_job(
+        now=now,
+        lease_seconds=lease_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    if claim is None:
+        return STTExecutionResult(
+            status=STTExecutionStatus.NOT_CLAIMED,
+            state=None,
+            attempt_count=0,
+        )
+    return await _execute_claim(claim=claim, provider=provider, now=now)
 
 
 async def requeue_failed_stt_job(
@@ -527,25 +648,84 @@ async def _converge_canonical(batch_size: int) -> int:
         return len(jobs)
 
 
-def _eligible_expression(current: datetime, cooldown_before: datetime):
-    state_eligible = or_(
-        STTJob.state == STTJobState.PENDING.value,
-        and_(
-            STTJob.state == STTJobState.RETRY_WAIT.value,
-            STTJob.next_attempt_at.is_not(None),
-            STTJob.next_attempt_at <= current,
-        ),
-        and_(
-            STTJob.state == STTJobState.CLAIMED.value,
-            STTJob.claim_expires_at.is_not(None),
-            STTJob.claim_expires_at <= current,
-        ),
+async def _repair_false_succeeded(batch_size: int) -> int:
+    transcript_key = func.concat("utterance:", cast(STTJob.utterance_id, String))
+    async with get_sessionmaker()() as db, db.begin():
+        jobs = list(
+            (
+                await db.scalars(
+                    select(STTJob)
+                    .outerjoin(
+                        TranscriptSegment,
+                        and_(
+                            TranscriptSegment.session_id == STTJob.session_id,
+                            TranscriptSegment.producer_key == transcript_key,
+                        ),
+                    )
+                    .where(
+                        STTJob.state == STTJobState.SUCCEEDED.value,
+                        TranscriptSegment.id.is_(None),
+                    )
+                    .order_by(STTJob.updated_at, STTJob.utterance_id)
+                    .limit(batch_size)
+                    .with_for_update(of=STTJob, skip_locked=True)
+                )
+            ).all()
+        )
+        for job in jobs:
+            _repair_false_success(job)
+        return len(jobs)
+
+
+def _delivery_reservation_expression(current: datetime, cooldown_before: datetime):
+    recent = and_(
+        STTJob.last_delivery_attempt_at.is_not(None),
+        STTJob.last_delivery_attempt_at > cooldown_before,
     )
-    dispatch_eligible = or_(
+    pending = STTJob.state == STTJobState.PENDING.value
+    due_retry = and_(
+        STTJob.state == STTJobState.RETRY_WAIT.value,
+        STTJob.next_attempt_at.is_not(None),
+        STTJob.next_attempt_at <= current,
+        STTJob.last_delivery_attempt_at >= STTJob.next_attempt_at,
+    )
+    expired_claim = and_(
+        STTJob.state == STTJobState.CLAIMED.value,
+        STTJob.claim_expires_at.is_not(None),
+        STTJob.claim_expires_at <= current,
+        STTJob.last_delivery_attempt_at >= STTJob.claim_expires_at,
+    )
+    return and_(recent, or_(pending, due_retry, expired_claim))
+
+
+def _eligible_expression(current: datetime, cooldown_before: datetime):
+    no_recent_delivery = or_(
         STTJob.last_delivery_attempt_at.is_(None),
         STTJob.last_delivery_attempt_at <= cooldown_before,
     )
-    return and_(state_eligible, dispatch_eligible)
+    pending = and_(
+        STTJob.state == STTJobState.PENDING.value,
+        no_recent_delivery,
+    )
+    due_retry = and_(
+        STTJob.state == STTJobState.RETRY_WAIT.value,
+        STTJob.next_attempt_at.is_not(None),
+        STTJob.next_attempt_at <= current,
+        or_(
+            no_recent_delivery,
+            STTJob.last_delivery_attempt_at < STTJob.next_attempt_at,
+        ),
+    )
+    expired_claim = and_(
+        STTJob.state == STTJobState.CLAIMED.value,
+        STTJob.claim_expires_at.is_not(None),
+        STTJob.claim_expires_at <= current,
+        or_(
+            no_recent_delivery,
+            STTJob.last_delivery_attempt_at < STTJob.claim_expires_at,
+        ),
+    )
+    return or_(pending, due_retry, expired_claim)
 
 
 def _outstanding_expression(current: datetime, cooldown_before: datetime):
@@ -554,127 +734,142 @@ def _outstanding_expression(current: datetime, cooldown_before: datetime):
         STTJob.claim_expires_at.is_not(None),
         STTJob.claim_expires_at > current,
     )
-    recently_published_unclaimed = and_(
-        STTJob.last_delivery_attempt_at.is_not(None),
-        STTJob.last_delivery_attempt_at > cooldown_before,
-        or_(
-            STTJob.state == STTJobState.PENDING.value,
-            and_(
-                STTJob.state == STTJobState.RETRY_WAIT.value,
-                STTJob.next_attempt_at.is_not(None),
-                STTJob.next_attempt_at <= current,
-            ),
-            and_(
-                STTJob.state == STTJobState.CLAIMED.value,
-                STTJob.claim_expires_at.is_not(None),
-                STTJob.claim_expires_at <= current,
-            ),
-        ),
-    )
-    return or_(active_claim, recently_published_unclaimed)
+    return or_(active_claim, _delivery_reservation_expression(current, cooldown_before))
 
 
-async def _fair_candidates(
+async def _reserve_fair_candidates(
     *,
-    now: datetime,
+    now: datetime | None,
     limit: int,
     per_session_limit: int,
     cooldown_seconds: float,
-) -> list[UUID]:
-    cooldown_before = now - timedelta(seconds=cooldown_seconds)
-    async with get_sessionmaker()() as db:
-        outstanding_expression = _outstanding_expression(now, cooldown_before)
+) -> _ReservationBatch:
+    async with get_sessionmaker()() as db, db.begin():
+        # Correctness must not depend on a singleton reconciler process. All concurrent
+        # reconcilers serialize only capacity + selection + reservation in PostgreSQL.
+        await db.execute(select(func.pg_advisory_xact_lock(_STT_SCHEDULER_ADVISORY_LOCK)))
+        current = now or await _database_now(db)
+        cooldown_before = current - timedelta(seconds=cooldown_seconds)
+        outstanding_expression = _outstanding_expression(current, cooldown_before)
+
         global_outstanding = int(
             await db.scalar(select(func.count(STTJob.utterance_id)).where(outstanding_expression))
             or 0
         )
         available_global = max(0, limit - global_outstanding)
-        if available_global == 0:
-            return []
 
-        outstanding = (
-            select(
-                STTJob.session_id.label("session_id"),
-                func.count(STTJob.utterance_id).label("outstanding_count"),
-            )
-            .where(outstanding_expression)
-            .group_by(STTJob.session_id)
-            .subquery()
-        )
-        session_history = (
-            select(
-                STTJob.session_id.label("session_id"),
-                func.max(STTJob.last_delivery_attempt_at).label("last_delivery_attempt_at"),
-            )
-            .group_by(STTJob.session_id)
-            .subquery()
-        )
-        session_rank = func.row_number().over(
-            partition_by=STTJob.session_id,
-            order_by=(
-                TranscriptionUtterance.sequence,
-                STTJob.created_at,
-                STTJob.utterance_id,
-            ),
-        )
-        ranked = (
-            select(
-                STTJob.utterance_id.label("utterance_id"),
-                session_rank.label("session_rank"),
-                STTJob.session_id.label("session_id"),
-            )
-            .join(
-                TranscriptionUtterance,
-                TranscriptionUtterance.id == STTJob.utterance_id,
-            )
-            .where(_eligible_expression(now, cooldown_before))
-            .subquery()
-        )
-        outstanding_count = func.coalesce(outstanding.c.outstanding_count, 0)
-        rows = (
-            await db.execute(
-                select(ranked.c.utterance_id)
-                .outerjoin(outstanding, outstanding.c.session_id == ranked.c.session_id)
-                .outerjoin(
-                    session_history,
-                    session_history.c.session_id == ranked.c.session_id,
+        if available_global > 0:
+            outstanding = (
+                select(
+                    STTJob.session_id.label("session_id"),
+                    func.count(STTJob.utterance_id).label("outstanding_count"),
                 )
+                .where(outstanding_expression)
+                .group_by(STTJob.session_id)
+                .subquery()
+            )
+            session_history = (
+                select(
+                    STTJob.session_id.label("session_id"),
+                    func.max(STTJob.last_delivery_attempt_at).label("last_delivery_attempt_at"),
+                    func.min(STTJob.created_at).label("oldest_created_at"),
+                )
+                .group_by(STTJob.session_id)
+                .subquery()
+            )
+            session_rank = func.row_number().over(
+                partition_by=STTJob.session_id,
+                order_by=(
+                    TranscriptionUtterance.sequence,
+                    STTJob.created_at,
+                    STTJob.utterance_id,
+                ),
+            )
+            ranked = (
+                select(
+                    STTJob.utterance_id.label("utterance_id"),
+                    session_rank.label("session_rank"),
+                    STTJob.session_id.label("session_id"),
+                )
+                .join(
+                    TranscriptionUtterance,
+                    TranscriptionUtterance.id == STTJob.utterance_id,
+                )
+                .where(_eligible_expression(current, cooldown_before))
+                .subquery()
+            )
+            outstanding_count = func.coalesce(outstanding.c.outstanding_count, 0)
+            service_turn = func.coalesce(
+                session_history.c.last_delivery_attempt_at,
+                session_history.c.oldest_created_at,
+            )
+            candidate_ids = list(
+                (
+                    await db.scalars(
+                        select(ranked.c.utterance_id)
+                        .outerjoin(outstanding, outstanding.c.session_id == ranked.c.session_id)
+                        .outerjoin(
+                            session_history,
+                            session_history.c.session_id == ranked.c.session_id,
+                        )
+                        .where(
+                            outstanding_count < per_session_limit,
+                            ranked.c.session_rank <= per_session_limit - outstanding_count,
+                        )
+                        .order_by(
+                            ranked.c.session_rank,
+                            service_turn,
+                            ranked.c.session_id,
+                            ranked.c.utterance_id,
+                        )
+                        .limit(available_global)
+                    )
+                ).all()
+            )
+        else:
+            candidate_ids = []
+
+        reserved_ids: list[UUID] = []
+        if candidate_ids:
+            # Revalidate eligibility in the write itself. The scheduler advisory lock excludes
+            # another reconciler; this predicate additionally tolerates a worker/direct claim
+            # changing a row between the candidate SELECT and this UPDATE.
+            stamp = case(
+                (STTJob.last_delivery_attempt_at.is_(None), current),
+                else_=func.greatest(STTJob.last_delivery_attempt_at, current),
+            )
+            statement = (
+                update(STTJob)
                 .where(
-                    outstanding_count < per_session_limit,
-                    ranked.c.session_rank <= per_session_limit - outstanding_count,
+                    STTJob.utterance_id.in_(candidate_ids),
+                    _eligible_expression(current, cooldown_before),
                 )
-                .order_by(
-                    ranked.c.session_rank,
-                    session_history.c.last_delivery_attempt_at.asc().nulls_first(),
-                    ranked.c.session_id,
-                    ranked.c.utterance_id,
-                )
-                .limit(available_global)
+                .values(last_delivery_attempt_at=stamp)
+                .returning(STTJob.utterance_id)
             )
-        ).all()
-        return [row.utterance_id for row in rows]
+            reserved_ids = list((await db.scalars(statement)).all())
 
-
-async def _mark_delivery_attempt(utterance_id: UUID, attempted_at: datetime) -> None:
-    async with get_sessionmaker()() as db, db.begin():
-        job = await db.get(STTJob, utterance_id)
-        if job is not None and job.state not in {
-            STTJobState.SUCCEEDED.value,
-            STTJobState.FAILED.value,
-        }:
-            job.last_delivery_attempt_at = attempted_at
+        wake_target = int(
+            await db.scalar(
+                select(func.count(STTJob.utterance_id)).where(
+                    _delivery_reservation_expression(current, cooldown_before)
+                )
+            )
+            or 0
+        )
+        return _ReservationBatch(tuple(reserved_ids), wake_target)
 
 
 async def reconcile_stt_jobs(
     *,
-    enqueue: Callable[[UUID], object],
+    enqueue: Callable[[UUID], object] | None = None,
+    ensure_wake_capacity: Callable[[int], int] | None = None,
     now: datetime | None = None,
     limit: int | None = None,
     per_session_limit: int | None = None,
     cooldown_seconds: float | None = None,
 ) -> STTReconcileResult:
     settings = get_settings()
-    current = await _scheduler_now(now)
     batch_size = limit or settings.stt_reconcile_batch_size
     session_limit = per_session_limit or settings.stt_reconcile_per_session_limit
     if batch_size < 1:
@@ -688,11 +883,17 @@ async def reconcile_stt_jobs(
     )
     if cooldown < 0:
         raise STTJobError("STT dispatch cooldown must be non-negative")
+    if enqueue is None and ensure_wake_capacity is None:
+        raise STTJobError("STT reconciliation requires a broker wake callback")
 
-    created = await _ensure_missing_jobs(max(batch_size * 4, batch_size))
-    converged = await _converge_canonical(max(batch_size * 4, batch_size))
-    candidates = await _fair_candidates(
-        now=current,
+    repair_batch = max(batch_size * 4, batch_size)
+    created = await _ensure_missing_jobs(repair_batch)
+    # Canonical evidence wins in both directions: promote real success and repair any false
+    # durable succeeded projection whose authoritative TranscriptSegment is absent.
+    converged = await _converge_canonical(repair_batch)
+    converged += await _repair_false_succeeded(repair_batch)
+    reservations = await _reserve_fair_candidates(
+        now=now,
         limit=batch_size,
         per_session_limit=session_limit,
         cooldown_seconds=cooldown,
@@ -700,20 +901,30 @@ async def reconcile_stt_jobs(
 
     dispatched = 0
     enqueue_failures = 0
-    for utterance_id in candidates:
-        # Reserve the expiring admission hint before broker publication. A crash or publish
-        # failure can delay this work only until the hint TTL expires; PostgreSQL remains truth.
-        await _mark_delivery_attempt(utterance_id, current)
+    if ensure_wake_capacity is not None:
         try:
-            enqueue(utterance_id)
+            # This runs only after the PostgreSQL transaction has committed/released its
+            # scheduler authority. Re-running every pass means a known publish failure or a
+            # total Redis flush can be repaired immediately; it never waits for reservation TTL.
+            dispatched = int(ensure_wake_capacity(reservations.wake_target))
         except Exception:
-            enqueue_failures += 1
-        else:
-            dispatched += 1
+            enqueue_failures = 1
+    elif enqueue is not None:
+        # Legacy/injected deterministic callback retained for unit tests and operator helpers.
+        # Production uses coalesced generic wakes through ensure_wake_capacity.
+        for utterance_id in reservations.reserved_ids:
+            try:
+                enqueue(utterance_id)
+            except Exception:
+                enqueue_failures += 1
+            else:
+                dispatched += 1
 
     return STTReconcileResult(
         created=created,
         converged=converged,
+        reserved=len(reservations.reserved_ids),
+        wake_target=reservations.wake_target,
         dispatched=dispatched,
         enqueue_failures=enqueue_failures,
     )
