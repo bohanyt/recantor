@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 import type { TranscriptSegmentResponse } from '../api/generated/types.gen';
 import { fetchTranscriptPage, transcriptSocketUrl } from './api';
-import { mergeCanonicalSegments } from './state';
+import { TranscriptLog } from './TranscriptLog';
+import { mergeCanonicalSegments, transcriptReconnectDelayMs } from './state';
 
 type DeliveryState = 'idle' | 'starting' | 'live' | 'recovering' | 'degraded';
 
@@ -14,14 +15,6 @@ function realtimeType(data: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-function timestampLabel(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1_000);
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
 function deliveryLabel(state: DeliveryState): string {
@@ -52,6 +45,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
     let syncAgain = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
+    let reconnectAttempt = 0;
     const abortController = new AbortController();
 
     const syncCanonical = async (): Promise<void> => {
@@ -84,8 +78,8 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
         setDeliveryState((current) => (current === 'live' ? 'recovering' : 'degraded'));
         setDetail(
           error instanceof Error
-            ? `Transcript recovery is temporarily unavailable: ${error.message}`
-            : 'Transcript recovery is temporarily unavailable.',
+            ? `Transcript recovery is temporarily unavailable: ${error.message}. Recorder safety status remains authoritative.`
+            : 'Transcript recovery is temporarily unavailable. Recorder safety status remains authoritative.',
         );
       } finally {
         syncing = false;
@@ -100,6 +94,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
       nextSocket.onmessage = (event) => {
         const type = realtimeType(event.data);
         if (type === 'ready') {
+          reconnectAttempt = 0;
           setDeliveryState('live');
           setDetail(null);
           // Catch up after subscription is established. This closes the fetch/subscribe race.
@@ -114,7 +109,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
         if (type === 'delivery_degraded') {
           setDeliveryState('degraded');
           setDetail(
-            'Live transcript updates are delayed. Canonical transcript recovery continues automatically.',
+            'Live transcript updates are delayed. Canonical transcript recovery will keep checking for committed segments. Recorder safety status remains authoritative.',
           );
         }
       };
@@ -123,7 +118,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
         if (disposed) return;
         setDeliveryState((current) => (current === 'degraded' ? current : 'recovering'));
         setDetail(
-          'Live transcript updates are reconnecting. Canonical transcript recovery continues automatically.',
+          'Live transcript updates are reconnecting. Canonical transcript recovery will keep checking for committed segments. Recorder safety status remains authoritative.',
         );
       };
 
@@ -131,10 +126,12 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
         if (disposed) return;
         setDeliveryState((current) => (current === 'degraded' ? current : 'recovering'));
         setDetail(
-          'Live transcript updates are reconnecting. Canonical transcript recovery continues automatically.',
+          'Live transcript updates are reconnecting. Canonical transcript recovery will keep checking for committed segments. Recorder safety status remains authoritative.',
         );
         if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-        reconnectTimer = window.setTimeout(connect, 1_000);
+        const delay = transcriptReconnectDelayMs(reconnectAttempt);
+        reconnectAttempt += 1;
+        reconnectTimer = window.setTimeout(connect, delay);
       };
     };
 
@@ -162,7 +159,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
         <div>
           <p className="text-sm font-semibold">Live transcript</p>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            Committed speech appears here in order.
+            Committed transcript segments appear here in order.
           </p>
         </div>
         <span
@@ -175,32 +172,19 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
 
       {!sessionId ? (
         <p className="mt-4 text-sm text-[var(--muted)]" data-testid="transcript-empty">
-          Start a recording to see the live transcript.
+          No transcript session is active.
         </p>
       ) : segments.length === 0 ? (
         <p className="mt-4 text-sm text-[var(--muted)]" data-testid="transcript-empty">
-          Listening for speech. The first committed transcript segment will appear automatically.
+          No transcript segments are available yet. Committed text will appear here when available.
         </p>
       ) : (
-        <ol className="mt-4 space-y-3" aria-live="polite" data-testid="transcript-segments">
-          {segments.map((segment) => (
-            <li
-              key={segment.sequence}
-              className="grid gap-1 sm:grid-cols-[7rem_1fr] sm:gap-3"
-              data-testid={`transcript-segment-${segment.sequence}`}
-            >
-              <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
-                {timestampLabel(segment.start_ms)}
-              </span>
-              <span className="text-sm leading-6">{segment.text}</span>
-            </li>
-          ))}
-        </ol>
+        <TranscriptLog segments={segments} />
       )}
 
       {detail && (
         <p className="mt-4 text-xs leading-5 text-[var(--muted)]" role="status">
-          {detail} Recording and saved transcript evidence continue independently.
+          {detail}
         </p>
       )}
     </section>
