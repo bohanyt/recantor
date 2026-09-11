@@ -148,7 +148,7 @@ PR #37 then made that `User-Agent` behavior permanent and added a regression ass
 
 Second work item, using the permanent adapter with no runtime monkeypatch:
 
-- utterance `ad71e495-cdd6-5ae0-814b-758ba5133f85`, sequence 39;
+- utterance `ad71e495-cdd6-5ae0-814b-758a5133f85`, sequence 39;
 - timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
 - Groq call succeeded directly from the rebuilt API container;
 - canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
@@ -190,6 +190,35 @@ A bounded real witness is required before merge-ready: fresh Windows/Edge record
 
 Realtime transcript WebSocket delivery/UI is explicitly the next slice after #38, not part of #38.
 
+## Existing-recording upload foundation — DRAFT / Issue #44
+
+Issue #44 / DRAFT PR #51 is the Phase 3A ingest candidate on branch `agent-h/issue-44-upload-foundation`, based on the frozen cloud-alpha integration anchor. It is not merged or merge-ready.
+
+The DRAFT candidate adds a distinct upload session kind and durable PostgreSQL `UploadRecord`, plus the bounded ingest path:
+
+```text
+Browser file
+  -> Uppy + tus
+  -> tusd
+  -> shared durable audio storage
+  -> Recantor tusd completion hook
+  -> PostgreSQL upload completion evidence
+```
+
+Current candidate rules:
+
+- uploaded media is not routed through the live `MediaRecorder` chunk protocol;
+- a browser-generated high-entropy capability token is stored server-side only as a SHA-256 hash and is required for upload-session reads and tus hooks;
+- upload state records declared filename/type/length, received progress, expiry, one bound tus upload identity, completion/failure state, and Recantor-owned durable object metadata;
+- durable completion records an internal storage key, exact byte length, and streaming SHA-256 of the stored source object; the raw filesystem path and tus internals are not public API identity;
+- duplicate completion is idempotent only when the durable key/length/hash still match;
+- Uppy recovery state allows pause/retry/reload/reselection to resume the same tus upload rather than restarting from zero;
+- configurable size/duration hooks and WAV/MP3/M4A/OGG/WebM/MP4 admission policy are present;
+- local Compose includes pinned tusd with the same durable audio volume as the API and completion hooks back into Recantor;
+- upload-specific cloud browser evidence uses a real tusd process; final real-user/local acceptance remains deferred to the Control Tower final gate.
+
+This slice deliberately stops at durable completed-upload evidence. FFmpeg/ffprobe validation, normalization, segmentation, upload-to-STT scheduling, canonical transcript production, and live-vs-upload scheduling priority belong to Issue #45. Result/export UX belongs to Issue #46.
+
 ## Roadmap alignment / drift guard
 
 The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
@@ -203,11 +232,13 @@ The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
 7. local STT provider/fallback — later;
 8. latency/accuracy/provider benchmark harness — later.
 
-Do not pull diarization, summaries, native mobile, existing-file upload, or production exposure concerns into the Phase 2 critical path unless a concrete dependency forces it.
+Existing-file upload is being developed as a separate cloud-alpha productization lane and must not weaken the Phase 2 live capture/STT invariants.
 
 ## Production exposure boundary
 
 Authentication, authorization, retention/deletion, abuse controls, and production deployment hardening remain required before exposing Live Intelligence beyond trusted development. They do not block trusted local Phase 2 engineering.
+
+The Issue #44 capability model is likewise a trusted-development/guest foundation, not production authentication or abuse protection.
 
 ## Not implemented yet
 
@@ -219,7 +250,9 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 - rolling/final summaries;
 - production auth/authorization;
 - user-visible recording deletion/retention;
-- tus existing-recording upload pipeline;
+- Phase 3A existing-recording upload remains unmerged on DRAFT PR #51;
+- uploaded-media FFmpeg normalization and durable processing into canonical transcript truth (#45);
+- uploaded-recording result/export UX (#46);
 - production reverse-proxy/deployment hardening;
 - native Android/iOS recorder clients.
 
@@ -237,6 +270,7 @@ Do not describe these as working on `main` until repository evidence proves them
 - Realtime discontinuity is live-intelligence evidence loss, not automatically an archive gap.
 - VAD defaults need real-office speech/noise/latency tuning before being treated as product-quality.
 - STT accuracy has not yet been benchmarked against known ground-truth meeting speech.
+- Existing-recording file/container validity is not proven by an accepted extension/MIME declaration; #45 owns ffprobe/FFmpeg validation and corrupt/no-audio handling.
 
 ## Local development
 
@@ -258,7 +292,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #38 and DRAFT PR #40;
+5. read Issue #41 and the active implementation/review issue relevant to the lane;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
