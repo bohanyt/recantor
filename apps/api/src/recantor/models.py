@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -169,6 +170,7 @@ class TranscriptionUtterance(Base):
         UniqueConstraint(
             "session_id", "producer_key", name="uq_transcription_utterance_session_producer_key"
         ),
+        UniqueConstraint("id", "session_id", name="uq_transcription_utterance_id_session"),
         CheckConstraint("sequence >= 1", name="ck_transcription_utterance_sequence_positive"),
         CheckConstraint(
             "start_ms >= 0 AND end_ms > start_ms", name="ck_transcription_utterance_timing"
@@ -204,6 +206,12 @@ class TranscriptionUtterance(Base):
 class STTJob(Base):
     __tablename__ = "stt_jobs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["utterance_id", "session_id"],
+            ["transcription_utterances.id", "transcription_utterances.session_id"],
+            name="fk_stt_job_utterance_session",
+            ondelete="CASCADE",
+        ),
         CheckConstraint("attempt_count >= 0", name="ck_stt_job_attempt_count_nonnegative"),
         CheckConstraint(
             "state IN ('pending', 'claimed', 'retry_wait', 'succeeded', 'failed')",
@@ -220,13 +228,10 @@ class STTJob(Base):
         ),
         Index("ix_stt_jobs_session_state", "session_id", "state"),
         Index("ix_stt_jobs_state_next_attempt", "state", "next_attempt_at"),
+        Index("ix_stt_jobs_claim_expiry", "state", "claim_expires_at"),
     )
 
-    utterance_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("transcription_utterances.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
+    utterance_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     session_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
     )
