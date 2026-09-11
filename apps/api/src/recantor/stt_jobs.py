@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,7 +112,7 @@ def _retry_delay_seconds(category: STTErrorCategory, attempt_count: int) -> floa
 
 
 async def _database_now(db: AsyncSession) -> datetime:
-    current = await db.scalar(select(func.now()))
+    current = await db.scalar(select(func.clock_timestamp()))
     if current is None:
         raise STTJobError("database did not return a scheduling clock")
     return current
@@ -178,12 +178,12 @@ async def claim_stt_job(
         raise STTJobError("STT claim lease must be positive")
 
     async with get_sessionmaker()() as db, db.begin():
-        current = now or await _database_now(db)
         job = await db.scalar(
             select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update()
         )
         if job is None:
             return None
+        current = now or await _database_now(db)
 
         if await _canonical_exists(
             db,
@@ -502,50 +502,29 @@ async def _ensure_missing_jobs(batch_size: int) -> int:
 
 
 async def _converge_canonical(batch_size: int) -> int:
+    transcript_key = func.concat("utterance:", cast(STTJob.utterance_id, String))
     async with get_sessionmaker()() as db, db.begin():
         jobs = list(
             (
                 await db.scalars(
                     select(STTJob)
+                    .join(
+                        TranscriptSegment,
+                        and_(
+                            TranscriptSegment.session_id == STTJob.session_id,
+                            TranscriptSegment.producer_key == transcript_key,
+                        ),
+                    )
                     .where(STTJob.state != STTJobState.SUCCEEDED.value)
                     .order_by(STTJob.updated_at, STTJob.utterance_id)
                     .limit(batch_size)
+                    .with_for_update(of=STTJob, skip_locked=True)
                 )
             ).all()
         )
-        if not jobs:
-            return 0
-
-        keys = {
-            job.utterance_id: transcript_producer_key_for_utterance(job.utterance_id)
-            for job in jobs
-        }
-        segments = list(
-            (
-                await db.scalars(
-                    select(TranscriptSegment).where(
-                        TranscriptSegment.producer_key.in_(list(keys.values()))
-                    )
-                )
-            ).all()
-        )
-        canonical_pairs = {(segment.session_id, segment.producer_key) for segment in segments}
-        converged = 0
         for job in jobs:
-            if (
-                job.session_id,
-                keys[job.utterance_id],
-            ) not in canonical_pairs:
-                continue
-            locked = await db.scalar(
-                select(STTJob).where(STTJob.utterance_id == job.utterance_id).with_for_update()
-            )
-            if locked is None or locked.state == STTJobState.SUCCEEDED.value:
-                continue
-            _mark_succeeded(locked)
-            converged += 1
-        return converged
-
+            _mark_succeeded(job)
+        return len(jobs)
 
 def _eligible_expression(current: datetime, cooldown_before: datetime):
     state_eligible = or_(
@@ -568,6 +547,32 @@ def _eligible_expression(current: datetime, cooldown_before: datetime):
     return and_(state_eligible, dispatch_eligible)
 
 
+def _outstanding_expression(current: datetime, cooldown_before: datetime):
+    active_claim = and_(
+        STTJob.state == STTJobState.CLAIMED.value,
+        STTJob.claim_expires_at.is_not(None),
+        STTJob.claim_expires_at > current,
+    )
+    recently_published_unclaimed = and_(
+        STTJob.last_delivery_attempt_at.is_not(None),
+        STTJob.last_delivery_attempt_at > cooldown_before,
+        or_(
+            STTJob.state == STTJobState.PENDING.value,
+            and_(
+                STTJob.state == STTJobState.RETRY_WAIT.value,
+                STTJob.next_attempt_at.is_not(None),
+                STTJob.next_attempt_at <= current,
+            ),
+            and_(
+                STTJob.state == STTJobState.CLAIMED.value,
+                STTJob.claim_expires_at.is_not(None),
+                STTJob.claim_expires_at <= current,
+            ),
+        ),
+    )
+    return or_(active_claim, recently_published_unclaimed)
+
+
 async def _fair_candidates(
     *,
     now: datetime,
@@ -577,6 +582,34 @@ async def _fair_candidates(
 ) -> list[UUID]:
     cooldown_before = now - timedelta(seconds=cooldown_seconds)
     async with get_sessionmaker()() as db:
+        outstanding_expression = _outstanding_expression(now, cooldown_before)
+        global_outstanding = int(
+            await db.scalar(
+                select(func.count(STTJob.utterance_id)).where(outstanding_expression)
+            )
+            or 0
+        )
+        available_global = max(0, limit - global_outstanding)
+        if available_global == 0:
+            return []
+
+        outstanding = (
+            select(
+                STTJob.session_id.label("session_id"),
+                func.count(STTJob.utterance_id).label("outstanding_count"),
+            )
+            .where(outstanding_expression)
+            .group_by(STTJob.session_id)
+            .subquery()
+        )
+        session_history = (
+            select(
+                STTJob.session_id.label("session_id"),
+                func.max(STTJob.last_delivery_attempt_at).label("last_delivery_attempt_at"),
+            )
+            .group_by(STTJob.session_id)
+            .subquery()
+        )
         session_rank = func.row_number().over(
             partition_by=STTJob.session_id,
             order_by=(
@@ -598,16 +631,26 @@ async def _fair_candidates(
             .where(_eligible_expression(now, cooldown_before))
             .subquery()
         )
+        outstanding_count = func.coalesce(outstanding.c.outstanding_count, 0)
         rows = (
             await db.execute(
                 select(ranked.c.utterance_id)
-                .where(ranked.c.session_rank <= per_session_limit)
+                .outerjoin(outstanding, outstanding.c.session_id == ranked.c.session_id)
+                .outerjoin(
+                    session_history,
+                    session_history.c.session_id == ranked.c.session_id,
+                )
+                .where(
+                    outstanding_count < per_session_limit,
+                    ranked.c.session_rank <= per_session_limit - outstanding_count,
+                )
                 .order_by(
                     ranked.c.session_rank,
+                    session_history.c.last_delivery_attempt_at.asc().nulls_first(),
                     ranked.c.session_id,
                     ranked.c.utterance_id,
                 )
-                .limit(limit)
+                .limit(available_global)
             )
         ).all()
         return [row.utterance_id for row in rows]
@@ -659,16 +702,15 @@ async def reconcile_stt_jobs(
     dispatched = 0
     enqueue_failures = 0
     for utterance_id in candidates:
+        # Reserve the expiring admission hint before broker publication. A crash or publish
+        # failure can delay this work only until the hint TTL expires; PostgreSQL remains truth.
+        await _mark_delivery_attempt(utterance_id, current)
         try:
             enqueue(utterance_id)
         except Exception:
             enqueue_failures += 1
         else:
             dispatched += 1
-        finally:
-            # Delivery is only a hint. This timestamp throttles publish storms, then expires;
-            # PostgreSQL unfinished state remains eligible for later reconciliation.
-            await _mark_delivery_attempt(utterance_id, current)
 
     return STTReconcileResult(
         created=created,
