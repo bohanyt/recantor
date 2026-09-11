@@ -7,10 +7,12 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Mapping, Protocol
+from typing import Protocol
 
 _MAX_TRANSCRIPT_CHARS = 120_000
 _MAX_STDOUT_BYTES = 256 * 1024
@@ -160,7 +162,6 @@ class SubprocessAdapter:
     def run(self, spec: ProcessSpec) -> ProcessResult:
         stdout_capture = _BoundedCapture(spec.stdout_limit_bytes)
         stderr_capture = _BoundedCapture(spec.stderr_limit_bytes)
-
         try:
             with tempfile.TemporaryFile() as stdin_file:
                 stdin_file.write(spec.stdin)
@@ -205,10 +206,8 @@ class SubprocessAdapter:
                 timed_out = True
                 process.kill()
                 break
-            try:
+            with suppress(subprocess.TimeoutExpired):
                 process.wait(timeout=min(0.05, remaining))
-            except subprocess.TimeoutExpired:
-                pass
         if process.poll() is None:
             process.wait()
 
@@ -391,7 +390,6 @@ class CodexSubscriptionMeetingIntelligenceProvider:
             )
 
         self._check_chatgpt_auth_sync()
-
         with tempfile.TemporaryDirectory(prefix="recantor-codex-") as temp_dir:
             schema_path = Path(temp_dir) / "meeting-intelligence.schema.json"
             schema_path.write_text(
@@ -419,7 +417,6 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                     ]
                 )
             argv.append(_CODEX_INSTRUCTION)
-
             result = self._run(
                 ProcessSpec(
                     argv=tuple(argv),
@@ -458,7 +455,6 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 MeetingIntelligenceErrorCategory.INVALID_OUTPUT,
                 "Codex returned an unexpected meeting-intelligence shape",
             )
-
         return MeetingIntelligenceResult(
             key_points=_validate_string_list(payload, "key_points"),
             decisions=_validate_string_list(payload, "decisions"),
@@ -475,17 +471,13 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 "development Codex bridge already has an active invocation",
             )
         cancel_event = threading.Event()
-        worker = asyncio.create_task(
-            asyncio.to_thread(self._derive_sync, request, cancel_event)
-        )
+        worker = asyncio.create_task(asyncio.to_thread(self._derive_sync, request, cancel_event))
         try:
             return await asyncio.shield(worker)
         except asyncio.CancelledError:
             cancel_event.set()
-            try:
+            with suppress(MeetingIntelligenceError):
                 await asyncio.shield(worker)
-            except MeetingIntelligenceError:
-                pass
             raise
         finally:
             self._slot.release()
