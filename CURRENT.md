@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34655126609
+snapshot_seq: 34655280155
 
-collected_at: 2026-09-11T22:42:06.213897Z
+collected_at: 2026-09-11T22:44:22.587245Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T22:41:53Z
+issue_updated_at: 2026-09-11T22:44:10Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,18 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640174853 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: I
-issue: #47
-mode: implementation
-branch: agent-i/issue-47-codex-subscription-bridge
-base_sha: f852e8a85eb72c81595e8839017b9b95f946a2b6
-write_scope: unchanged from AGENT_WORK_LEASE_V1 comment 5640084774
-lease_expires_at: 2026-09-11T20:50:00Z
-
----
-
 comment_id=5640222969 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: I
@@ -629,11 +617,32 @@ Do not change IAM/WIF unless the fresh run produces a concrete auth/permission f
 Do not manually overwrite Drive to manufacture activation evidence.
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5641474140 author=bohanyt
+## ACC_ACTIVATION_BLOCKED — official caller reaches Drive, CURRENT replacement blocked by sequence namespace
+
+Fresh activation run after central repo became PUBLIC:
+
+- caller/main head: `59ff57502a9a1d84ad332cab106c46c256482d23` (merged PR #52)
+- canonical branch/head compiled: `integration/cloud-alpha-2026-09-11` @ `e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`
+- official run: `34655126609` / `agent-context-current` #3 — workflow conclusion **SUCCESS**
+- reusable workflow resolved successfully: `bohanyt/agent-context-compiler/.github/workflows/compile.yml@main` @ `f9bfd0e53ccc9439a3cc95c033a1b20cbe608575`
+- reusable workflow job actually started: PASS
+- repository ACC config load: PASS
+- official repository CURRENT render: PASS, 34,152 bytes
+- GitHub fallback: PASS, branch `agent-context`, commit `219dd3354c6753a0257349010abcedf3ab33dc74`
+- official fallback snapshot: `snapshot_seq: 34655126609`, `canonical_branch: integration/cloud-alpha-2026-09-11`, `canonical_head: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`
+- fallback sentinel: `END_OF_AGENT_CONTEXT kind=CURRENT seq=34655126609 sections=6`
+- WIF auth: PASS
+- writer service account: `acc-drive-writer@agent-context-compiler.iam.gservi
+...[COMMENT_5641474140_TRUNCATED chars=1996]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T22:41:53Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T22:44:10Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 ISSUE #44 state=open updated=2026-09-11T21:15:46Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T21:15:35Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -654,4 +663,4 @@ PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-p
 PR #51 draft=True updated=2026-09-11T13:10:39Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34655126609 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34655280155 sections=6
