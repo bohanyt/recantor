@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34655280155
+snapshot_seq: 34656170993
 
-collected_at: 2026-09-11T22:44:22.587245Z
+collected_at: 2026-09-11T22:57:43.971344Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T22:44:10Z
+issue_updated_at: 2026-09-11T22:57:30Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,28 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640222969 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: I
-issue: #47
-mode: implementation
-branch: agent-i/issue-47-codex-subscription-bridge
-base_sha: f852e8a85eb72c81595e8839017b9b95f946a2b6
-write_scope:
-  - apps/api/src/recantor/meeting_intelligence.py
-  - apps/api/src/recantor/codex_process.py
-  - apps/api/tests/test_meeting_intelligence.py
-  - apps/api/tests/test_codex_process.py
-  - tools/codex_subscription_bridge.py
-  - docs/development/CODEX_SUBSCRIPTION_BRIDGE.md
-exclusions:
-  - no Groq/STT/audio/provider changes
-  - no integration-branch writes
-  - no real ChatGPT auth/model probe
-lease_expires_at: 2026-09-11T20:55:00Z
-
----
-
 comment_id=5640714125 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: Primary Control Tower
@@ -638,11 +616,35 @@ Fresh activation run after central repo became PUBLIC:
 - WIF auth: PASS
 - writer service account: `acc-drive-writer@agent-context-compiler.iam.gservi
 ...[COMMENT_5641474140_TRUNCATED chars=1996]
+
+---
+
+comment_id=5641570960 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: H
+issue: #44
+mode: implementation
+branch: agent-h/issue-44-upload-foundation
+base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
+current_head_at_lease: dae0f6be5d6428e842bedfb2e268ac323ef0dc14
+write_scope:
+  - reconcile existing PR #51 branch against current integration baseline without touching integration
+  - close K-B1 with direct real-tusd HEAD Upload-Offset proof and same-upload resume-from-prior-offset evidence
+  - strengthen UploadRecord completion SHA-256 schema/model constraints and focused schema tests required by #45 durable source identity
+  - add bounded mid-upload API+tusd restart/recovery witness inside upload-specific E2E only
+  - upload-specific CI/Compose/test wiring only as required by those proofs
+exclusions:
+  - no #45 FFmpeg/STT processing implementation
+  - no #46 export/result implementation
+  - no integration-branch writes
+  - no local Windows witness
+  - no merge or mark-ready
+lease_expires_at: 2026-09-11T23:20:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T22:44:10Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T22:57:30Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 ISSUE #44 state=open updated=2026-09-11T21:15:46Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T21:15:35Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -663,4 +665,4 @@ PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-p
 PR #51 draft=True updated=2026-09-11T13:10:39Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34655280155 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34656170993 sections=6
