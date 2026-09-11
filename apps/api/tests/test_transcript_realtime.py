@@ -73,6 +73,10 @@ async def next_notice(pubsub, *, timeout: float = 1.5) -> dict[str, object]:
     raise AssertionError("timed out waiting for transcript notice")
 
 
+def transcript_ws_url(port: int, session_id: UUID) -> str:
+    return f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
+
+
 @asynccontextmanager
 async def live_api_server() -> AsyncIterator[int]:
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -242,9 +246,10 @@ async def test_real_websocket_route_forwards_only_valid_session_notice(
     session_id = await create_session(client, "writer-transcript-ws-0001")
     other_id = await create_session(client, "writer-transcript-ws-0002")
 
-    async with live_api_server() as port, connect(
-        f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
-    ) as websocket:
+    async with (
+        live_api_server() as port,
+        connect(transcript_ws_url(port, session_id)) as websocket,
+    ):
         assert await recv_json(websocket) == {"type": "ready"}
 
         redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
@@ -268,9 +273,10 @@ async def test_real_websocket_route_forwards_only_valid_session_notice(
 async def test_real_websocket_route_rejects_missing_session(client: AsyncClient) -> None:
     del client
     missing_id = uuid4()
-    async with live_api_server() as port, connect(
-        f"ws://127.0.0.1:{port}/api/v1/sessions/{missing_id}/transcript/live"
-    ) as websocket:
+    async with (
+        live_api_server() as port,
+        connect(transcript_ws_url(port, missing_id)) as websocket,
+    ):
         error = await recv_json(websocket)
         assert error["type"] == "error"
         assert error["code"] == "session_not_found"
@@ -322,9 +328,10 @@ async def test_real_websocket_route_degrades_and_cleans_up_subscription(
         lambda: fake_redis,
     )
 
-    async with live_api_server() as port, connect(
-        f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
-    ) as websocket:
+    async with (
+        live_api_server() as port,
+        connect(transcript_ws_url(port, session_id)) as websocket,
+    ):
         assert await recv_json(websocket) == {"type": "ready"}
         degraded = await recv_json(websocket)
         assert degraded["type"] == "delivery_degraded"
