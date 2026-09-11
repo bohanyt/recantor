@@ -19,6 +19,7 @@ test('live transcript recovers while archive survives delivery outage', async ({
   };
 
   let canonical: Segment[] = [];
+  const observedAfterSequences: number[] = [];
   await page.route('**/api/v1/sessions/*/transcript**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/transcript/live')) {
@@ -26,6 +27,7 @@ test('live transcript recovers while archive survives delivery outage', async ({
       return;
     }
     const afterSequence = Number(url.searchParams.get('after_sequence') ?? '0');
+    observedAfterSequences.push(afterSequence);
     const segments = canonical.filter((item) => item.sequence > afterSequence);
     const nextAfterSequence = segments.reduce(
       (highest, item) => Math.max(highest, item.sequence),
@@ -138,6 +140,7 @@ test('live transcript recovers while archive survives delivery outage', async ({
   await page.getByTestId('start-recording').click();
   await expect(page.getByTestId('transcript-empty')).toContainText('Listening for speech');
   await expect(page.getByTestId('transcript-delivery-state')).toHaveText('Live');
+  expect(observedAfterSequences[0]).toBe(0);
 
   canonical = [
     {
@@ -177,13 +180,32 @@ test('live transcript recovers while archive survives delivery outage', async ({
   await expect(page.getByTestId('transcript-segment-1')).toContainText('pertama');
   await expect(page.getByTestId('transcript-segment-2')).toContainText('kedua');
   await expect(page.getByTestId('transcript-segment-3')).toContainText('ketiga');
-  const orderedText = await page.getByTestId('transcript-segments').locator('li').allTextContents();
+  const transcriptRows = page.getByTestId('transcript-segments').locator('li');
+  await expect(transcriptRows).toHaveCount(3);
+  const orderedText = await transcriptRows.allTextContents();
   expect(orderedText.join('|')).toMatch(/pertama.*kedua.*ketiga/);
 
   await page.evaluate(() => window.__setTranscriptDeliveryAvailable?.(false));
   await expect(page.getByTestId('transcript-delivery-state')).toHaveText(/Catching up|Delayed/);
 
-  await page.waitForTimeout(2_600);
+  canonical = [
+    ...canonical,
+    {
+      id: '00000000-0000-4000-8000-000000000004',
+      sequence: 4,
+      start_ms: 3_000,
+      end_ms: 4_000,
+      text: 'keempat tanpa event realtime',
+      language: 'id',
+      created_at: '2026-09-11T00:00:04Z',
+    },
+  ];
+  await expect(page.getByTestId('transcript-segment-4')).toContainText(
+    'keempat tanpa event realtime',
+    { timeout: 6_000 },
+  );
+  await expect(transcriptRows).toHaveCount(4);
+
   await page.getByTestId('stop-recording').click();
   await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
     timeout: 20_000,
