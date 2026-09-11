@@ -18,6 +18,11 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.create_unique_constraint(
+        "uq_transcription_utterance_id_session",
+        "transcription_utterances",
+        ["id", "session_id"],
+    )
     op.create_table(
         "stt_jobs",
         sa.Column("utterance_id", sa.Uuid(), nullable=False),
@@ -66,8 +71,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["utterance_id"],
-            ["transcription_utterances.id"],
+            ["utterance_id", "session_id"],
+            ["transcription_utterances.id", "transcription_utterances.session_id"],
+            name="fk_stt_job_utterance_session",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("utterance_id"),
@@ -82,6 +88,12 @@ def upgrade() -> None:
         "ix_stt_jobs_state_next_attempt",
         "stt_jobs",
         ["state", "next_attempt_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_stt_jobs_claim_expiry",
+        "stt_jobs",
+        ["state", "claim_expires_at"],
         unique=False,
     )
 
@@ -113,6 +125,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_stt_jobs_claim_expiry", table_name="stt_jobs")
     op.drop_index("ix_stt_jobs_state_next_attempt", table_name="stt_jobs")
     op.drop_index("ix_stt_jobs_session_state", table_name="stt_jobs")
     op.drop_table("stt_jobs")
+    op.drop_constraint(
+        "uq_transcription_utterance_id_session",
+        "transcription_utterances",
+        type_="unique",
+    )
