@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34657235159
+snapshot_seq: 34657623042
 
-collected_at: 2026-09-11T23:13:46.451092Z
+collected_at: 2026-09-11T23:19:43.983494Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -642,7 +642,7 @@ lease_expires_at: 2026-09-11T23:45:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #44 state=open updated=2026-09-11T23:13:35Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
+ISSUE #44 state=open updated=2026-09-11T23:19:30Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #41 state=open updated=2026-09-11T23:06:20Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -663,4 +663,4 @@ PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34657235159 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34657623042 sections=6
