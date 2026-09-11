@@ -20,13 +20,8 @@ jobs:
 
           path = Path('apps/api/src/recantor/stt_jobs.py')
           text = path.read_text()
-          old = '''        result = await db.execute(statement)
-          await db.commit()
-          return max(0, result.rowcount or 0)'''
-          new = '''        statement = statement.returning(STTJob.utterance_id)
-          created_ids = list((await db.scalars(statement)).all())
-          await db.commit()
-          return len(created_ids)'''
+          old = "        result = await db.execute(statement)\n        await db.commit()\n        return max(0, result.rowcount or 0)"
+          new = "        statement = statement.returning(STTJob.utterance_id)\n        created_ids = list((await db.scalars(statement)).all())\n        await db.commit()\n        return len(created_ids)"
           if old not in text:
               raise SystemExit('target reconciliation result block not found exactly')
           path.write_text(text.replace(old, new, 1))
