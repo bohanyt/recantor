@@ -75,9 +75,8 @@ test('live transcript recovers while archive survives delivery outage', async ({
           }
           this.readyState = NativeWebSocket.OPEN;
           this.onopen?.(new Event('open'));
-          this.onmessage?.(
-            new MessageEvent('message', { data: JSON.stringify({ type: 'ready' }) }),
-          );
+          const ready = JSON.stringify({ type: 'ready' });
+          this.onmessage?.(new MessageEvent('message', { data: ready }));
         });
       }
 
@@ -92,9 +91,8 @@ test('live transcript recovers while archive survives delivery outage', async ({
 
     function RoutedWebSocket(url: string | URL, protocols?: string | string[]) {
       if (!String(url).includes('/transcript/live')) {
-        return protocols === undefined
-          ? new NativeWebSocket(url)
-          : new NativeWebSocket(url, protocols);
+        if (protocols === undefined) return new NativeWebSocket(url);
+        return new NativeWebSocket(url, protocols);
       }
       return new FakeTranscriptSocket();
     }
@@ -179,10 +177,7 @@ test('live transcript recovers while archive survives delivery outage', async ({
   await expect(page.getByTestId('transcript-segment-1')).toContainText('pertama');
   await expect(page.getByTestId('transcript-segment-2')).toContainText('kedua');
   await expect(page.getByTestId('transcript-segment-3')).toContainText('ketiga');
-  const orderedText = await page
-    .getByTestId('transcript-segments')
-    .locator('li')
-    .allTextContents();
+  const orderedText = await page.getByTestId('transcript-segments').locator('li').allTextContents();
   expect(orderedText.join('|')).toMatch(/pertama.*kedua.*ketiga/);
 
   await page.evaluate(() => window.__setTranscriptDeliveryAvailable?.(false));
