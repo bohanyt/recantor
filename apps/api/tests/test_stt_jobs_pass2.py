@@ -616,7 +616,10 @@ async def test_session_selection_rotates_when_active_sessions_exceed_global_batc
             )
             work_to_session[work.id] = session_id
 
-    t0 = datetime(2026, 9, 11, 12, 25, tzinfo=UTC)
+    async with get_sessionmaker()() as db:
+        t0 = await db.scalar(select(func.clock_timestamp()))
+    assert t0 is not None
+
     first_batch: list[UUID] = []
     await reconcile_stt_jobs(
         enqueue=first_batch.append,

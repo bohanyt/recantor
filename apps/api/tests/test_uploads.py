@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import IntegrityError
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
@@ -246,6 +248,7 @@ async def test_tusd_resume_progress_and_duplicate_completion_are_durable(clean_u
         assert record.received_bytes == len(payload)
         assert record.byte_length == len(payload)
         assert record.storage_key == f"uploads/tus/{upload_id}"
+        assert record.sha256 == hashlib.sha256(payload).hexdigest()
         assert record.completed_at is not None
         assert session.state == SessionState.UPLOADED.value
 
@@ -253,6 +256,47 @@ async def test_tusd_resume_progress_and_duplicate_completion_are_durable(clean_u
         record = await db.get(UploadRecord, session_id)
         assert record is not None
         assert record.completed_at == first_completed_at
+
+
+@pytest.mark.asyncio
+async def test_upload_completion_shape_requires_valid_sha256(clean_upload_state):
+    async with get_sessionmaker()() as db:
+        session, _ = await create_upload_session(
+            db,
+            client_request_id=uuid4(),
+            capability_token=TOKEN_A,
+            original_filename="shape.wav",
+            content_type="audio/wav",
+            byte_length=4096,
+            duration_ms=None,
+        )
+        session_id = session.id
+        record = await db.get(UploadRecord, session_id)
+        assert record is not None
+        record.sha256 = "a" * 64
+        with pytest.raises(IntegrityError):
+            await db.commit()
+        await db.rollback()
+
+    async with get_sessionmaker()() as db:
+        record = await db.get(UploadRecord, session_id)
+        assert record is not None
+        record.storage_key = "uploads/tus/schema-proof"
+        record.byte_length = record.declared_byte_length
+        record.sha256 = "g" * 64
+        record.completed_at = datetime.now(UTC)
+        with pytest.raises(IntegrityError):
+            await db.commit()
+        await db.rollback()
+
+    async with get_sessionmaker()() as db:
+        record = await db.get(UploadRecord, session_id)
+        assert record is not None
+        record.storage_key = "uploads/tus/schema-proof"
+        record.byte_length = record.declared_byte_length
+        record.sha256 = "a" * 64
+        record.completed_at = datetime.now(UTC)
+        await db.commit()
 
 
 @pytest.mark.asyncio

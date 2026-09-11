@@ -157,8 +157,11 @@ class UploadRecord(Base):
             name="ck_upload_byte_length_matches_declared",
         ),
         CheckConstraint(
-            "(completed_at IS NULL AND storage_key IS NULL AND byte_length IS NULL) OR "
-            "(completed_at IS NOT NULL AND storage_key IS NOT NULL AND byte_length > 0)",
+            "(completed_at IS NULL AND storage_key IS NULL AND sha256 IS NULL "
+            "AND byte_length IS NULL) OR "
+            "(completed_at IS NOT NULL AND storage_key IS NOT NULL "
+            "AND length(btrim(storage_key)) > 0 AND sha256 IS NOT NULL "
+            "AND sha256 ~ '^[0-9a-f]{64}$' AND byte_length > 0)",
             name="ck_upload_completion_shape",
         ),
         Index("ix_upload_records_expires_at", "expires_at"),
