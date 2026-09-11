@@ -1,6 +1,6 @@
 # Current
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 
 This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, branch, and CI state outrank this summary if the repository has moved.
 
@@ -158,28 +158,30 @@ The API key remained local/server-side and was not committed or posted. This pro
 
 ## Current Phase 2 slice — Issue #38 / Phase 2E
 
-Issue #38 is now the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**.
+Issue #38 is the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**. DRAFT PR #40 is the active implementation candidate on branch `agent-a/issue-38-phase2e-live-stt`; it is not merged or merge-ready, and the required Windows/Edge real-microphone witness has intentionally not been performed pending Control Tower assignment.
 
-The missing causal link is now automatic scheduling:
+The DRAFT candidate implements automatic scheduling as:
 
 ```text
 durable TranscriptionUtterance
-        -> PostgreSQL-backed eligible/claim state
-        -> Celery/Redis delivery hint
-        -> STT worker
-        -> merged Phase 2D executor/provider
+        -> PostgreSQL eligibility/capacity/reservation
+        -> coalesced generic Celery/Redis wake
+        -> PostgreSQL-selected fenced claim
+        -> STT worker / merged Phase 2D executor/provider
         -> canonical TranscriptSegment
 ```
+
+DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Broker messages do not encode service order or durable work identity: an old wake asks PostgreSQL for whichever reserved job is currently authoritative, while reconciliation tops Redis only up to current reservation demand. Redis loss can therefore be replenished without letting stale broker history become the backlog. Canonical convergence is bidirectional: authoritative transcript evidence promotes success, while a false durable `succeeded` projection without canonical evidence is automatically repaired to runnable work. Production capacity/selection/reservation samples PostgreSQL `clock_timestamp()` inside a transaction-scoped scheduler advisory lock and releases that DB authority before Redis publication; reservation timestamps never regress. Durable utterance commit does not call Redis, Celery, or the provider, so queue/provider availability cannot roll back archive or utterance durability.
 
 Required semantics for #38:
 
 - PostgreSQL + audio storage remain durable truth; Redis/Celery are delivery/coordination only;
 - losing a queue message cannot lose transcription work because unfinished durable utterances are rediscoverable;
-- duplicate Celery delivery must be safe and two workers must not concurrently call the provider for the same active claim;
+- stale/duplicate Celery wakes carry no durable service-order authority and two workers must not concurrently call the provider for the same active claim;
 - claims must expire/recover after worker death without holding a DB transaction across the provider network call;
 - provider retry policy must consume Phase 2D error categories and avoid hot loops;
-- canonical transcript evidence remains authoritative for success;
-- a large backlog from one session must not starve another session;
+- canonical transcript evidence remains authoritative for success, including repair of false scheduling success;
+- broker admission is bounded globally and per session across reconciliation passes; PostgreSQL reservations are serialized before publication, and session service-turn ordering prevents fixed-order or continuous-new-session starvation;
 - enqueue/Redis/provider failure must not weaken archive capture or durable utterance commit;
 - local Compose should run the minimum worker/reconciler services needed to exercise the automatic path;
 - ordinary CI must remain independent from real Groq secrets/network.
@@ -195,7 +197,7 @@ The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
 1. utterance/VAD pipeline — landed;
 2. Groq STT provider — landed;
 3. canonical transcript segment model — landed;
-4. live STT queue — **current #38**;
+4. live STT queue — **DRAFT PR #40 for #38; not merged/witnessed**;
 5. provider retry/rate-limit handling — included in #38 scheduling semantics;
 6. WebSocket transcript updates/recovery — next;
 7. local STT provider/fallback — later;
@@ -209,8 +211,7 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 
 ## Not implemented yet
 
-- automatic/live STT scheduling from each newly committed utterance;
-- durable live STT queue/reconciliation/fairness;
+- Phase 2E live STT scheduling/queue/reconciliation/fairness remains unmerged and unwitnessed on `main`; DRAFT PR #40 is the implementation candidate;
 - realtime transcript fanout/UI;
 - local faster-whisper fallback;
 - final ground-truth STT/VAD latency/accuracy benchmark harness;
@@ -222,7 +223,7 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 - production reverse-proxy/deployment hardening;
 - native Android/iOS recorder clients.
 
-Do not describe these as working until repository evidence proves them.
+Do not describe these as working on `main` until repository evidence proves them.
 
 ## Known boundaries
 
@@ -257,7 +258,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #38 and its current implementation PR if one exists;
+5. read Issue #38 and DRAFT PR #40;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.
