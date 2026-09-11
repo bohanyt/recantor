@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -40,6 +41,14 @@ class AudioCompleteness(StrEnum):
     FULL = "full"
     PARTIAL = "partial"
     EMPTY = "empty"
+
+
+class STTJobState(StrEnum):
+    PENDING = "pending"
+    CLAIMED = "claimed"
+    RETRY_WAIT = "retry_wait"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 class RecordingSession(Base):
@@ -189,4 +198,54 @@ class TranscriptionUtterance(Base):
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class STTJob(Base):
+    __tablename__ = "stt_jobs"
+    __table_args__ = (
+        CheckConstraint("attempt_count >= 0", name="ck_stt_job_attempt_count_nonnegative"),
+        CheckConstraint(
+            "state IN ('pending', 'claimed', 'retry_wait', 'succeeded', 'failed')",
+            name="ck_stt_job_state",
+        ),
+        CheckConstraint(
+            "(state = 'claimed' AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL) "
+            "OR (state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
+            name="ck_stt_job_claim_shape",
+        ),
+        CheckConstraint(
+            "state <> 'retry_wait' OR next_attempt_at IS NOT NULL",
+            name="ck_stt_job_retry_wait_has_time",
+        ),
+        Index("ix_stt_jobs_session_state", "session_id", "state"),
+        Index("ix_stt_jobs_state_next_attempt", "state", "next_attempt_at"),
+    )
+
+    utterance_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("transcription_utterances.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=STTJobState.PENDING.value
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_delivery_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

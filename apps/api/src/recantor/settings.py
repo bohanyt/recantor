@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     groq_stt_endpoint: str = "https://api.groq.com/openai/v1/audio/transcriptions"
     groq_stt_model: str = "whisper-large-v3-turbo"
     groq_stt_timeout_seconds: float = 30.0
+    stt_queue_name: str = "stt-live"
+    stt_claim_lease_seconds: float = 60.0
+    stt_max_attempts: int = 5
+    stt_retry_base_seconds: float = 2.0
+    stt_retry_max_seconds: float = 60.0
+    stt_configuration_retry_seconds: float = 300.0
+    stt_reconcile_interval_seconds: float = 1.0
+    stt_reconcile_batch_size: int = 100
+    stt_dispatch_reenqueue_seconds: float = 15.0
     log_level: str = "INFO"
 
     @property

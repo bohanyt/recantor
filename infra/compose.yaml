@@ -74,6 +74,61 @@ services:
       timeout: 3s
       retries: 20
 
+  stt-worker:
+    build:
+      context: ../apps/api
+    command:
+      [
+        "celery",
+        "-A",
+        "recantor.stt_tasks:celery_app",
+        "worker",
+        "-Q",
+        "stt-live",
+        "--concurrency=2",
+        "--loglevel=INFO",
+      ]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      AUDIO_STORAGE_PATH: /data/audio
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
+      GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
+      GROQ_STT_TIMEOUT_SECONDS: "${GROQ_STT_TIMEOUT_SECONDS:-30}"
+      STT_QUEUE_NAME: stt-live
+      STT_CLAIM_LEASE_SECONDS: "${STT_CLAIM_LEASE_SECONDS:-60}"
+      STT_MAX_ATTEMPTS: "${STT_MAX_ATTEMPTS:-5}"
+      STT_RETRY_BASE_SECONDS: "${STT_RETRY_BASE_SECONDS:-2}"
+      STT_RETRY_MAX_SECONDS: "${STT_RETRY_MAX_SECONDS:-60}"
+      STT_CONFIGURATION_RETRY_SECONDS: "${STT_CONFIGURATION_RETRY_SECONDS:-300}"
+    volumes:
+      - recantor-audio:/data/audio
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  stt-reconciler:
+    build:
+      context: ../apps/api
+    command: ["python", "-m", "recantor.stt_reconciler"]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      STT_QUEUE_NAME: stt-live
+      STT_RECONCILE_INTERVAL_SECONDS: "${STT_RECONCILE_INTERVAL_SECONDS:-1}"
+      STT_RECONCILE_BATCH_SIZE: "${STT_RECONCILE_BATCH_SIZE:-100}"
+      STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   web:
     build:
       context: ../apps/web
