@@ -242,43 +242,41 @@ async def test_real_websocket_route_forwards_only_valid_session_notice(
     session_id = await create_session(client, "writer-transcript-ws-0001")
     other_id = await create_session(client, "writer-transcript-ws-0002")
 
-    async with live_api_server() as port:
-        async with connect(
-            f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
-        ) as websocket:
-            assert await recv_json(websocket) == {"type": "ready"}
+    async with live_api_server() as port, connect(
+        f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
+    ) as websocket:
+        assert await recv_json(websocket) == {"type": "ready"}
 
-            redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
-            try:
-                await redis.publish(transcript_channel(session_id), "not-json")
-                await redis.publish(
-                    transcript_channel(session_id),
-                    json.dumps(transcript_notice(other_id, 7)),
-                )
-                expected = transcript_notice(session_id, 3)
-                await redis.publish(
-                    transcript_channel(session_id),
-                    json.dumps(expected),
-                )
-                assert await recv_json(websocket) == expected
-            finally:
-                await redis.aclose()
+        redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
+        try:
+            await redis.publish(transcript_channel(session_id), "not-json")
+            await redis.publish(
+                transcript_channel(session_id),
+                json.dumps(transcript_notice(other_id, 7)),
+            )
+            expected = transcript_notice(session_id, 3)
+            await redis.publish(
+                transcript_channel(session_id),
+                json.dumps(expected),
+            )
+            assert await recv_json(websocket) == expected
+        finally:
+            await redis.aclose()
 
 
 @pytest.mark.asyncio
 async def test_real_websocket_route_rejects_missing_session(client: AsyncClient) -> None:
     del client
     missing_id = uuid4()
-    async with live_api_server() as port:
-        async with connect(
-            f"ws://127.0.0.1:{port}/api/v1/sessions/{missing_id}/transcript/live"
-        ) as websocket:
-            error = await recv_json(websocket)
-            assert error["type"] == "error"
-            assert error["code"] == "session_not_found"
-            with pytest.raises(ConnectionClosed) as closed:
-                await websocket.recv()
-            assert closed.value.code == 1008
+    async with live_api_server() as port, connect(
+        f"ws://127.0.0.1:{port}/api/v1/sessions/{missing_id}/transcript/live"
+    ) as websocket:
+        error = await recv_json(websocket)
+        assert error["type"] == "error"
+        assert error["code"] == "session_not_found"
+        with pytest.raises(ConnectionClosed) as closed:
+            await websocket.recv()
+        assert closed.value.code == 1008
 
 
 @pytest.mark.asyncio
@@ -324,16 +322,15 @@ async def test_real_websocket_route_degrades_and_cleans_up_subscription(
         lambda: fake_redis,
     )
 
-    async with live_api_server() as port:
-        async with connect(
-            f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
-        ) as websocket:
-            assert await recv_json(websocket) == {"type": "ready"}
-            degraded = await recv_json(websocket)
-            assert degraded["type"] == "delivery_degraded"
-            with pytest.raises(ConnectionClosed) as closed:
-                await websocket.recv()
-            assert closed.value.code == 1013
+    async with live_api_server() as port, connect(
+        f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
+    ) as websocket:
+        assert await recv_json(websocket) == {"type": "ready"}
+        degraded = await recv_json(websocket)
+        assert degraded["type"] == "delivery_degraded"
+        with pytest.raises(ConnectionClosed) as closed:
+            await websocket.recv()
+        assert closed.value.code == 1013
 
     assert fake_redis.pubsub_instance.subscribed == transcript_channel(session_id)
     assert fake_redis.pubsub_instance.unsubscribed == transcript_channel(session_id)
