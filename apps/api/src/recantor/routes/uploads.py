@@ -32,6 +32,13 @@ CapabilityHeader = Annotated[
     str,
     Header(alias="X-Recantor-Upload-Token", min_length=43, max_length=128),
 ]
+UPLOAD_ERRORS = (
+    UploadNotFound,
+    UploadExpired,
+    UploadForbidden,
+    UploadPolicyError,
+    UploadConflict,
+)
 
 
 def _http_error(exc: Exception) -> HTTPException:
@@ -65,7 +72,7 @@ async def create_upload(body: CreateUploadSessionRequest, db: DbSession) -> Uplo
             byte_length=body.byte_length,
             duration_ms=body.duration_ms,
         )
-    except (UploadNotFound, UploadExpired, UploadForbidden, UploadPolicyError, UploadConflict) as exc:
+    except UPLOAD_ERRORS as exc:
         raise _http_error(exc) from exc
     return upload_session_response(session, record)
 
@@ -98,6 +105,6 @@ async def read_upload(
             session_id=session_id,
             capability_token=capability_token,
         )
-    except (UploadNotFound, UploadExpired, UploadForbidden, UploadPolicyError, UploadConflict) as exc:
+    except UPLOAD_ERRORS as exc:
         raise _http_error(exc) from exc
     return upload_session_response(session, record)
