@@ -52,6 +52,11 @@ services:
       AUDIO_STORAGE_PATH: /data/audio
       RECORDING_HEARTBEAT_TIMEOUT_SECONDS: 20
       RECORDING_MAX_CHUNK_BYTES: 16777216
+      UPLOAD_MAX_BYTES: "${UPLOAD_MAX_BYTES:-5368709120}"
+      UPLOAD_MAX_DURATION_SECONDS: "${UPLOAD_MAX_DURATION_SECONDS:-43200}"
+      UPLOAD_CAPABILITY_TTL_SECONDS: "${UPLOAD_CAPABILITY_TTL_SECONDS:-86400}"
+      UPLOAD_TUS_STORAGE_PREFIX: uploads/tus
+      TUS_PUBLIC_ENDPOINT: http://localhost:1080/files/
       GROQ_API_KEY: "${GROQ_API_KEY:-}"
       GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
       GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
@@ -74,6 +79,36 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  tusd:
+    image: tusproject/tusd:v2.10.0
+    command:
+      [
+        "-host=0.0.0.0",
+        "-port=8080",
+        "-base-path=/files/",
+        "-upload-dir=/data/audio/uploads/tus",
+        "-max-size=${UPLOAD_MAX_BYTES:-5368709120}",
+        "-disable-download",
+        "-disable-termination",
+        "-disable-concatenation",
+        "-cors-allow-origin=http://localhost:5173",
+        "-cors-allow-headers=X-Recantor-Upload-Token",
+        "-hooks-http=http://api:8000/api/v1/uploads/tusd-hooks",
+        "-hooks-http-forward-headers=X-Recantor-Upload-Token",
+        "-hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish",
+        "-hooks-http-retry=5",
+        "-hooks-http-backoff=1",
+        "-progress-hooks-interval=1s",
+      ]
+    ports:
+      - "1080:8080"
+    volumes:
+      - recantor-audio:/data/audio
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
   stt-worker:
     build:
@@ -147,6 +182,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      tusd:
+        condition: service_started
 
 volumes:
   recantor-postgres:
