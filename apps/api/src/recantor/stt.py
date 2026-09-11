@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 
 from recantor.db import get_sessionmaker
-from recantor.models import TranscriptSegment, TranscriptionUtterance
+from recantor.models import TranscriptionUtterance, TranscriptSegment
 from recantor.settings import get_settings
 from recantor.storage import AudioStorageError, FilesystemAudioStorage
 from recantor.transcript import TranscriptCommitGuard, commit_transcript_segment

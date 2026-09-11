@@ -14,8 +14,8 @@ from recantor.models import (
     RecordingSession,
     STTJob,
     STTJobState,
-    TranscriptSegment,
     TranscriptionUtterance,
+    TranscriptSegment,
 )
 from recantor.settings import get_settings
 from recantor.stt import STTErrorCategory, STTProviderError, STTRequest, STTResult
