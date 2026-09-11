@@ -421,9 +421,10 @@ async def _ensure_missing_jobs(batch_size: int) -> int:
             )
             .on_conflict_do_nothing(index_elements=[STTJob.utterance_id])
         )
-        result = await db.execute(statement)
+        statement = statement.returning(STTJob.utterance_id)
+        created_ids = list((await db.scalars(statement)).all())
         await db.commit()
-        return max(0, result.rowcount or 0)
+        return len(created_ids)
 
 
 async def _converge_canonical(batch_size: int) -> int:
