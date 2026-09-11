@@ -20,14 +20,7 @@ const VERIFY_ATTEMPTS = 20;
 const VERIFY_DELAY_MS = 250;
 
 type UploadPhase =
-  | 'idle'
-  | 'ready'
-  | 'preparing'
-  | 'uploading'
-  | 'paused'
-  | 'verifying'
-  | 'complete'
-  | 'error';
+  'idle' | 'ready' | 'preparing' | 'uploading' | 'paused' | 'verifying' | 'complete' | 'error';
 
 function bytesLabel(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -172,8 +165,7 @@ export function UploadPanel() {
 
       uppy.on('upload-progress', (_uppyFile, uploadProgress) => {
         const total = uploadProgress.bytesTotal ?? file.size;
-        const percent =
-          total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
+        const percent = total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
         setProgress(Math.min(99, Math.max(0, percent)));
       });
       uppy.on('upload-error', (_uppyFile, error, response) => {
@@ -258,7 +250,10 @@ export function UploadPanel() {
           </p>
         </div>
         <div className="min-w-28 rounded-2xl border border-[var(--border)] px-4 py-3 text-right">
-          <p className="font-mono text-2xl font-semibold tabular-nums" data-testid="upload-progress">
+          <p
+            className="font-mono text-2xl font-semibold tabular-nums"
+            data-testid="upload-progress"
+          >
             {progress}%
           </p>
           <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{phase}</p>
