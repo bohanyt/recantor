@@ -5,6 +5,7 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -35,6 +36,8 @@ class SessionState(StrEnum):
     INTERRUPTED = "interrupted"
     RECOVERING = "recovering"
     FINALIZING = "finalizing"
+    UPLOADING = "uploading"
+    UPLOADED = "uploaded"
     COMPLETE = "complete"
     FAILED = "failed"
 
@@ -129,6 +132,63 @@ class RecordingGap(Base):
     reason: Mapped[str] = mapped_column(String(160), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class UploadRecord(Base):
+    __tablename__ = "upload_records"
+    __table_args__ = (
+        CheckConstraint("declared_byte_length > 0", name="ck_upload_declared_byte_length_positive"),
+        CheckConstraint("received_bytes >= 0", name="ck_upload_received_bytes_nonnegative"),
+        CheckConstraint(
+            "received_bytes <= declared_byte_length",
+            name="ck_upload_received_bytes_within_declared",
+        ),
+        CheckConstraint(
+            "declared_duration_ms IS NULL OR declared_duration_ms > 0",
+            name="ck_upload_declared_duration_positive",
+        ),
+        CheckConstraint(
+            "tus_upload_id IS NULL OR length(btrim(tus_upload_id)) > 0",
+            name="ck_upload_tus_id_nonblank",
+        ),
+        CheckConstraint(
+            "byte_length IS NULL OR byte_length = declared_byte_length",
+            name="ck_upload_byte_length_matches_declared",
+        ),
+        CheckConstraint(
+            "(completed_at IS NULL AND storage_key IS NULL AND byte_length IS NULL) OR "
+            "(completed_at IS NOT NULL AND storage_key IS NOT NULL AND byte_length > 0)",
+            name="ck_upload_completion_shape",
+        ),
+        Index("ix_upload_records_expires_at", "expires_at"),
+    )
+
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    declared_byte_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    declared_duration_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tus_upload_id: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
+    received_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    byte_length: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    failure_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
 
