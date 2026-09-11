@@ -1,55 +1,46 @@
-name: Agent A pytest diagnostic
+name: Agent A targeted reconciliation fix
 
 on:
   push:
     branches: [agent-a/issue-38-phase2e-live-stt]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  pytest-diagnostic:
+  fix-reconcile-count:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: recantor
-          POSTGRES_USER: recantor
-          POSTGRES_PASSWORD: recantor
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U recantor -d recantor"
-          --health-interval 3s
-          --health-timeout 3s
-          --health-retries 20
-    env:
-      DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
-      REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: '0.10.0'
-      - name: Install API dependencies
-        run: uv sync --project apps/api --frozen --dev
-      - name: Capture Phase 2E pytest output
-        shell: bash
+      - name: Make missing-job repair count deterministic
         run: |
-          set +e
-          uv run --project apps/api pytest apps/api/tests/test_stt_jobs.py -vv --tb=long > /tmp/phase2e-pytest.log 2>&1
-          code=$?
-          cat /tmp/phase2e-pytest.log
-          echo "$code" > /tmp/phase2e-pytest.exit
-          exit 0
-      - name: Upload diagnostic
-        uses: actions/upload-artifact@v6
-        with:
-          name: agent-a-phase2e-pytest
-          path: |
-            /tmp/phase2e-pytest.log
-            /tmp/phase2e-pytest.exit
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/api/src/recantor/stt_jobs.py')
+          text = path.read_text()
+          old = '''            .on_conflict_do_nothing(index_elements=[STTJob.utterance_id])
+          )
+          result = await db.execute(statement)
+          await db.commit()
+          return max(0, result.rowcount or 0)
+          '''
+          new = '''            .on_conflict_do_nothing(index_elements=[STTJob.utterance_id])
+              .returning(STTJob.utterance_id)
+          )
+          created_ids = list((await db.scalars(statement)).all())
+          await db.commit()
+          return len(created_ids)
+          '''
+          if old not in text:
+              raise SystemExit('target reconciliation block not found exactly')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/src/recantor/stt_jobs.py
+          git commit -m 'fix(stt): count reconciled jobs via returning'
+          git push origin HEAD:${GITHUB_REF_NAME}
