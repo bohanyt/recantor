@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34659190820
+snapshot_seq: 34659484068
 
-collected_at: 2026-09-11T23:44:46.951601Z
+collected_at: 2026-09-11T23:49:33.470050Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T23:44:35Z
+issue_updated_at: 2026-09-11T23:49:19Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,25 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640922695 author=bohanyt
-CONTROL_TOWER_ACC_ACTIVATION_V1
-state: OFFICIAL_CURRENT_WIRING_MERGED / FIRST_COMPILE_TRIGGERED
-
-Owner explicitly authorized merging PR #52. Fresh-checked exact PR head `f396b2a76279faca6efa923d22b02042aa20b0c4`; PR #52 was marked ready only as required for merge and squash-merged to `main` as `59ff57502a9a1d84ad332cab106c46c256482d23`.
-
-WIF repo binding for `bohanyt/recantor` was also added by the owner in Google Cloud before this merge. Stable official CURRENT Doc ID remains:
-`1ZcMQPDQDEO67wseF6V5BltbWOe7UarVDWEiC9bzML1Q`
-
-This Issue #41 comment intentionally triggers the merged `agent-context-current` issue_comment workflow. Until the resulting run and Drive overwrite are verified, treat the CURRENT Doc as PENDING and continue GitHub as authority. `SOURCE-MANUAL-SPIKE-DO-NOT-USE` remains quarantined and must not be used for agent orientation.
-
-Do not manually author or edit `AGENT_CONTEXT_V1` snapshots. Only the central compiler owns official ACC snapshot content.
-
-No application/runtime code changed. Integration branch was not moved. No local Windows action occurred.
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5640954985 author=bohanyt
 CONTROL_TOWER_ACC_ACTIVATION_BLOCKER_V1
 state: OFFICIAL_WIRING_MERGED / FIRST_RUN_FAILED_BEFORE_JOB
@@ -636,11 +617,36 @@ Deliver a coherent first installable alpha with:
 - #44 / PR #51 @ `5394ee4e20f711cc5b234ade1b220cbf69a3b870`: Reviewer K delta **CLEAN / K-B1 CLOSED**; Upload Foundation CI `34657014697` SUCCESS and standard CI `34657014766` SUCCESS. Treat as **cloud-review accepted / integration candidate**.
 - #47 / PR #50 @
 ...[COMMENT_5641903294_TRUNCATED chars=1657]
+
+---
+
+comment_id=5641932547 author=bohanyt
+CONTROL_TOWER_INTEGRATION_LEASE_V1
+owner: Primary Control Tower
+scope: integration-branch-only
+branch: integration/cloud-alpha-2026-09-11
+base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
+accepted_candidates:
+  - PR #49 head fb110308ee1a2a6a93ee05b97da5fe0cef472c74
+  - PR #51 head 5394ee4e20f711cc5b234ade1b220cbf69a3b870
+write_scope:
+  - integrate only the accepted #42 and #44 candidate commits into integration/cloud-alpha-2026-09-11
+  - no main write
+  - no #47 integration
+  - no feature implementation
+post_write_obligation:
+  - run/inspect exact integrated-head CI/Compose/E2E
+  - record resulting integration SHA and evidence on #41
+lease_expires_at: 2026-09-11T23:59:00Z
+
+User explicitly authorized: "integrate #49 dan #51 ke integration branch".
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T23:44:35Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T23:49:19Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #44 state=open updated=2026-09-11T23:42:11Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #42 state=open updated=2026-09-11T23:36:16Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
@@ -661,4 +667,4 @@ PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34659190820 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34659484068 sections=6
