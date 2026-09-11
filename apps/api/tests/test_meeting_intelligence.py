@@ -89,14 +89,14 @@ async def test_fake_adapter_proves_safe_command_shape_and_structured_result() ->
     assert "--ignore-user-config" in exec_call.argv
     assert "--ephemeral" in exec_call.argv
     assert "--skip-git-repo-check" in exec_call.argv
-    assert ("--sandbox", "read-only") == (
+    assert (
         exec_call.argv[exec_call.argv.index("--sandbox")],
         exec_call.argv[exec_call.argv.index("--sandbox") + 1],
-    )
-    assert ("--model", "fake-subscription-model") == (
+    ) == ("--sandbox", "read-only")
+    assert (
         exec_call.argv[exec_call.argv.index("--model")],
         exec_call.argv[exec_call.argv.index("--model") + 1],
-    )
+    ) == ("--model", "fake-subscription-model")
     config_index = exec_call.argv.index("--config")
     assert exec_call.argv[config_index + 1] == 'model_reasoning_effort="high"'
     assert transcript not in " ".join(exec_call.argv)
