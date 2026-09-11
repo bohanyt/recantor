@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34659049409
+snapshot_seq: 34659190820
 
-collected_at: 2026-09-11T23:42:24.917870Z
+collected_at: 2026-09-11T23:44:46.951601Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T23:19:43Z
+issue_updated_at: 2026-09-11T23:44:35Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,23 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640864761 author=bohanyt
-CONTROL_TOWER_ACC_BOUNDARY_ALERT_V1
-state: ACC_SPLIT_BRAIN_DETECTED_AND_CONTAINED
-
-Drive hygiene correction completed outside Recantor runtime/integration source:
-- Existing manual Doc `RECANTOR ACC — CURRENT` was moved into `GitHub Agent Context/recantor/`, renamed `CURRENT`, stable ID preserved: `1ZcMQPDQDEO67wseF6V5BltbWOe7UarVDWEiC9bzML1Q`.
-- That CURRENT ID is now shared Writer only to the existing ACC service account. Its manually assembled content has been prefixed `PENDING_OFFICIAL_ACC_OVERWRITE / DO_NOT_USE_AS_FINAL_ACC_ORIENTATION_YET` until the compiler overwrites it.
-- Existing manual Doc `RECANTOR ACC — SOURCE` was moved into the same folder, renamed `SOURCE-MANUAL-SPIKE-DO-NOT-USE`, stable ID preserved: `1zrVErAidVa9MIWncuQm9xFmWWsMS7xoQQJddSYtXCpI`.
-- The SOURCE spike now begins `NOT_AN_OFFICIAL_ACC_ARTIFACT / DO_NOT_USE_FOR_ORIENTATION`. Official SOURCE is NOT enabled.
-
-Reason: those documents were manually authored but used the `AGENT_CONTEXT_V1` shape, creating a split-brain risk with the real compiler. GitHub remains authority; only compiler-generated ACC artifacts may be presented as official `AGENT_CONTEXT_V1` orientation snapshots.
-
-Official Recantor CURRENT w
-...[COMMENT_5640864761_TRUNCATED chars=1138]
-
----
-
 comment_id=5640922695 author=bohanyt
 CONTROL_TOWER_ACC_ACTIVATION_V1
 state: OFFICIAL_CURRENT_WIRING_MERGED / FIRST_COMPILE_TRIGGERED
@@ -631,14 +614,36 @@ Current candidates:
 - #49 / #42 head `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`, OPEN DRAFT. Hardened implementation landed. Existing workflow run #304 is red only because it predates the #38 test-clock baseline repair; focused #42/backend realtime, frontend, E2E and Compose evidence at that head were green. B/J delta reviewers were run by the operator, but the prompt incorrectly said `No writes`, so their new findings are not yet durable in GitHub. Their prior reviews at the old head do not accept the hardened delta.
 - #50 / #47 head `652581b62c6f7ca392a5e235f3a5231f25370709`, OPEN DRAFT. Security/process reconciliation landed. Existing workflow run #306 is red only because it predates the #38 test-clock baseline repair; all 15 focused #47 security/process tests plus frontend/E2E/Compose were green. Reviewer F was run by the operator, but the prompt incorrectly forbade writes, so the delta result is not yet du
 ...[COMMENT_5641744447_TRUNCATED chars=1277]
+
+---
+
+comment_id=5641903294 author=bohanyt
+## CONTROL_TOWER_GOAL_RESET_V1 — return to first installable alpha
+
+The Control Tower has spent enough cycles on tooling/review mechanics. Re-anchor all next work to the #41 product goal.
+
+### Product goal that wins
+
+Deliver a coherent first installable alpha with:
+1. **Live** — reliable browser recording + automatic Groq STT + reconnect-safe canonical transcript UI.
+2. **Upload recording** — resumable upload -> durable media processing -> canonical transcript -> exports.
+3. **Desktop product UX/setup** — clear Live/Upload shell, human status, diagnostics hidden by default, truthful minimal Groq setup.
+4. One **final #48 Windows acceptance campaign** after cloud evidence is exhausted.
+
+### Fresh frontier
+
+- #42 / PR #49 @ `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`: Reviewer B delta CLEAN (0 blocker / 0 should-fix); Reviewer J delta CLEAN (0 blocker / 0 should-fix). Treat as **cloud-review accepted / integration candidate**.
+- #44 / PR #51 @ `5394ee4e20f711cc5b234ade1b220cbf69a3b870`: Reviewer K delta **CLEAN / K-B1 CLOSED**; Upload Foundation CI `34657014697` SUCCESS and standard CI `34657014766` SUCCESS. Treat as **cloud-review accepted / integration candidate**.
+- #47 / PR #50 @
+...[COMMENT_5641903294_TRUNCATED chars=1657]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-11T23:44:35Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #44 state=open updated=2026-09-11T23:42:11Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #42 state=open updated=2026-09-11T23:36:16Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
-ISSUE #41 state=open updated=2026-09-11T23:19:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
@@ -656,4 +661,4 @@ PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34659049409 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34659190820 sections=6
