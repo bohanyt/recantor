@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { TranscriptSegmentResponse } from '../api/generated/types.gen';
 import { fetchTranscriptPage, transcriptSocketUrl } from './api';
 import { TranscriptLog } from './TranscriptLog';
-import { mergeCanonicalSegments, transcriptReconnectDelayMs } from './state';
+import { mergeCanonicalSegments, TranscriptReconnectBackoff } from './state';
 
 type DeliveryState = 'idle' | 'starting' | 'live' | 'recovering' | 'degraded';
 
@@ -45,7 +45,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
     let syncAgain = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
-    let reconnectAttempt = 0;
+    const reconnectBackoff = new TranscriptReconnectBackoff();
     const abortController = new AbortController();
 
     const syncCanonical = async (): Promise<void> => {
@@ -94,7 +94,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
       nextSocket.onmessage = (event) => {
         const type = realtimeType(event.data);
         if (type === 'ready') {
-          reconnectAttempt = 0;
+          reconnectBackoff.reset();
           setDeliveryState('live');
           setDetail(null);
           // Catch up after subscription is established. This closes the fetch/subscribe race.
@@ -129,9 +129,7 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
           'Live transcript updates are reconnecting. Canonical transcript recovery will keep checking for committed segments. Recorder safety status remains authoritative.',
         );
         if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-        const delay = transcriptReconnectDelayMs(reconnectAttempt);
-        reconnectAttempt += 1;
-        reconnectTimer = window.setTimeout(connect, delay);
+        reconnectTimer = window.setTimeout(connect, reconnectBackoff.nextDelay());
       };
     };
 
