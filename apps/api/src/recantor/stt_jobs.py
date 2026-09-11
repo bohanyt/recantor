@@ -15,8 +15,8 @@ from recantor.models import (
     RecordingSession,
     STTJob,
     STTJobState,
-    TranscriptionUtterance,
     TranscriptSegment,
+    TranscriptionUtterance,
 )
 from recantor.settings import get_settings
 from recantor.stt import (
@@ -27,6 +27,7 @@ from recantor.stt import (
     STTSourceNotFound,
     transcribe_utterance,
 )
+from recantor.transcript import TranscriptCommitRejected
 from recantor.utterance import transcript_producer_key_for_utterance
 
 
@@ -110,6 +111,20 @@ def _retry_delay_seconds(category: STTErrorCategory, attempt_count: int) -> floa
     )
 
 
+async def _database_now(db: AsyncSession) -> datetime:
+    current = await db.scalar(select(func.now()))
+    if current is None:
+        raise STTJobError("database did not return a scheduling clock")
+    return current
+
+
+async def _scheduler_now(now: datetime | None) -> datetime:
+    if now is not None:
+        return now
+    async with get_sessionmaker()() as db:
+        return await _database_now(db)
+
+
 async def _canonical_exists(
     db: AsyncSession,
     *,
@@ -142,18 +157,28 @@ def _mark_succeeded(job: STTJob) -> None:
     job.last_error_message = None
 
 
+def _mark_retry_budget_exhausted(job: STTJob) -> None:
+    job.state = STTJobState.FAILED.value
+    job.next_attempt_at = None
+    _clear_claim(job)
+    job.last_error_category = "scheduler"
+    job.last_error_code = "retry_budget_exhausted"
+    job.last_error_message = "automatic STT attempt budget exhausted"
+
+
 async def claim_stt_job(
     *,
     utterance_id: UUID,
     now: datetime | None = None,
     lease_seconds: float | None = None,
 ) -> STTClaim | None:
-    current = now or utcnow()
+    settings = get_settings()
     lease = lease_seconds if lease_seconds is not None else _effective_lease_seconds()
     if lease <= 0:
         raise STTJobError("STT claim lease must be positive")
 
     async with get_sessionmaker()() as db, db.begin():
+        current = now or await _database_now(db)
         job = await db.scalar(
             select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update()
         )
@@ -182,6 +207,9 @@ async def claim_stt_job(
             and job.next_attempt_at > current
         ):
             return None
+        if job.attempt_count >= settings.stt_max_attempts:
+            _mark_retry_budget_exhausted(job)
+            return None
 
         token = uuid4().hex
         expires_at = current + timedelta(seconds=lease)
@@ -200,21 +228,35 @@ async def claim_stt_job(
         )
 
 
+async def _claim_commit_is_current(db: AsyncSession, claim: STTClaim) -> bool:
+    job = await db.scalar(
+        select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+    )
+    return (
+        job is not None
+        and job.session_id == claim.session_id
+        and job.state == STTJobState.CLAIMED.value
+        and job.claim_token == claim.token
+    )
+
+
 async def _complete_claim_success(claim: STTClaim) -> bool:
     async with get_sessionmaker()() as db, db.begin():
         job = await db.scalar(
             select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
         )
-        if job is None or job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
+        if job is None:
             return False
-        if not await _canonical_exists(
+        if await _canonical_exists(
             db,
-            session_id=claim.session_id,
-            utterance_id=claim.utterance_id,
+            session_id=job.session_id,
+            utterance_id=job.utterance_id,
         ):
+            _mark_succeeded(job)
+            return True
+        if job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
             return False
-        _mark_succeeded(job)
-        return True
+        return False
 
 
 async def _record_claim_failure(
@@ -226,21 +268,40 @@ async def _record_claim_failure(
     retry_category: STTErrorCategory | None,
     now: datetime | None = None,
 ) -> STTExecutionResult:
-    current = now or utcnow()
     settings = get_settings()
 
     async with get_sessionmaker()() as db, db.begin():
         job = await db.scalar(
             select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
         )
-        if job is None or job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
+        if job is None:
             return STTExecutionResult(
                 status=STTExecutionStatus.STALE,
-                state=None if job is None else STTJobState(job.state),
-                attempt_count=0 if job is None else job.attempt_count,
-                next_attempt_at=None if job is None else job.next_attempt_at,
+                state=None,
+                attempt_count=0,
             )
 
+        if await _canonical_exists(
+            db,
+            session_id=job.session_id,
+            utterance_id=job.utterance_id,
+        ):
+            _mark_succeeded(job)
+            return STTExecutionResult(
+                status=STTExecutionStatus.SUCCEEDED,
+                state=STTJobState.SUCCEEDED,
+                attempt_count=job.attempt_count,
+            )
+
+        if job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
+            return STTExecutionResult(
+                status=STTExecutionStatus.STALE,
+                state=STTJobState(job.state),
+                attempt_count=job.attempt_count,
+                next_attempt_at=job.next_attempt_at,
+            )
+
+        current = now or await _database_now(db)
         job.last_error_category = category[:64]
         job.last_error_code = code[:96]
         job.last_error_message = _safe_message(message, fallback=code)
@@ -269,6 +330,17 @@ async def _record_claim_failure(
         )
 
 
+async def _stale_execution_result(claim: STTClaim) -> STTExecutionResult:
+    async with get_sessionmaker()() as db:
+        job = await db.get(STTJob, claim.utterance_id)
+    return STTExecutionResult(
+        status=STTExecutionStatus.STALE,
+        state=None if job is None else STTJobState(job.state),
+        attempt_count=claim.attempt_count if job is None else job.attempt_count,
+        next_attempt_at=None if job is None else job.next_attempt_at,
+    )
+
+
 async def execute_stt_job(
     *,
     utterance_id: UUID,
@@ -291,18 +363,24 @@ async def execute_stt_job(
             next_attempt_at=None if job is None else job.next_attempt_at,
         )
 
+    async def commit_guard(db: AsyncSession) -> bool:
+        return await _claim_commit_is_current(db, claim)
+
     try:
         await transcribe_utterance(
             session_id=claim.session_id,
             work_id=claim.utterance_id,
             provider=provider,
+            commit_guard=commit_guard,
         )
+    except TranscriptCommitRejected:
+        return await _stale_execution_result(claim)
     except STTProviderError as exc:
         return await _record_claim_failure(
             claim,
             category=exc.category.value,
             code=f"provider_{exc.category.value}",
-            message=str(exc),
+            message=f"STT provider {exc.category.value} failure",
             retry_category=exc.category,
             now=now,
         )
@@ -336,11 +414,7 @@ async def execute_stt_job(
 
     completed = await _complete_claim_success(claim)
     if not completed:
-        return STTExecutionResult(
-            status=STTExecutionStatus.STALE,
-            state=STTJobState.CLAIMED,
-            attempt_count=claim.attempt_count,
-        )
+        return await _stale_execution_result(claim)
     return STTExecutionResult(
         status=STTExecutionStatus.SUCCEEDED,
         state=STTJobState.SUCCEEDED,
@@ -420,8 +494,8 @@ async def _ensure_missing_jobs(batch_size: int) -> int:
                 ]
             )
             .on_conflict_do_nothing(index_elements=[STTJob.utterance_id])
+            .returning(STTJob.utterance_id)
         )
-        statement = statement.returning(STTJob.utterance_id)
         created_ids = list((await db.scalars(statement)).all())
         await db.commit()
         return len(created_ids)
@@ -498,6 +572,7 @@ async def _fair_candidates(
     *,
     now: datetime,
     limit: int,
+    per_session_limit: int,
     cooldown_seconds: float,
 ) -> list[UUID]:
     cooldown_before = now - timedelta(seconds=cooldown_seconds)
@@ -526,6 +601,7 @@ async def _fair_candidates(
         rows = (
             await db.execute(
                 select(ranked.c.utterance_id)
+                .where(ranked.c.session_rank <= per_session_limit)
                 .order_by(
                     ranked.c.session_rank,
                     ranked.c.session_id,
@@ -552,13 +628,17 @@ async def reconcile_stt_jobs(
     enqueue: Callable[[UUID], object],
     now: datetime | None = None,
     limit: int | None = None,
+    per_session_limit: int | None = None,
     cooldown_seconds: float | None = None,
 ) -> STTReconcileResult:
     settings = get_settings()
-    current = now or utcnow()
+    current = await _scheduler_now(now)
     batch_size = limit or settings.stt_reconcile_batch_size
+    session_limit = per_session_limit or settings.stt_reconcile_per_session_limit
     if batch_size < 1:
         raise STTJobError("STT reconcile batch size must be positive")
+    if session_limit < 1:
+        raise STTJobError("STT per-session reconcile limit must be positive")
     cooldown = (
         float(settings.stt_dispatch_reenqueue_seconds)
         if cooldown_seconds is None
@@ -572,6 +652,7 @@ async def reconcile_stt_jobs(
     candidates = await _fair_candidates(
         now=current,
         limit=batch_size,
+        per_session_limit=session_limit,
         cooldown_seconds=cooldown,
     )
 
@@ -585,8 +666,8 @@ async def reconcile_stt_jobs(
         else:
             dispatched += 1
         finally:
-            # Record the attempt even when Redis is unavailable so a reconciler outage does not
-            # turn into a hot enqueue loop. Durable work remains eligible after the cooldown.
+            # Delivery is only a hint. This timestamp throttles publish storms, then expires;
+            # PostgreSQL unfinished state remains eligible for later reconciliation.
             await _mark_delivery_attempt(utterance_id, current)
 
     return STTReconcileResult(
