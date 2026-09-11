@@ -119,7 +119,8 @@ class TranscriptRealtimeNotifier:
             self._queue.put_nowait((session_id, sequence))
         except Full:
             logger.warning(
-                "dropping transcript realtime wake-up because notifier queue is full: %s sequence %s",
+                "dropping transcript realtime wake-up because notifier queue is full: "
+                "%s sequence %s",
                 session_id,
                 sequence,
             )
