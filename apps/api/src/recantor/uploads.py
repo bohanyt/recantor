@@ -95,9 +95,7 @@ def validate_upload_policy(
     normalized_type = _normalize_content_type(content_type)
     allowed_types = _ALLOWED_CONTENT_TYPES.get(PurePath(filename).suffix.lower())
     if allowed_types is None:
-        raise UploadPolicyError(
-            "unsupported file extension; use WAV, MP3, M4A, OGG, WebM, or MP4"
-        )
+        raise UploadPolicyError("unsupported file extension; use WAV, MP3, M4A, OGG, WebM, or MP4")
     if normalized_type not in allowed_types:
         raise UploadPolicyError("declared media type does not match the supported file type")
     if byte_length <= 0:
