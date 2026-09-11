@@ -6,7 +6,13 @@ from uuid import UUID, uuid5
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recantor.models import RecordingSession, SessionState, TranscriptionUtterance
+from recantor.models import (
+    RecordingSession,
+    SessionState,
+    STTJob,
+    STTJobState,
+    TranscriptionUtterance,
+)
 from recantor.settings import get_settings
 from recantor.storage import AudioStorageConflict, AudioStorageError, FilesystemAudioStorage
 
@@ -113,6 +119,19 @@ def _validate_expected_capture(
         raise UtteranceWorkConflict("recording session is not accepting live utterance work")
 
 
+async def _ensure_stt_job(db: AsyncSession, work: TranscriptionUtterance) -> STTJob:
+    job = await db.get(STTJob, work.id)
+    if job is None:
+        job = STTJob(
+            utterance_id=work.id,
+            session_id=work.session_id,
+            state=STTJobState.PENDING.value,
+        )
+        db.add(job)
+        await db.flush()
+    return job
+
+
 async def commit_utterance_work(
     db: AsyncSession,
     *,
@@ -180,6 +199,7 @@ async def commit_utterance_work(
                 raise UtteranceWorkStorageError(
                     "committed utterance storage evidence failed verification"
                 )
+            await _ensure_stt_job(db, existing)
             return existing, True
 
         highest_sequence = await db.scalar(
@@ -220,6 +240,7 @@ async def commit_utterance_work(
         )
         db.add(work)
         await db.flush()
+        await _ensure_stt_job(db, work)
 
     return work, False
 

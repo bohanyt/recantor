@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchHealth, fetchReadiness } from './api';
 import { env } from './env';
 import { RecorderPanel } from './RecorderPanel';
+import { UploadPanel } from './UploadPanel';
 
 type StatusCardProps = {
   title: string;
@@ -71,6 +72,7 @@ export default function App() {
       </header>
 
       <RecorderPanel />
+      <UploadPanel />
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <StatusCard

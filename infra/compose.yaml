@@ -26,6 +26,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   migrate:
     build:
@@ -40,6 +41,19 @@ services:
         condition: service_healthy
     restart: "no"
 
+  upload-storage-init:
+    image: alpine:3.23.4
+    user: "0:0"
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /data/audio/uploads/tus && chown 1000:1000 /data/audio/uploads/tus && chmod 0775 /data/audio/uploads/tus",
+      ]
+    volumes:
+      - recantor-audio:/data/audio
+    restart: "no"
+
   api:
     build:
       context: ../apps/api
@@ -51,6 +65,11 @@ services:
       AUDIO_STORAGE_PATH: /data/audio
       RECORDING_HEARTBEAT_TIMEOUT_SECONDS: 20
       RECORDING_MAX_CHUNK_BYTES: 16777216
+      UPLOAD_MAX_BYTES: "${UPLOAD_MAX_BYTES:-5368709120}"
+      UPLOAD_MAX_DURATION_SECONDS: "${UPLOAD_MAX_DURATION_SECONDS:-43200}"
+      UPLOAD_CAPABILITY_TTL_SECONDS: "${UPLOAD_CAPABILITY_TTL_SECONDS:-86400}"
+      UPLOAD_TUS_STORAGE_PREFIX: uploads/tus
+      TUS_PUBLIC_ENDPOINT: http://localhost:1080/files/
       GROQ_API_KEY: "${GROQ_API_KEY:-}"
       GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
       GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
@@ -61,6 +80,8 @@ services:
       - recantor-audio:/data/audio
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      upload-storage-init:
         condition: service_completed_successfully
     healthcheck:
       test:
@@ -74,6 +95,99 @@ services:
       timeout: 3s
       retries: 20
 
+  tusd:
+    image: tusproject/tusd:v2.10.0
+    user: "1000:1000"
+    command:
+      [
+        "-host=0.0.0.0",
+        "-port=8080",
+        "-base-path=/files/",
+        "-upload-dir=/data/audio/uploads/tus",
+        "-max-size=${UPLOAD_MAX_BYTES:-5368709120}",
+        "-disable-download",
+        "-disable-termination",
+        "-disable-concatenation",
+        "-cors-allow-origin=http://localhost:5173",
+        "-cors-allow-headers=X-Recantor-Upload-Token",
+        "-hooks-http=http://api:8000/api/v1/uploads/tusd-hooks",
+        "-hooks-http-forward-headers=X-Recantor-Upload-Token",
+        "-hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish",
+        "-hooks-http-retry=5",
+        "-hooks-http-backoff=1s",
+        "-progress-hooks-interval=1s",
+      ]
+    ports:
+      - "1080:8080"
+    volumes:
+      - recantor-audio:/data/audio
+    depends_on:
+      api:
+        condition: service_healthy
+      upload-storage-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  stt-worker:
+    build:
+      context: ../apps/api
+    command:
+      [
+        "celery",
+        "-A",
+        "recantor.stt_tasks:celery_app",
+        "worker",
+        "-Q",
+        "${STT_QUEUE_NAME:-stt-live}",
+        "--concurrency=2",
+        "--prefetch-multiplier=1",
+        "--loglevel=INFO",
+      ]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      AUDIO_STORAGE_PATH: /data/audio
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      GROQ_STT_ENDPOINT: "${GROQ_STT_ENDPOINT:-https://api.groq.com/openai/v1/audio/transcriptions}"
+      GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
+      GROQ_STT_TIMEOUT_SECONDS: "${GROQ_STT_TIMEOUT_SECONDS:-30}"
+      STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
+      STT_CLAIM_LEASE_SECONDS: "${STT_CLAIM_LEASE_SECONDS:-60}"
+      STT_MAX_ATTEMPTS: "${STT_MAX_ATTEMPTS:-5}"
+      STT_RETRY_BASE_SECONDS: "${STT_RETRY_BASE_SECONDS:-2}"
+      STT_RETRY_MAX_SECONDS: "${STT_RETRY_MAX_SECONDS:-60}"
+      STT_CONFIGURATION_RETRY_SECONDS: "${STT_CONFIGURATION_RETRY_SECONDS:-300}"
+      STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
+    volumes:
+      - recantor-audio:/data/audio:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  stt-reconciler:
+    build:
+      context: ../apps/api
+    command: ["python", "-m", "recantor.stt_reconciler"]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
+      STT_RECONCILE_INTERVAL_SECONDS: "${STT_RECONCILE_INTERVAL_SECONDS:-1}"
+      STT_RECONCILE_BATCH_SIZE: "${STT_RECONCILE_BATCH_SIZE:-100}"
+      STT_RECONCILE_PER_SESSION_LIMIT: "${STT_RECONCILE_PER_SESSION_LIMIT:-2}"
+      STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     build:
       context: ../apps/web
@@ -86,6 +200,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      tusd:
+        condition: service_started
 
 volumes:
   recantor-postgres:

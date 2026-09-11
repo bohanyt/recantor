@@ -1,6 +1,6 @@
 # Current
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 
 This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, branch, and CI state outrank this summary if the repository has moved.
 
@@ -148,7 +148,7 @@ PR #37 then made that `User-Agent` behavior permanent and added a regression ass
 
 Second work item, using the permanent adapter with no runtime monkeypatch:
 
-- utterance `ad71e495-cdd6-5ae0-814b-758ba5133f85`, sequence 39;
+- utterance `ad71e495-cdd6-5ae0-814b-758a5133f85`, sequence 39;
 - timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
 - Groq call succeeded directly from the rebuilt API container;
 - canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
@@ -158,28 +158,30 @@ The API key remained local/server-side and was not committed or posted. This pro
 
 ## Current Phase 2 slice — Issue #38 / Phase 2E
 
-Issue #38 is now the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**.
+Issue #38 is the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**. DRAFT PR #40 is the active implementation candidate on branch `agent-a/issue-38-phase2e-live-stt`; it is not merged or merge-ready, and the required Windows/Edge real-microphone witness has intentionally not been performed pending Control Tower assignment.
 
-The missing causal link is now automatic scheduling:
+The DRAFT candidate implements automatic scheduling as:
 
 ```text
 durable TranscriptionUtterance
-        -> PostgreSQL-backed eligible/claim state
-        -> Celery/Redis delivery hint
-        -> STT worker
-        -> merged Phase 2D executor/provider
+        -> PostgreSQL eligibility/capacity/reservation
+        -> coalesced generic Celery/Redis wake
+        -> PostgreSQL-selected fenced claim
+        -> STT worker / merged Phase 2D executor/provider
         -> canonical TranscriptSegment
 ```
+
+DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider retries, safe diagnostics/replay, deterministic fake-provider tests, and Compose worker/reconciler wiring. Broker messages do not encode service order or durable work identity: an old wake asks PostgreSQL for whichever reserved job is currently authoritative, while reconciliation tops Redis only up to current reservation demand. Redis loss can therefore be replenished without letting stale broker history become the backlog. Canonical convergence is bidirectional: authoritative transcript evidence promotes success, while a false durable `succeeded` projection without canonical evidence is automatically repaired to runnable work. Production capacity/selection/reservation samples PostgreSQL `clock_timestamp()` inside a transaction-scoped scheduler advisory lock and releases that DB authority before Redis publication; reservation timestamps never regress. Durable utterance commit does not call Redis, Celery, or the provider, so queue/provider availability cannot roll back archive or utterance durability.
 
 Required semantics for #38:
 
 - PostgreSQL + audio storage remain durable truth; Redis/Celery are delivery/coordination only;
 - losing a queue message cannot lose transcription work because unfinished durable utterances are rediscoverable;
-- duplicate Celery delivery must be safe and two workers must not concurrently call the provider for the same active claim;
+- stale/duplicate Celery wakes carry no durable service-order authority and two workers must not concurrently call the provider for the same active claim;
 - claims must expire/recover after worker death without holding a DB transaction across the provider network call;
 - provider retry policy must consume Phase 2D error categories and avoid hot loops;
-- canonical transcript evidence remains authoritative for success;
-- a large backlog from one session must not starve another session;
+- canonical transcript evidence remains authoritative for success, including repair of false scheduling success;
+- broker admission is bounded globally and per session across reconciliation passes; PostgreSQL reservations are serialized before publication, and session service-turn ordering prevents fixed-order or continuous-new-session starvation;
 - enqueue/Redis/provider failure must not weaken archive capture or durable utterance commit;
 - local Compose should run the minimum worker/reconciler services needed to exercise the automatic path;
 - ordinary CI must remain independent from real Groq secrets/network.
@@ -188,6 +190,35 @@ A bounded real witness is required before merge-ready: fresh Windows/Edge record
 
 Realtime transcript WebSocket delivery/UI is explicitly the next slice after #38, not part of #38.
 
+## Existing-recording upload foundation — DRAFT / Issue #44
+
+Issue #44 / DRAFT PR #51 is the Phase 3A ingest candidate on branch `agent-h/issue-44-upload-foundation`, based on the frozen cloud-alpha integration anchor. It is not merged or merge-ready.
+
+The DRAFT candidate adds a distinct upload session kind and durable PostgreSQL `UploadRecord`, plus the bounded ingest path:
+
+```text
+Browser file
+  -> Uppy + tus
+  -> tusd
+  -> shared durable audio storage
+  -> Recantor tusd completion hook
+  -> PostgreSQL upload completion evidence
+```
+
+Current candidate rules:
+
+- uploaded media is not routed through the live `MediaRecorder` chunk protocol;
+- a browser-generated high-entropy capability token is stored server-side only as a SHA-256 hash and is required for upload-session reads and tus hooks;
+- upload state records declared filename/type/length, received progress, expiry, one bound tus upload identity, completion/failure state, and Recantor-owned durable object metadata;
+- durable completion records an internal storage key, exact byte length, and streaming SHA-256 of the stored source object; the raw filesystem path and tus internals are not public API identity;
+- duplicate completion is idempotent only when the durable key/length/hash still match;
+- Uppy recovery state allows pause/retry/reload/reselection to resume the same tus upload rather than restarting from zero;
+- configurable size/duration hooks and WAV/MP3/M4A/OGG/WebM/MP4 admission policy are present;
+- local Compose includes pinned tusd with the same durable audio volume as the API and completion hooks back into Recantor;
+- upload-specific cloud browser evidence uses a real tusd process; final real-user/local acceptance remains deferred to the Control Tower final gate.
+
+This slice deliberately stops at durable completed-upload evidence. FFmpeg/ffprobe validation, normalization, segmentation, upload-to-STT scheduling, canonical transcript production, and live-vs-upload scheduling priority belong to Issue #45. Result/export UX belongs to Issue #46.
+
 ## Roadmap alignment / drift guard
 
 The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
@@ -195,22 +226,23 @@ The repository remains aligned with `docs/ROADMAP.md` Phase 2 dependency order:
 1. utterance/VAD pipeline — landed;
 2. Groq STT provider — landed;
 3. canonical transcript segment model — landed;
-4. live STT queue — **current #38**;
+4. live STT queue — **DRAFT PR #40 for #38; not merged/witnessed**;
 5. provider retry/rate-limit handling — included in #38 scheduling semantics;
 6. WebSocket transcript updates/recovery — next;
 7. local STT provider/fallback — later;
 8. latency/accuracy/provider benchmark harness — later.
 
-Do not pull diarization, summaries, native mobile, existing-file upload, or production exposure concerns into the Phase 2 critical path unless a concrete dependency forces it.
+Existing-file upload is being developed as a separate cloud-alpha productization lane and must not weaken the Phase 2 live capture/STT invariants.
 
 ## Production exposure boundary
 
 Authentication, authorization, retention/deletion, abuse controls, and production deployment hardening remain required before exposing Live Intelligence beyond trusted development. They do not block trusted local Phase 2 engineering.
 
+The Issue #44 capability model is likewise a trusted-development/guest foundation, not production authentication or abuse protection.
+
 ## Not implemented yet
 
-- automatic/live STT scheduling from each newly committed utterance;
-- durable live STT queue/reconciliation/fairness;
+- Phase 2E live STT scheduling/queue/reconciliation/fairness remains unmerged and unwitnessed on `main`; DRAFT PR #40 is the implementation candidate;
 - realtime transcript fanout/UI;
 - local faster-whisper fallback;
 - final ground-truth STT/VAD latency/accuracy benchmark harness;
@@ -218,11 +250,13 @@ Authentication, authorization, retention/deletion, abuse controls, and productio
 - rolling/final summaries;
 - production auth/authorization;
 - user-visible recording deletion/retention;
-- tus existing-recording upload pipeline;
+- Phase 3A existing-recording upload remains unmerged on DRAFT PR #51;
+- uploaded-media FFmpeg normalization and durable processing into canonical transcript truth (#45);
+- uploaded-recording result/export UX (#46);
 - production reverse-proxy/deployment hardening;
 - native Android/iOS recorder clients.
 
-Do not describe these as working until repository evidence proves them.
+Do not describe these as working on `main` until repository evidence proves them.
 
 ## Known boundaries
 
@@ -236,6 +270,7 @@ Do not describe these as working until repository evidence proves them.
 - Realtime discontinuity is live-intelligence evidence loss, not automatically an archive gap.
 - VAD defaults need real-office speech/noise/latency tuning before being treated as product-quality.
 - STT accuracy has not yet been benchmarked against known ground-truth meeting speech.
+- Existing-recording file/container validity is not proven by an accepted extension/MIME declaration; #45 owns ffprobe/FFmpeg validation and corrupt/no-audio handling.
 
 ## Local development
 
@@ -257,7 +292,7 @@ For a new Control Tower chat:
 2. read `AGENTS.md`;
 3. read this file;
 4. read the latest dated file under `docs/handoff/` if present;
-5. read Issue #38 and its current implementation PR if one exists;
+5. read Issue #41 and the active implementation/review issue relevant to the lane;
 6. re-check current branch/PR/issue/CI state before acting.
 
 Whenever a change materially alters current product/architecture truth, update this file in the same delivery.

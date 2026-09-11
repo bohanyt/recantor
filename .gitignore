@@ -21,6 +21,7 @@ dist/
 .vite/
 coverage/
 *.tsbuildinfo
+apps/web/src/vendor/uppy.min.mjs
 
 # Generated API client / schema scratch
 openapi.json
