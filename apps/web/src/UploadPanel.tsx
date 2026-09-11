@@ -89,7 +89,9 @@ async function waitForDurableCompletion(
     }
     await delay(VERIFY_DELAY_MS);
   }
-  throw new Error('Transfer finished, but durable server confirmation did not arrive. Retry safely.');
+  throw new Error(
+    'Transfer finished, but durable server confirmation did not arrive. Retry safely.',
+  );
 }
 
 export function UploadPanel() {
@@ -170,7 +172,8 @@ export function UploadPanel() {
 
       uppy.on('upload-progress', (_uppyFile, uploadProgress) => {
         const total = uploadProgress.bytesTotal ?? file.size;
-        const percent = total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
+        const percent =
+          total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
         setProgress(Math.min(99, Math.max(0, percent)));
       });
       uppy.on('upload-error', (_uppyFile, error, response) => {
@@ -209,7 +212,9 @@ export function UploadPanel() {
         },
       });
       setPhase('uploading');
-      setMessage(session.received_bytes > 0 ? 'Resuming from durable server progress…' : 'Uploading…');
+      setMessage(
+        session.received_bytes > 0 ? 'Resuming from durable server progress…' : 'Uploading…',
+      );
       void uppy.upload();
     } catch (error) {
       setPhase('error');
@@ -244,7 +249,9 @@ export function UploadPanel() {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
             Existing recording
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">Upload without starting over.</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+            Upload without starting over.
+          </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             WAV, MP3, M4A, OGG, WebM, or MP4. The transfer uses resumable tus storage; a completed
             bar is not treated as durable until the Recantor API confirms the stored object.
@@ -295,7 +302,10 @@ export function UploadPanel() {
         ) : null}
       </div>
 
-      <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--background)]" aria-hidden="true">
+      <div
+        className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--background)]"
+        aria-hidden="true"
+      >
         <div
           className="h-full bg-[var(--accent)] transition-[width]"
           style={{ width: `${progress}%` }}
