@@ -57,10 +57,6 @@ jobs:
         run: |
           uv sync --project apps/api --frozen --dev
           pnpm --dir apps/web install --frozen-lockfile
-      - name: Show canonical upload E2E format diff
-        run: |
-          pnpm --dir apps/web exec prettier e2e/upload.spec.ts > /tmp/upload.spec.ts.formatted
-          diff -u apps/web/e2e/upload.spec.ts /tmp/upload.spec.ts.formatted || true
       - name: Prepare tusd-owned durable upload storage and database
         run: |
           docker run --rm --entrypoint sh tusproject/tusd:v2.10.0 \

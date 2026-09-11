@@ -217,12 +217,7 @@ test.describe('existing recording resumable upload', () => {
     expect(afterApiRestart.state).toBe('uploading');
     expect(afterApiRestart.received_bytes).toBeGreaterThan(0);
 
-    await restartTusdAtOffset(
-      request,
-      tusUploadUrl,
-      recovery.capabilityToken,
-      persistedOffset,
-    );
+    await restartTusdAtOffset(request, tusUploadUrl, recovery.capabilityToken, persistedOffset);
     expect(await tusOffset(request, tusUploadUrl, recovery.capabilityToken)).toBe(persistedOffset);
 
     await page.reload();
