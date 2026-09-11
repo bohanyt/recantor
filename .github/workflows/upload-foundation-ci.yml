@@ -57,6 +57,10 @@ jobs:
         run: |
           uv sync --project apps/api --frozen --dev
           pnpm --dir apps/web install --frozen-lockfile
+      - name: Show canonical Prettier output while stabilizing upload UI
+        run: |
+          pnpm --dir apps/web exec prettier src/UploadPanel.tsx --write
+          git diff -- apps/web/src/UploadPanel.tsx
       - name: Prepare durable upload storage and database
         run: |
           mkdir -p /tmp/recantor-upload-audio/uploads/tus
@@ -90,7 +94,7 @@ jobs:
             -hooks-http-forward-headers=X-Recantor-Upload-Token \
             -hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish \
             -hooks-http-retry=5 \
-            -hooks-http-backoff=1 \
+            -hooks-http-backoff=1s \
             -progress-hooks-interval=1s
           for i in {1..30}; do
             if curl -fsS -X OPTIONS http://127.0.0.1:1080/files/ \
