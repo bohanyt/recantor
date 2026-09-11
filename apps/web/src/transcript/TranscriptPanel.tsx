@@ -161,7 +161,9 @@ function SessionTranscript({ sessionId }: { sessionId: string | null }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold">Live transcript</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">Committed speech appears here in order.</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Committed speech appears here in order.
+          </p>
         </div>
         <span
           className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em]"
