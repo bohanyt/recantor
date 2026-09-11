@@ -7,9 +7,7 @@ declare global {
   }
 }
 
-test('live transcript converges through canonical HTTP state and archive survives delivery outage', async ({
-  page,
-}) => {
+test('live transcript recovers while archive survives delivery outage', async ({ page }) => {
   type Segment = {
     id: string;
     sequence: number;
