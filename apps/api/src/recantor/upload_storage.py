@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 _TUS_UPLOAD_ID = re.compile(r"^[A-Za-z0-9._~-]{8,160}$")
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 
 class UploadStorageError(RuntimeError):
@@ -15,6 +17,7 @@ class UploadStorageError(RuntimeError):
 class StoredUpload:
     key: str
     byte_length: int
+    sha256: str
 
 
 class FilesystemUploadStorage:
@@ -51,7 +54,16 @@ class FilesystemUploadStorage:
         if stat.st_size != expected_bytes:
             raise UploadStorageError("completed tus upload length does not match declared length")
 
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(_HASH_CHUNK_BYTES), b""):
+                    digest.update(chunk)
+        except OSError as exc:
+            raise UploadStorageError("completed tus upload could not be hashed") from exc
+
         return StoredUpload(
             key=path.relative_to(self.root).as_posix(),
             byte_length=stat.st_size,
+            sha256=digest.hexdigest(),
         )
