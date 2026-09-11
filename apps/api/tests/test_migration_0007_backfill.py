@@ -1,11 +1,11 @@
 from pathlib import Path
 from uuid import uuid4
 
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
+from alembic import command
 from recantor.settings import get_settings
 
 
@@ -83,15 +83,19 @@ def test_migration_0007_backfills_existing_utterances(monkeypatch) -> None:
         command.upgrade(config, "0007")
 
         with migration_engine.connect() as connection:
-            rows = connection.execute(
-                text(
-                    """
+            rows = (
+                connection.execute(
+                    text(
+                        """
                     SELECT utterance_id, session_id, state
                     FROM stt_jobs
                     ORDER BY utterance_id
                     """
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             constraints = set(
                 connection.execute(
                     text(

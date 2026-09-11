@@ -6,7 +6,6 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
-from sqlalchemy import select
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
@@ -25,7 +24,9 @@ from recantor.utterance import commit_utterance_work, transcript_producer_key_fo
 
 class SequenceProvider:
     def __init__(self, count: int):
-        self.results = [STTResult(text=f"pass2 transcript {index}", language="id") for index in range(count)]
+        self.results = [
+            STTResult(text=f"pass2 transcript {index}", language="id") for index in range(count)
+        ]
         self.calls = 0
 
     async def transcribe(self, request: STTRequest) -> STTResult:
@@ -147,7 +148,9 @@ async def test_cross_pass_admission_bounds_broker_prefix_and_late_session_reache
 
     assert provider.calls == 3
     assert (await load_job(b_work.id)).state == STTJobState.SUCCEEDED.value
-    remaining_a = [work for work in a_works if (await load_job(work.id)).state != STTJobState.SUCCEEDED.value]
+    remaining_a = [
+        work for work in a_works if (await load_job(work.id)).state != STTJobState.SUCCEEDED.value
+    ]
     assert len(remaining_a) == 6
 
 

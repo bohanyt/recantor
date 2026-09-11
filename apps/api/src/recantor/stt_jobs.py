@@ -526,6 +526,7 @@ async def _converge_canonical(batch_size: int) -> int:
             _mark_succeeded(job)
         return len(jobs)
 
+
 def _eligible_expression(current: datetime, cooldown_before: datetime):
     state_eligible = or_(
         STTJob.state == STTJobState.PENDING.value,
@@ -584,9 +585,7 @@ async def _fair_candidates(
     async with get_sessionmaker()() as db:
         outstanding_expression = _outstanding_expression(now, cooldown_before)
         global_outstanding = int(
-            await db.scalar(
-                select(func.count(STTJob.utterance_id)).where(outstanding_expression)
-            )
+            await db.scalar(select(func.count(STTJob.utterance_id)).where(outstanding_expression))
             or 0
         )
         available_global = max(0, limit - global_outstanding)
