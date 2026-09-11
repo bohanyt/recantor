@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34656170993
+snapshot_seq: 34656766446
 
-collected_at: 2026-09-11T22:57:43.971344Z
+collected_at: 2026-09-11T23:06:36.849740Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T22:57:30Z
+issue_updated_at: 2026-09-11T23:06:20Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,21 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640714125 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: Primary Control Tower
-issue: #41
-mode: implementation
-branch: integration/cloud-alpha-2026-09-11
-base_sha: 1cf0b3d69a356aaab17f6c42a4b687f7d42ea361
-write_scope:
-  - integration branch ref only
-  - fast-forward Phase 2E baseline test-clock repair e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
-  - no feature code edits
-lease_expires_at: 2026-09-11T21:35:00Z
-
----
-
 comment_id=5640725203 author=bohanyt
 ## CONTROL_TOWER_STATUS_V3 — baseline repaired; delta review + upload proof wave
 
@@ -640,11 +625,25 @@ exclusions:
   - no local Windows witness
   - no merge or mark-ready
 lease_expires_at: 2026-09-11T23:20:00Z
+
+---
+
+comment_id=5641651260 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: H
+issue: #44
+mode: implementation
+branch: agent-h/issue-44-upload-foundation
+base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
+current_head_at_renewal: e966ea806572d9204a792eb6bf97968a3e240e62
+write_scope: unchanged from lease comment 5641570960; stabilization/CI evidence only
+lease_expires_at: 2026-09-11T23:45:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T22:57:30Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T23:06:20Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #51 state=open updated=2026-09-11T23:02:33Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 ISSUE #44 state=open updated=2026-09-11T21:15:46Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T21:15:35Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -652,17 +651,16 @@ ISSUE #42 state=open updated=2026-09-11T21:15:26Z title=Phase 2F: realtime trans
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #49 state=open updated=2026-09-11T20:19:10Z title=Phase 2F: realtime transcript delivery and live UI
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
-PR #51 state=open updated=2026-09-11T13:10:39Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #45 state=open updated=2026-09-11T06:56:47Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #43 state=open updated=2026-09-11T06:49:41Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
+PR #51 draft=True updated=2026-09-11T23:02:33Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026-09-11 head=agent-g/issue-42-live-transcript-ui title=Phase 2F: realtime transcript delivery and live UI
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
-PR #51 draft=True updated=2026-09-11T13:10:39Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34656170993 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34656766446 sections=6
