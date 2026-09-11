@@ -98,7 +98,7 @@ services:
         "-hooks-http-forward-headers=X-Recantor-Upload-Token",
         "-hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish",
         "-hooks-http-retry=5",
-        "-hooks-http-backoff=1",
+        "-hooks-http-backoff=1s",
         "-progress-hooks-interval=1s",
       ]
     ports:
