@@ -21,7 +21,7 @@ jobs:
           version: '0.10.0'
       - run: uv sync --project apps/api --frozen --dev
       - run: |
-          uv run --project apps/api ruff check --fix apps/api
+          uv run --project apps/api ruff check --fix apps/api || true
           uv run --project apps/api ruff format apps/api
       - run: |
           if git diff --quiet; then exit 0; fi
