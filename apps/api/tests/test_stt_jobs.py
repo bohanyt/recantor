@@ -648,9 +648,11 @@ async def test_reconciler_bounds_admission_and_serves_late_session_before_large_
         per_session_limit=2,
         cooldown_seconds=60,
     )
-    assert second.dispatched == 3
-    assert b_work.id in second_dispatch
-    assert len(set(second_dispatch).intersection(a_ids)) == 2
+    # Session A already owns both outstanding admission slots from pass 1.
+    # Only newly-active session B may publish until those expiring hints clear or claim.
+    assert second.dispatched == 1
+    assert second_dispatch == [b_work.id]
+    assert len(set(second_dispatch).intersection(a_ids)) == 0
 
     b_provider = FakeProvider([STTResult(text="sesi B dilayani", language="id")])
     b_result = await execute_stt_job(utterance_id=b_work.id, provider=b_provider)
