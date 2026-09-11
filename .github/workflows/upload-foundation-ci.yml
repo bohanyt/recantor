@@ -1,0 +1,134 @@
+name: Upload foundation CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/upload-foundation-ci.yml"
+      - ".env.example"
+      - "apps/api/**"
+      - "apps/web/**"
+      - "infra/compose.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  upload-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: recantor
+          POSTGRES_USER: recantor
+          POSTGRES_PASSWORD: recantor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recantor -d recantor"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
+      CORS_ORIGINS: http://127.0.0.1:4173
+      AUDIO_STORAGE_PATH: /tmp/recantor-upload-audio
+      TUS_PUBLIC_ENDPOINT: http://127.0.0.1:1080/files/
+      VITE_APP_NAME: Recantor
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.10.0"
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "11.7.0"
+          run_install: false
+      - name: Install dependencies
+        run: |
+          uv sync --project apps/api --frozen --dev
+          pnpm --dir apps/web install --frozen-lockfile
+      - name: Prepare durable upload storage and database
+        run: |
+          mkdir -p /tmp/recantor-upload-audio/uploads/tus
+          uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+      - name: Start API
+        run: |
+          uv run --project apps/api uvicorn recantor.main:app --host 127.0.0.1 --port 8000 > /tmp/recantor-upload-api.log 2>&1 &
+          echo $! > /tmp/recantor-upload-api.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/recantor-upload-api.log
+          exit 1
+      - name: Start real tusd against shared durable storage
+        run: |
+          docker run --detach --name recantor-upload-tusd --network host \
+            --volume /tmp/recantor-upload-audio:/data/audio \
+            tusproject/tusd:v2.10.0 \
+            -host=127.0.0.1 \
+            -port=1080 \
+            -base-path=/files/ \
+            -upload-dir=/data/audio/uploads/tus \
+            -max-size=5368709120 \
+            -disable-download \
+            -disable-termination \
+            -disable-concatenation \
+            -cors-allow-origin=http://127.0.0.1:4173 \
+            -cors-allow-headers=X-Recantor-Upload-Token \
+            -hooks-http=http://127.0.0.1:8000/api/v1/uploads/tusd-hooks \
+            -hooks-http-forward-headers=X-Recantor-Upload-Token \
+            -hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish \
+            -hooks-http-retry=5 \
+            -hooks-http-backoff=1 \
+            -progress-hooks-interval=1s
+          for i in {1..30}; do
+            if curl -fsS -X OPTIONS http://127.0.0.1:1080/files/ \
+              -H 'Origin: http://127.0.0.1:4173' \
+              -H 'Access-Control-Request-Method: POST' >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs recantor-upload-tusd
+          exit 1
+      - name: Build and start web preview
+        run: |
+          pnpm --dir apps/web generate:api
+          pnpm --dir apps/web build
+          pnpm --dir apps/web exec playwright install --with-deps chromium
+          pnpm --dir apps/web preview --host 127.0.0.1 --port 4173 > /tmp/recantor-upload-web.log 2>&1 &
+          echo $! > /tmp/recantor-upload-web.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/recantor-upload-web.log
+          exit 1
+      - name: Browser pause reload and tus resume proof
+        run: |
+          dd if=/dev/zero of=/tmp/recantor-upload-e2e.wav bs=1M count=4 status=none
+          UPLOAD_E2E_FILE=/tmp/recantor-upload-e2e.wav \
+            pnpm --dir apps/web exec playwright test e2e/upload.spec.ts
+      - name: Capture diagnostics on failure
+        if: failure()
+        run: |
+          cat /tmp/recantor-upload-api.log || true
+          cat /tmp/recantor-upload-web.log || true
+          docker logs recantor-upload-tusd || true
+      - name: Stop upload services
+        if: always()
+        run: |
+          docker rm -f recantor-upload-tusd >/dev/null 2>&1 || true
+          if [ -f /tmp/recantor-upload-web.pid ]; then kill "$(cat /tmp/recantor-upload-web.pid)" || true; fi
+          if [ -f /tmp/recantor-upload-api.pid ]; then kill "$(cat /tmp/recantor-upload-api.pid)" || true; fi
