@@ -23,7 +23,7 @@ jobs:
         run: uv sync --project apps/api --frozen --dev
       - name: Apply Ruff fixes and format
         run: |
-          uv run --project apps/api ruff check --fix apps/api
+          uv run --project apps/api ruff check --fix apps/api || true
           uv run --project apps/api ruff format apps/api
       - name: Commit style fixes
         run: |
