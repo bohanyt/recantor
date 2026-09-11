@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34657623042
+snapshot_seq: 34657635942
 
-collected_at: 2026-09-11T23:19:43.983494Z
+collected_at: 2026-09-11T23:19:57.903067Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -359,7 +359,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T23:06:20Z
+issue_updated_at: 2026-09-11T23:19:43Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,25 +489,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640725203 author=bohanyt
-## CONTROL_TOWER_STATUS_V3 — baseline repaired; delta review + upload proof wave
-
-Fresh reconstruction after A2/G/I/K results.
-
-### Integration line
-- `main`: unchanged at `5b3d043f3aba916d0b4652c41d4715b09c6933cd`.
-- `integration/cloud-alpha-2026-09-11` was fast-forwarded under CT lease `5640714125` from `1cf0b3d69a356aaab17f6c42a4b687f7d42ea361` to **`e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`**.
-- The integrated delta is exactly one commit / one test file (`apps/api/tests/test_stt_jobs_pass2.py`, +4/-1) repairing the deterministic hard-coded scheduler test clock. No production code changed.
-- Exact commit CI `34643008322` / #290: **SUCCESS** across backend/frontend/E2E/Compose.
-- No further integration write is authorized under the current CT lease.
-
-### Current candidate lanes
-- #38 / PR #40: head `e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`, OPEN/DRAFT/unmerged. Baseline proof repair accepted into integration; no further #38 implementation action currently required. Final real-mic/provider witness remains deferred to #48 under the cloud-first plan.
-- #42 / PR #49: head `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`, OPEN/DRAFT. G implemented all B/J bounded hardening: jittered reconn
-...[COMMENT_5640725203_TRUNCATED chars=2189]
-
----
-
 comment_id=5640864761 author=bohanyt
 CONTROL_TOWER_ACC_BOUNDARY_ALERT_V1
 state: ACC_SPLIT_BRAIN_DETECTED_AND_CONTAINED
@@ -638,13 +619,25 @@ base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
 current_head_at_renewal: e966ea806572d9204a792eb6bf97968a3e240e62
 write_scope: unchanged from lease comment 5641570960; stabilization/CI evidence only
 lease_expires_at: 2026-09-11T23:45:00Z
+
+---
+
+comment_id=5641744447 author=bohanyt
+## CONTROL_TOWER_STATUS_V4 — review persistence gap + #51 hardened candidate
+
+Fresh compiler orientation: `agent-context/CURRENT.md` snapshot_seq `34657235159`, canonical branch `integration/cloud-alpha-2026-09-11`, canonical head `e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`.
+
+Current candidates:
+- #49 / #42 head `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`, OPEN DRAFT. Hardened implementation landed. Existing workflow run #304 is red only because it predates the #38 test-clock baseline repair; focused #42/backend realtime, frontend, E2E and Compose evidence at that head were green. B/J delta reviewers were run by the operator, but the prompt incorrectly said `No writes`, so their new findings are not yet durable in GitHub. Their prior reviews at the old head do not accept the hardened delta.
+- #50 / #47 head `652581b62c6f7ca392a5e235f3a5231f25370709`, OPEN DRAFT. Security/process reconciliation landed. Existing workflow run #306 is red only because it predates the #38 test-clock baseline repair; all 15 focused #47 security/process tests plus frontend/E2E/Compose were green. Reviewer F was run by the operator, but the prompt incorrectly forbade writes, so the delta result is not yet du
+...[COMMENT_5641744447_TRUNCATED chars=1277]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-11T23:19:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #44 state=open updated=2026-09-11T23:19:30Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
-ISSUE #41 state=open updated=2026-09-11T23:06:20Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 ISSUE #47 state=open updated=2026-09-11T21:15:35Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #42 state=open updated=2026-09-11T21:15:26Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
@@ -663,4 +656,4 @@ PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34657623042 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34657635942 sections=6
