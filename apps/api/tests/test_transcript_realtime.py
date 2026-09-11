@@ -150,4 +150,4 @@ async def test_delivery_failure_cannot_roll_back_transcript_or_recording(
 
     recording = await client.get(f"/api/v1/sessions/{session_id}/recording-state")
     assert recording.status_code == 200
-    assert recording.json()["session"]["state"] == "RECORDING"
+    assert recording.json()["session"]["state"] == "recording"
