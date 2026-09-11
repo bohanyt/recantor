@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34659834480
+snapshot_seq: 34659873099
 
-collected_at: 2026-09-11T23:55:29.072673Z
+collected_at: 2026-09-11T23:56:14.339813Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -656,9 +656,7 @@ SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
 ISSUE #41 state=open updated=2026-09-11T23:55:18Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #44 state=open updated=2026-09-11T23:42:11Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
-ISSUE #42 state=open updated=2026-09-11T23:36:16Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
@@ -673,4 +671,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34659834480 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34659873099 sections=6
