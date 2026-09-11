@@ -57,10 +57,6 @@ jobs:
         run: |
           uv sync --project apps/api --frozen --dev
           pnpm --dir apps/web install --frozen-lockfile
-      - name: Show canonical Prettier output while stabilizing upload UI
-        run: |
-          pnpm --dir apps/web exec prettier src/UploadPanel.tsx --write
-          git diff -- apps/web/src/UploadPanel.tsx
       - name: Prepare durable upload storage and database
         run: |
           mkdir -p /tmp/recantor-upload-audio/uploads/tus
