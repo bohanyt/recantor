@@ -1,6 +1,7 @@
 dist
 src/api/generated
 src/vendor/uppy.min.mjs
+src/vendor/uppy.min.d.mts
 pnpm-lock.yaml
 playwright-report
 test-results
