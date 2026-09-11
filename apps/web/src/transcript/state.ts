@@ -22,3 +22,17 @@ export function transcriptReconnectDelayMs(attempt: number, randomUnit = Math.ra
   const boundedRandom = Math.max(0, Math.min(1, randomUnit));
   return Math.round(ceiling / 2 + (ceiling / 2) * boundedRandom);
 }
+
+export class TranscriptReconnectBackoff {
+  private attempt = 0;
+
+  nextDelay(randomUnit = Math.random()): number {
+    const delay = transcriptReconnectDelayMs(this.attempt, randomUnit);
+    this.attempt += 1;
+    return delay;
+  }
+
+  reset(): void {
+    this.attempt = 0;
+  }
+}
