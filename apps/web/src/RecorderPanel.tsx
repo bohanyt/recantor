@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { FencedRecorderController, type FencedRecorderSnapshot } from './recorder/fencedController';
+import { TranscriptPanel } from './transcript/TranscriptPanel';
 
 function durationLabel(milliseconds: number): string {
   const totalSeconds = Math.floor(milliseconds / 1_000);
@@ -254,6 +255,8 @@ export function RecorderPanel() {
           </p>
         )}
       </div>
+
+      <TranscriptPanel sessionId={snapshot.sessionId} />
     </section>
   );
 }
