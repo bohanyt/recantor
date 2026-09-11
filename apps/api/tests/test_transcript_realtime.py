@@ -1,17 +1,30 @@
 import asyncio
 import json
+import socket
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
+from threading import Event
+from time import monotonic
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+import uvicorn
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
 from recantor.settings import get_settings
 from recantor.transcript import commit_transcript_segment
-from recantor.transcript_realtime import transcript_channel
+from recantor.transcript_realtime import (
+    TranscriptRealtimeNotifier,
+    transcript_channel,
+    transcript_notice,
+)
 
 
 def recovery_token(writer_id: str) -> str:
@@ -60,6 +73,105 @@ async def next_notice(pubsub, *, timeout: float = 1.5) -> dict[str, object]:
     raise AssertionError("timed out waiting for transcript notice")
 
 
+@asynccontextmanager
+async def live_api_server() -> AsyncIterator[int]:
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(128)
+    listener.setblocking(False)
+    port = int(listener.getsockname()[1])
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="error",
+            lifespan="off",
+        )
+    )
+    task = asyncio.create_task(server.serve(sockets=[listener]))
+    try:
+        for _ in range(200):
+            if server.started:
+                break
+            if task.done():
+                await task
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("uvicorn test server did not start")
+        yield port
+    finally:
+        server.should_exit = True
+        with suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(task, timeout=5)
+        listener.close()
+
+
+async def recv_json(websocket, *, timeout: float = 2.0) -> dict[str, object]:
+    payload = await asyncio.wait_for(websocket.recv(), timeout=timeout)
+    assert isinstance(payload, str)
+    parsed = json.loads(payload)
+    assert isinstance(parsed, dict)
+    return parsed
+
+
+def test_bounded_notifier_does_not_wait_for_slow_publisher() -> None:
+    started = Event()
+    release = Event()
+
+    def slow_publisher(session_id: UUID, sequence: int) -> bool:
+        del session_id, sequence
+        started.set()
+        release.wait(timeout=2)
+        return True
+
+    notifier = TranscriptRealtimeNotifier(max_pending=1, publisher=slow_publisher)
+    session_id = uuid4()
+    try:
+        first_started_at = monotonic()
+        assert notifier.enqueue(session_id=session_id, sequence=1) is True
+        assert monotonic() - first_started_at < 0.25
+        assert started.wait(timeout=1)
+
+        queued_at = monotonic()
+        assert notifier.enqueue(session_id=session_id, sequence=2) is True
+        assert notifier.enqueue(session_id=session_id, sequence=3) is False
+        assert monotonic() - queued_at < 0.1
+    finally:
+        release.set()
+
+
+@pytest.mark.asyncio
+async def test_commit_enqueues_realtime_only_after_database_commit(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = await create_session(client, "writer-transcript-post-commit-0001")
+    observed_transaction_states: list[bool] = []
+
+    async with get_sessionmaker()() as db:
+
+        def record_enqueue(*, session_id: UUID, sequence: int) -> bool:
+            del session_id, sequence
+            observed_transaction_states.append(db.in_transaction())
+            return True
+
+        monkeypatch.setattr("recantor.transcript.enqueue_transcript_available", record_enqueue)
+        segment, idempotent = await commit_transcript_segment(
+            db,
+            session_id=session_id,
+            producer_key="post-commit",
+            start_ms=0,
+            end_ms=800,
+            text="committed first",
+        )
+
+    assert idempotent is False
+    assert segment.sequence == 1
+    assert observed_transaction_states == [False]
+
+
 @pytest.mark.asyncio
 async def test_canonical_commit_publishes_ephemeral_session_scoped_wakeup(
     client: AsyncClient,
@@ -76,11 +188,7 @@ async def test_canonical_commit_publishes_ephemeral_session_scoped_wakeup(
         first, idempotent = await commit_segment(first_id, "live-a", 0, "meeting A")
         assert idempotent is False
         notice = await next_notice(first_sub)
-        assert notice == {
-            "type": "transcript_available",
-            "session_id": str(first_id),
-            "sequence": first.sequence,
-        }
+        assert notice == transcript_notice(first_id, first.sequence)
 
         unrelated = await second_sub.get_message(ignore_subscribe_messages=True, timeout=0.1)
         assert unrelated is None
@@ -128,17 +236,123 @@ async def test_disconnect_misses_ephemeral_event_but_http_cursor_recovers_it(
 
 
 @pytest.mark.asyncio
+async def test_real_websocket_route_forwards_only_valid_session_notice(
+    client: AsyncClient,
+) -> None:
+    session_id = await create_session(client, "writer-transcript-ws-0001")
+    other_id = await create_session(client, "writer-transcript-ws-0002")
+
+    async with live_api_server() as port:
+        async with connect(
+            f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
+        ) as websocket:
+            assert await recv_json(websocket) == {"type": "ready"}
+
+            redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
+            try:
+                await redis.publish(transcript_channel(session_id), "not-json")
+                await redis.publish(
+                    transcript_channel(session_id),
+                    json.dumps(transcript_notice(other_id, 7)),
+                )
+                expected = transcript_notice(session_id, 3)
+                await redis.publish(
+                    transcript_channel(session_id),
+                    json.dumps(expected),
+                )
+                assert await recv_json(websocket) == expected
+            finally:
+                await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_real_websocket_route_rejects_missing_session(client: AsyncClient) -> None:
+    del client
+    missing_id = uuid4()
+    async with live_api_server() as port:
+        async with connect(
+            f"ws://127.0.0.1:{port}/api/v1/sessions/{missing_id}/transcript/live"
+        ) as websocket:
+            error = await recv_json(websocket)
+            assert error["type"] == "error"
+            assert error["code"] == "session_not_found"
+            with pytest.raises(ConnectionClosed) as closed:
+                await websocket.recv()
+            assert closed.value.code == 1008
+
+
+@pytest.mark.asyncio
+async def test_real_websocket_route_degrades_and_cleans_up_subscription(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = await create_session(client, "writer-transcript-ws-degraded-0001")
+
+    class FailingPubSub:
+        def __init__(self) -> None:
+            self.subscribed: str | None = None
+            self.unsubscribed: str | None = None
+            self.closed = False
+
+        async def subscribe(self, channel: str) -> None:
+            self.subscribed = channel
+
+        async def get_message(self, **kwargs):
+            del kwargs
+            raise RedisError("forced pubsub failure")
+
+        async def unsubscribe(self, channel: str) -> None:
+            self.unsubscribed = channel
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    class FailingRedis:
+        def __init__(self) -> None:
+            self.pubsub_instance = FailingPubSub()
+            self.closed = False
+
+        def pubsub(self) -> FailingPubSub:
+            return self.pubsub_instance
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    fake_redis = FailingRedis()
+    monkeypatch.setattr(
+        "recantor.routes.transcript.create_transcript_redis",
+        lambda: fake_redis,
+    )
+
+    async with live_api_server() as port:
+        async with connect(
+            f"ws://127.0.0.1:{port}/api/v1/sessions/{session_id}/transcript/live"
+        ) as websocket:
+            assert await recv_json(websocket) == {"type": "ready"}
+            degraded = await recv_json(websocket)
+            assert degraded["type"] == "delivery_degraded"
+            with pytest.raises(ConnectionClosed) as closed:
+                await websocket.recv()
+            assert closed.value.code == 1013
+
+    assert fake_redis.pubsub_instance.subscribed == transcript_channel(session_id)
+    assert fake_redis.pubsub_instance.unsubscribed == transcript_channel(session_id)
+    assert fake_redis.pubsub_instance.closed is True
+    assert fake_redis.closed is True
+
+
+@pytest.mark.asyncio
 async def test_delivery_failure_cannot_roll_back_transcript_or_recording(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = await create_session(client, "writer-transcript-degraded-0001")
 
-    async def unavailable_delivery(*, session_id: UUID, sequence: int) -> bool:
+    def unavailable_delivery(*, session_id: UUID, sequence: int) -> bool:
         del session_id, sequence
         raise OSError("forced delivery outage")
 
-    monkeypatch.setattr("recantor.transcript.publish_transcript_available", unavailable_delivery)
+    monkeypatch.setattr("recantor.transcript.enqueue_transcript_available", unavailable_delivery)
 
     segment, idempotent = await commit_segment(session_id, "degraded-1", 0, "tetap tersimpan")
     assert idempotent is False
