@@ -175,32 +175,30 @@ def test_migration_0007_backfills_existing_utterances(monkeypatch) -> None:
                 ),
                 {"id": fk_probe_id, "session_id": session_id, "sha": "b" * 64},
             )
-            with pytest.raises(IntegrityError) as mismatch:
-                with connection.begin_nested():
-                    connection.execute(
-                        text(
-                            """
-                            INSERT INTO stt_jobs (utterance_id, session_id)
-                            VALUES (:utterance_id, :session_id)
-                            """
-                        ),
-                        {"utterance_id": fk_probe_id, "session_id": other_session_id},
-                    )
+            with pytest.raises(IntegrityError) as mismatch, connection.begin_nested():
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO stt_jobs (utterance_id, session_id)
+                        VALUES (:utterance_id, :session_id)
+                        """
+                    ),
+                    {"utterance_id": fk_probe_id, "session_id": other_session_id},
+                )
             assert mismatch.value.orig.diag.constraint_name == "fk_stt_job_utterance_session"
 
             # Retry deadlines are legal iff the state is retry_wait.
-            with pytest.raises(IntegrityError) as retry_shape:
-                with connection.begin_nested():
-                    connection.execute(
-                        text(
-                            """
-                            UPDATE stt_jobs
-                            SET next_attempt_at = clock_timestamp()
-                            WHERE utterance_id = :utterance_id
-                            """
-                        ),
-                        {"utterance_id": pending_id},
-                    )
+            with pytest.raises(IntegrityError) as retry_shape, connection.begin_nested():
+                connection.execute(
+                    text(
+                        """
+                        UPDATE stt_jobs
+                        SET next_attempt_at = clock_timestamp()
+                        WHERE utterance_id = :utterance_id
+                        """
+                    ),
+                    {"utterance_id": pending_id},
+                )
             assert retry_shape.value.orig.diag.constraint_name == "ck_stt_job_retry_time_shape"
     finally:
         if migration_engine is not None:
