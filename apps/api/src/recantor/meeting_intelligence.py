@@ -3,16 +3,23 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess
 import tempfile
 import threading
-import time
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
+
+from recantor.codex_process import (
+    ProcessAdapter,
+    ProcessContainmentError,
+    ProcessResult,
+    ProcessSpec,
+    ProcessUnavailableError,
+    SubprocessAdapter,
+)
 
 _MAX_TRANSCRIPT_CHARS = 120_000
 _MAX_STDOUT_BYTES = 256 * 1024
@@ -21,8 +28,40 @@ _AUTH_STDOUT_BYTES = 8 * 1024
 _AUTH_STDERR_BYTES = 8 * 1024
 _DEFAULT_TIMEOUT_SECONDS = 90.0
 _AUTH_TIMEOUT_SECONDS = 10.0
-_FORBIDDEN_CHILD_ENV = frozenset({"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"})
+_PERMISSION_PROFILE = "recantor_meeting_intelligence"
 _REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
+
+# Codex itself needs a small amount of host context to locate the binary and its own
+# already-saved authentication. Nothing else is inherited into the Codex process.
+_PARENT_ENV_ALLOWLIST = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "CODEX_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_RUNTIME_DIR",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    }
+)
 
 _MEETING_INTELLIGENCE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -72,6 +111,7 @@ class MeetingIntelligenceErrorCategory(StrEnum):
     CANCELLED = "cancelled"
     BUSY = "busy"
     INVALID_OUTPUT = "invalid_output"
+    CONTAINMENT = "containment"
     PROCESS_FAILED = "process_failed"
 
 
@@ -99,136 +139,70 @@ class MeetingIntelligenceResult:
 class MeetingIntelligenceProvider(Protocol):
     async def derive(self, request: MeetingIntelligenceRequest) -> MeetingIntelligenceResult: ...
 
-
-@dataclass(frozen=True)
-class ProcessSpec:
-    argv: tuple[str, ...]
-    stdin: bytes
-    env: Mapping[str, str]
-    timeout_seconds: float
-    stdout_limit_bytes: int
-    stderr_limit_bytes: int
-    cwd: str | None = None
-    cancel_event: threading.Event | None = None
+def _codex_parent_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
+    source_env = os.environ if source is None else source
+    allowed = {key.casefold() for key in _PARENT_ENV_ALLOWLIST}
+    return {key: value for key, value in source_env.items() if key.casefold() in allowed}
 
 
-@dataclass(frozen=True)
-class ProcessResult:
-    returncode: int
-    stdout: bytes
-    stderr: bytes
-    timed_out: bool = False
-    cancelled: bool = False
-    stdout_truncated: bool = False
-    stderr_truncated: bool = False
-
-
-class ProcessUnavailableError(RuntimeError):
-    pass
-
-
-class ProcessAdapter(Protocol):
-    def run(self, spec: ProcessSpec) -> ProcessResult: ...
-
-
-class _BoundedCapture:
-    def __init__(self, limit: int):
-        self.limit = limit
-        self.data = bytearray()
-        self.truncated = False
-
-    def consume(self, chunk: bytes) -> None:
-        remaining = self.limit - len(self.data)
-        if remaining > 0:
-            self.data.extend(chunk[:remaining])
-        if len(chunk) > max(remaining, 0):
-            self.truncated = True
-
-
-def _drain_pipe(pipe, capture: _BoundedCapture) -> None:
-    try:
-        while True:
-            chunk = pipe.read(8192)
-            if not chunk:
-                return
-            capture.consume(chunk)
-    finally:
-        pipe.close()
-
-
-class SubprocessAdapter:
-    """Run a child process without a shell while bounding in-memory output capture."""
-
-    def run(self, spec: ProcessSpec) -> ProcessResult:
-        stdout_capture = _BoundedCapture(spec.stdout_limit_bytes)
-        stderr_capture = _BoundedCapture(spec.stderr_limit_bytes)
-        try:
-            with tempfile.TemporaryFile() as stdin_file:
-                stdin_file.write(spec.stdin)
-                stdin_file.seek(0)
-                process = subprocess.Popen(
-                    list(spec.argv),
-                    stdin=stdin_file,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    cwd=spec.cwd,
-                    env=dict(spec.env),
-                    shell=False,
-                )
-        except (FileNotFoundError, OSError) as exc:
-            raise ProcessUnavailableError("configured Codex executable is unavailable") from exc
-
-        assert process.stdout is not None
-        assert process.stderr is not None
-        stdout_thread = threading.Thread(
-            target=_drain_pipe,
-            args=(process.stdout, stdout_capture),
-            daemon=True,
-        )
-        stderr_thread = threading.Thread(
-            target=_drain_pipe,
-            args=(process.stderr, stderr_capture),
-            daemon=True,
-        )
-        stdout_thread.start()
-        stderr_thread.start()
-
-        timed_out = False
-        cancelled = False
-        deadline = time.monotonic() + spec.timeout_seconds
-        while process.poll() is None:
-            if spec.cancel_event is not None and spec.cancel_event.is_set():
-                cancelled = True
-                process.kill()
-                break
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                timed_out = True
-                process.kill()
-                break
-            with suppress(subprocess.TimeoutExpired):
-                process.wait(timeout=min(0.05, remaining))
-        if process.poll() is None:
-            process.wait()
-
-        stdout_thread.join()
-        stderr_thread.join()
-        return ProcessResult(
-            returncode=process.returncode,
-            stdout=bytes(stdout_capture.data),
-            stderr=bytes(stderr_capture.data),
-            timed_out=timed_out,
-            cancelled=cancelled,
-            stdout_truncated=stdout_capture.truncated,
-            stderr_truncated=stderr_capture.truncated,
-        )
-
-
-def _codex_child_env(source: Mapping[str, str] | None = None) -> dict[str, str]:
-    env = dict(os.environ if source is None else source)
-    for key in _FORBIDDEN_CHILD_ENV:
-        env.pop(key, None)
+def _exec_environment(base: Mapping[str, str], workspace: str) -> dict[str, str]:
+    env = dict(base)
+    # Keep all Codex-created temporary files inside the invocation workspace.
+    env["TMPDIR"] = workspace
+    env["TMP"] = workspace
+    env["TEMP"] = workspace
     return env
+
+
+def _toml_string(value: str) -> str:
+    # JSON string syntax is valid TOML basic-string syntax for these values.
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _config_arg(key: str, value: str) -> tuple[str, str]:
+    return ("--config", f"{key}={value}")
+
+
+def _controlled_exec_config(workspace: str, shell_path: str | None) -> tuple[str, ...]:
+    settings: list[tuple[str, str]] = [
+        ("forced_login_method", '"chatgpt"'),
+        ("default_permissions", f'"{_PERMISSION_PROFILE}"'),
+        (f'permissions.{_PERMISSION_PROFILE}.filesystem.":root"', '"deny"'),
+        (f'permissions.{_PERMISSION_PROFILE}.filesystem.":minimal"', '"read"'),
+        (
+            f'permissions.{_PERMISSION_PROFILE}.filesystem.":workspace_roots"."."',
+            '"read"',
+        ),
+        (f"permissions.{_PERMISSION_PROFILE}.network.enabled", "false"),
+        ("approval_policy", '"never"'),
+        ("shell_environment_policy.inherit", '"none"'),
+        ("shell_environment_policy.ignore_default_excludes", "false"),
+        ("shell_environment_policy.experimental_use_profile", "false"),
+        ("features.shell_tool", "false"),
+        ("features.shell_snapshot", "false"),
+        ("features.remote_plugin", "false"),
+        ("features.skill_mcp_dependency_install", "false"),
+        ("agents.enabled", "false"),
+        ("apps._default.enabled", "false"),
+        ("web_search", '"disabled"'),
+        ("tools.web_search", "false"),
+        ("tools.view_image", "false"),
+        ("history.persistence", '"none"'),
+        ("memories.generate_memories", "false"),
+        ("check_for_update_on_startup", "false"),
+        ("allow_login_shell", "false"),
+        ("feedback.enabled", "false"),
+        ("shell_environment_policy.set.TMPDIR", _toml_string(workspace)),
+        ("shell_environment_policy.set.TMP", _toml_string(workspace)),
+        ("shell_environment_policy.set.TEMP", _toml_string(workspace)),
+    ]
+    if shell_path:
+        settings.append(("shell_environment_policy.set.PATH", _toml_string(shell_path)))
+
+    argv: list[str] = []
+    for key, value in settings:
+        argv.extend(_config_arg(key, value))
+    return tuple(argv)
 
 
 def _decode(data: bytes) -> str:
@@ -236,6 +210,8 @@ def _decode(data: bytes) -> str:
 
 
 def _classify_process_failure(result: ProcessResult) -> MeetingIntelligenceErrorCategory:
+    if result.containment_failed or result.drain_incomplete:
+        return MeetingIntelligenceErrorCategory.CONTAINMENT
     if result.timed_out:
         return MeetingIntelligenceErrorCategory.TIMEOUT
     if result.cancelled:
@@ -248,6 +224,10 @@ def _classify_process_failure(result: ProcessResult) -> MeetingIntelligenceError
         for marker in ("not available", "unavailable", "not found", "unsupported", "does not exist")
     ):
         return MeetingIntelligenceErrorCategory.MODEL_UNAVAILABLE
+    if "forced login" in diagnostic or (
+        "login method" in diagnostic and "chatgpt" in diagnostic
+    ):
+        return MeetingIntelligenceErrorCategory.UNSUPPORTED_AUTH_MODE
     if any(
         marker in diagnostic
         for marker in (
@@ -324,7 +304,7 @@ class CodexSubscriptionMeetingIntelligenceProvider:
         self.reasoning_effort = reasoning_effort
         self.timeout_seconds = timeout_seconds
         self.max_transcript_chars = max_transcript_chars
-        self.environment = _codex_child_env(environment)
+        self.environment = _codex_parent_env(environment)
         self._slot = threading.BoundedSemaphore(max_concurrency)
 
     def _run(self, spec: ProcessSpec) -> ProcessResult:
@@ -334,6 +314,11 @@ class CodexSubscriptionMeetingIntelligenceProvider:
             raise MeetingIntelligenceError(
                 MeetingIntelligenceErrorCategory.UNAVAILABLE,
                 "Codex CLI is not installed or not executable",
+            ) from exc
+        except ProcessContainmentError as exc:
+            raise MeetingIntelligenceError(
+                MeetingIntelligenceErrorCategory.CONTAINMENT,
+                "Codex process containment could not be established",
             ) from exc
 
     def _check_chatgpt_auth_sync(self) -> None:
@@ -347,6 +332,11 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 stderr_limit_bytes=_AUTH_STDERR_BYTES,
             )
         )
+        if result.containment_failed or result.drain_incomplete:
+            raise MeetingIntelligenceError(
+                MeetingIntelligenceErrorCategory.CONTAINMENT,
+                "Codex authentication check did not terminate cleanly",
+            )
         if result.timed_out:
             raise MeetingIntelligenceError(
                 MeetingIntelligenceErrorCategory.TIMEOUT,
@@ -396,17 +386,23 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 json.dumps(_MEETING_INTELLIGENCE_SCHEMA, separators=(",", ":")),
                 encoding="utf-8",
             )
+            exec_env = _exec_environment(self.environment, temp_dir)
             argv: list[str] = [
                 self.codex_binary,
                 "exec",
                 "--ignore-user-config",
+                "--ignore-rules",
                 "--ephemeral",
                 "--skip-git-repo-check",
-                "--sandbox",
-                "read-only",
                 "--output-schema",
                 str(schema_path),
             ]
+            argv.extend(
+                _controlled_exec_config(
+                    temp_dir,
+                    self.environment.get("PATH") or self.environment.get("Path"),
+                )
+            )
             if self.model is not None:
                 argv.extend(["--model", self.model])
             if self.reasoning_effort is not None:
@@ -421,7 +417,7 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 ProcessSpec(
                     argv=tuple(argv),
                     stdin=transcript.encode("utf-8"),
-                    env=self.environment,
+                    env=exec_env,
                     cwd=temp_dir,
                     timeout_seconds=self.timeout_seconds,
                     stdout_limit_bytes=_MAX_STDOUT_BYTES,
@@ -430,7 +426,13 @@ class CodexSubscriptionMeetingIntelligenceProvider:
                 )
             )
 
-        if result.returncode != 0 or result.timed_out or result.cancelled:
+        if (
+            result.returncode != 0
+            or result.timed_out
+            or result.cancelled
+            or result.containment_failed
+            or result.drain_incomplete
+        ):
             category = _classify_process_failure(result)
             raise MeetingIntelligenceError(
                 category,
