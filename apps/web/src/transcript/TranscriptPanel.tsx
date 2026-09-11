@@ -2,18 +2,9 @@ import { useEffect, useState } from 'react';
 
 import type { TranscriptSegmentResponse } from '../api/generated/types.gen';
 import { fetchTranscriptPage, transcriptSocketUrl } from './api';
+import { mergeCanonicalSegments } from './state';
 
 type DeliveryState = 'idle' | 'starting' | 'live' | 'recovering' | 'degraded';
-
-export function mergeCanonicalSegments(
-  current: readonly TranscriptSegmentResponse[],
-  incoming: readonly TranscriptSegmentResponse[],
-): TranscriptSegmentResponse[] {
-  const bySequence = new Map<number, TranscriptSegmentResponse>();
-  for (const segment of current) bySequence.set(segment.sequence, segment);
-  for (const segment of incoming) bySequence.set(segment.sequence, segment);
-  return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence);
-}
 
 function realtimeType(data: unknown): string | null {
   if (typeof data !== 'string') return null;
@@ -42,14 +33,17 @@ function deliveryLabel(state: DeliveryState): string {
 }
 
 export function TranscriptPanel({ sessionId }: { sessionId: string | null }) {
+  return <SessionTranscript key={sessionId ?? 'idle'} sessionId={sessionId} />;
+}
+
+function SessionTranscript({ sessionId }: { sessionId: string | null }) {
   const [segments, setSegments] = useState<TranscriptSegmentResponse[]>([]);
-  const [deliveryState, setDeliveryState] = useState<DeliveryState>('idle');
+  const [deliveryState, setDeliveryState] = useState<DeliveryState>(
+    sessionId ? 'starting' : 'idle',
+  );
   const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
-    setSegments([]);
-    setDetail(null);
-    setDeliveryState(sessionId ? 'starting' : 'idle');
     if (!sessionId) return;
 
     let disposed = false;
