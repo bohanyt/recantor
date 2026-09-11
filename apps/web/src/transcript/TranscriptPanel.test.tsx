@@ -76,7 +76,7 @@ describe('TranscriptPanel', () => {
     vi.clearAllMocks();
   });
 
-  it('rebuilds from sequence zero and treats duplicate or out-of-order realtime events as hints', async () => {
+  it('rebuilds through duplicate and out-of-order realtime hints', async () => {
     const view = render(<TranscriptPanel sessionId="session-1" />);
 
     await waitFor(() => {
