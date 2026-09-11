@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     stt_configuration_retry_seconds: float = 300.0
     stt_reconcile_interval_seconds: float = 1.0
     stt_reconcile_batch_size: int = 100
+    stt_reconcile_per_session_limit: int = 2
     stt_dispatch_reenqueue_seconds: float = 15.0
     log_level: str = "INFO"
 
