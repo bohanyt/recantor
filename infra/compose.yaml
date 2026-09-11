@@ -86,6 +86,7 @@ services:
         "-Q",
         "stt-live",
         "--concurrency=2",
+        "--prefetch-multiplier=1",
         "--loglevel=INFO",
       ]
     environment:
@@ -122,6 +123,7 @@ services:
       STT_QUEUE_NAME: stt-live
       STT_RECONCILE_INTERVAL_SECONDS: "${STT_RECONCILE_INTERVAL_SECONDS:-1}"
       STT_RECONCILE_BATCH_SIZE: "${STT_RECONCILE_BATCH_SIZE:-100}"
+      STT_RECONCILE_PER_SESSION_LIMIT: "${STT_RECONCILE_PER_SESSION_LIMIT:-2}"
       STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
     depends_on:
       migrate:
