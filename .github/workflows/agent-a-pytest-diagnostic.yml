@@ -1,0 +1,55 @@
+name: Agent A pytest diagnostic
+
+on:
+  push:
+    branches: [agent-a/issue-38-phase2e-live-stt]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest-diagnostic:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: recantor
+          POSTGRES_USER: recantor
+          POSTGRES_PASSWORD: recantor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recantor -d recantor"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: '0.10.0'
+      - name: Install API dependencies
+        run: uv sync --project apps/api --frozen --dev
+      - name: Capture Phase 2E pytest output
+        shell: bash
+        run: |
+          set +e
+          uv run --project apps/api pytest apps/api/tests/test_stt_jobs.py -vv --tb=long > /tmp/phase2e-pytest.log 2>&1
+          code=$?
+          cat /tmp/phase2e-pytest.log
+          echo "$code" > /tmp/phase2e-pytest.exit
+          exit 0
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-a-phase2e-pytest
+          path: |
+            /tmp/phase2e-pytest.log
+            /tmp/phase2e-pytest.exit
