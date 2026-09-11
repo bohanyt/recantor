@@ -7,16 +7,17 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "pnpm prepare:uppy && vite",
     "generate:api": "openapi-ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc -b --pretty false",
-    "test": "vitest run",
-    "build": "tsc -b && vite build",
+    "typecheck": "pnpm prepare:uppy && tsc -b --pretty false",
+    "test": "pnpm prepare:uppy && vitest run",
+    "build": "pnpm prepare:uppy && tsc -b && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "prepare:uppy": "node scripts/fetch-uppy.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
