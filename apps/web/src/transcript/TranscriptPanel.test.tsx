@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TranscriptPageResponse, TranscriptSegmentResponse } from '../api/generated/types.gen';
 import { fetchTranscriptPage } from './api';
-import { mergeCanonicalSegments, TranscriptPanel } from './TranscriptPanel';
+import { TranscriptPanel } from './TranscriptPanel';
+import { mergeCanonicalSegments } from './state';
 
 vi.mock('./api', () => ({
   fetchTranscriptPage: vi.fn(),
