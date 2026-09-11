@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34659484068
+snapshot_seq: 34659834480
 
-collected_at: 2026-09-11T23:49:33.470050Z
+collected_at: 2026-09-11T23:55:29.072673Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,12 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
-canonical_commit_message: test(stt): derive fairness clock from database
+canonical_head: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+canonical_commit_message: Integrate Phase 3A resumable upload foundation (#51)
+
+Control Tower integration of cloud-review accepted Issue #44 candidate into integration/cloud-alpha-2026-09-11 after #42.
+
+No main merge.
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -330,7 +334,7 @@ PR #37 then made that `User-Agent` behavior permanent and added a regression ass
 
 Second work item, using the permanent adapter with no runtime monkeypatch:
 
-- utterance `ad71e495-cdd6-5ae0-814b-758ba5133f85`, sequence 39;
+- utterance `ad71e495-cdd6-5ae0-814b-758a5133f85`, sequence 39;
 - timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
 - Groq call succeeded directly from the rebuilt API container;
 - canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
@@ -353,13 +357,13 @@ durable TranscriptionUtterance
         -> canonical TranscriptSegment
 ```
 
-DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider
-...[CURRENT_TRUNCATED chars=5924]
+DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider r
+...[CURRENT_TRUNCATED chars=8461]
 
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-11T23:49:19Z
+issue_updated_at: 2026-09-11T23:55:18Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -489,26 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5640954985 author=bohanyt
-CONTROL_TOWER_ACC_ACTIVATION_BLOCKER_V1
-state: OFFICIAL_WIRING_MERGED / FIRST_RUN_FAILED_BEFORE_JOB
-
-First official Recantor ACC trigger was observed as Actions run `34650264582` on merged `main` `59ff57502a9a1d84ad332cab106c46c256482d23`, event `issue_comment`, conclusion `failure`, with **zero jobs created** and no `agent-context` fallback branch. The Drive CURRENT was not overwritten and still begins `PENDING_OFFICIAL_ACC_OVERWRITE`.
-
-Root cause is repository visibility topology, not WIF/Drive evidence: `bohanyt/recantor` is PUBLIC while `bohanyt/agent-context-compiler` is PRIVATE. GitHub reusable-workflow access rules allow a public caller to use only workflows from public repositories; the private-repo Actions Access setting used successfully for private Phase-0/ARTI callers does not make a private reusable workflow callable from a public repository.
-
-Therefore:
-- Do NOT treat Recantor CURRENT as official yet.
-- Continue normal GitHub authority reads for current agents.
-- Do NOT use `SOURCE-MANUAL-SPIKE-DO-NOT-USE`.
-- Do NOT manually edit/create `AGENT_CONTEXT_V1` snapshots.
-- No WIF rollback is needed; the repo-specific WIF binding may remain in place.
-
-Pending owner infrastr
-...[COMMENT_5640954985_TRUNCATED chars=259]
-
----
-
 comment_id=5641457373 author=bohanyt
 ## ACC_ACTIVATION_RERUN_TRIGGER_V1
 
@@ -642,18 +626,41 @@ lease_expires_at: 2026-09-11T23:59:00Z
 User explicitly authorized: "integrate #49 dan #51 ke integration branch".
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5641968750 author=bohanyt
+## CONTROL_TOWER_INTEGRATION_RESULT_V1 — #42 + #44 integrated, exact-head cloud proof green
+
+User authorization: `integrate #49 dan #51 ke integration branch`.
+
+Integration branch: `integration/cloud-alpha-2026-09-11`
+
+Fresh sequence:
+1. accepted #42 / PR #49 exact head `fb110308ee1a2a6a93ee05b97da5fe0cef472c74` was mechanically marked ready only because GitHub refuses merging a DRAFT PR, then merged into the integration branch as merge commit `280958ea6e8c9423e42c6c99e4ea6fe3b65fceba`;
+2. accepted #44 / PR #51 exact head `5394ee4e20f711cc5b234ade1b220cbf69a3b870` was fresh-rechecked after #49, mechanically marked ready only for merge, then merged after #42 as merge commit `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`.
+
+Current authoritative integration head:
+`ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
+
+No main merge occurred.
+
+Because CI only runs on `push: main` or `pull_request`, CT opened DRAFT integration checkpoint PR #53 from the integration branch to `main` solely to trigger exact integrated-head verification. It MUST NOT be merged to main without explicit Bohan authorization.
+
+Exact-head proof on `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`:
+- standard CI run `34659603660` / #31
+...[COMMENT_5641968750_TRUNCATED chars=1235]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-11T23:49:19Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-11T23:55:18Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #44 state=open updated=2026-09-11T23:42:11Z title=Phase 3A: resumable existing-recording upload foundation with Uppy + tus/tusd
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #42 state=open updated=2026-09-11T23:36:16Z title=Phase 2F: realtime transcript delivery, reconnect recovery, and live transcript UI
-PR #51 state=open updated=2026-09-11T23:10:34Z title=Phase 3A: resumable existing-recording upload foundation
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
-PR #49 state=open updated=2026-09-11T20:19:10Z title=Phase 2F: realtime transcript delivery and live UI
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 ISSUE #45 state=open updated=2026-09-11T06:56:47Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
@@ -661,10 +668,9 @@ ISSUE #43 state=open updated=2026-09-11T06:49:41Z title=Desktop product UX: Live
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #51 draft=True updated=2026-09-11T23:10:34Z base=integration/cloud-alpha-2026-09-11 head=agent-h/issue-44-upload-foundation title=Phase 3A: resumable existing-recording upload foundation
+PR #53 draft=True updated=2026-09-11T23:51:23Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
-PR #49 draft=True updated=2026-09-11T20:19:10Z base=integration/cloud-alpha-2026-09-11 head=agent-g/issue-42-live-transcript-ui title=Phase 2F: realtime transcript delivery and live UI
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34659484068 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34659834480 sections=6
