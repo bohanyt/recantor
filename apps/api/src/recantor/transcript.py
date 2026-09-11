@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
@@ -7,8 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.models import RecordingSession, TranscriptSegment
+from recantor.transcript_realtime import publish_transcript_available
 
 TranscriptCommitGuard = Callable[[AsyncSession], Awaitable[bool]]
+logger = logging.getLogger(__name__)
 
 
 class TranscriptError(RuntimeError):
@@ -62,6 +65,20 @@ def _retry_matches(
         and segment.text == text
         and segment.language == language
     )
+
+
+async def _notify_realtime_best_effort(segment: TranscriptSegment) -> None:
+    try:
+        await publish_transcript_available(
+            session_id=segment.session_id,
+            sequence=segment.sequence,
+        )
+    except Exception:  # Delivery bugs must never roll back committed transcript or capture state.
+        logger.exception(
+            "unexpected transcript realtime notification failure for session %s sequence %s",
+            segment.session_id,
+            segment.sequence,
+        )
 
 
 async def commit_transcript_segment(
@@ -128,6 +145,10 @@ async def commit_transcript_segment(
         )
         db.add(segment)
         await db.flush()
+
+    # Publish only after the database transaction has committed. This notification is an
+    # ephemeral wake-up hint; consumers recover canonical state through the HTTP cursor.
+    await _notify_realtime_best_effort(segment)
     return segment, False
 
 
