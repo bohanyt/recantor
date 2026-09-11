@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TranscriptSegmentResponse } from '../api/generated/types.gen';
-import { mergeCanonicalSegments } from './state';
+import {
+  mergeCanonicalSegments,
+  TranscriptReconnectBackoff,
+  TRANSCRIPT_RECONNECT_MAX_DELAY_MS,
+  transcriptReconnectDelayMs,
+} from './state';
 
 function segment(sequence: number, text: string): TranscriptSegmentResponse {
   return {
@@ -24,5 +29,23 @@ describe('mergeCanonicalSegments', () => {
 
     expect(merged.map((item) => item.sequence)).toEqual([1, 2, 3]);
     expect(merged.map((item) => item.text)).toEqual(['satu', 'dua', 'tiga']);
+  });
+});
+
+describe('transcript reconnect backoff', () => {
+  it('uses bounded jitter inside a capped exponential ceiling', () => {
+    expect(transcriptReconnectDelayMs(0, 0)).toBe(250);
+    expect(transcriptReconnectDelayMs(0, 1)).toBe(500);
+    expect(transcriptReconnectDelayMs(1, 1)).toBe(1_000);
+    expect(transcriptReconnectDelayMs(30, 1)).toBe(TRANSCRIPT_RECONNECT_MAX_DELAY_MS);
+    expect(transcriptReconnectDelayMs(30, 0)).toBe(TRANSCRIPT_RECONNECT_MAX_DELAY_MS / 2);
+  });
+
+  it('resets the exponential attempt after a ready event', () => {
+    const backoff = new TranscriptReconnectBackoff();
+    expect(backoff.nextDelay(1)).toBe(500);
+    expect(backoff.nextDelay(1)).toBe(1_000);
+    backoff.reset();
+    expect(backoff.nextDelay(1)).toBe(500);
   });
 });
