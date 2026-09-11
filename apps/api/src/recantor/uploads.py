@@ -328,7 +328,10 @@ def _validate_hook_identity(record: UploadRecord, request: TusHookRequest) -> No
         raise UploadConflict("tus upload length does not match the declared file")
     filename = upload.metadata.get("filename")
     filetype = upload.metadata.get("filetype") or "application/octet-stream"
-    if filename != record.original_filename or _normalize_content_type(filetype) != record.content_type:
+    if (
+        filename != record.original_filename
+        or _normalize_content_type(filetype) != record.content_type
+    ):
         raise UploadConflict("tus upload metadata does not match the declared file")
     if upload.offset > record.declared_byte_length:
         raise UploadConflict("tus upload offset exceeds the declared file length")
