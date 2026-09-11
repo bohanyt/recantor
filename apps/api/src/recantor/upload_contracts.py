@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from recantor.models import SessionKind, SessionState
 
-
 CAPABILITY_TOKEN_PATTERN = r"^[A-Za-z0-9_-]{43,128}$"
 
 
