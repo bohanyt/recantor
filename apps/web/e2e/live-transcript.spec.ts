@@ -138,7 +138,9 @@ test('live transcript recovers while archive survives delivery outage', async ({
 
   await page.goto('/');
   await page.getByTestId('start-recording').click();
-  await expect(page.getByTestId('transcript-empty')).toContainText('Listening for speech');
+  await expect(page.getByTestId('transcript-empty')).toContainText(
+    'No transcript segments are available yet.',
+  );
   await expect(page.getByTestId('transcript-delivery-state')).toHaveText('Live');
   expect(observedAfterSequences[0]).toBe(0);
 
@@ -180,13 +182,18 @@ test('live transcript recovers while archive survives delivery outage', async ({
   await expect(page.getByTestId('transcript-segment-1')).toContainText('pertama');
   await expect(page.getByTestId('transcript-segment-2')).toContainText('kedua');
   await expect(page.getByTestId('transcript-segment-3')).toContainText('ketiga');
-  const transcriptRows = page.getByTestId('transcript-segments').locator('li');
+  const transcriptLog = page.getByRole('log', { name: 'Live transcript updates' });
+  await expect(transcriptLog).toHaveAttribute('aria-relevant', 'additions');
+  const transcriptRows = transcriptLog.getByRole('article');
   await expect(transcriptRows).toHaveCount(3);
   const orderedText = await transcriptRows.allTextContents();
   expect(orderedText.join('|')).toMatch(/pertama.*kedua.*ketiga/);
 
   await page.evaluate(() => window.__setTranscriptDeliveryAvailable?.(false));
   await expect(page.getByTestId('transcript-delivery-state')).toHaveText(/Catching up|Delayed/);
+  await expect(page.getByTestId('live-transcript-panel').getByRole('status')).toContainText(
+    'Recorder safety status remains authoritative.',
+  );
 
   canonical = [
     ...canonical,
