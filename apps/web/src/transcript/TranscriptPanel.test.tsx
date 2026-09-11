@@ -1,7 +1,8 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { TranscriptPageResponse, TranscriptSegmentResponse } from '../api/generated/types.gen';
+import type { TranscriptPageResponse } from '../api/generated/types.gen';
+import type { TranscriptSegmentResponse } from '../api/generated/types.gen';
 import { fetchTranscriptPage } from './api';
 import { TranscriptPanel } from './TranscriptPanel';
 import { mergeCanonicalSegments } from './state';
@@ -45,10 +46,7 @@ function page(
   afterSequence: number,
   segments: TranscriptSegmentResponse[],
 ): TranscriptPageResponse {
-  const next = segments.reduce(
-    (highest, item) => Math.max(highest, item.sequence),
-    afterSequence,
-  );
+  const next = segments.reduce((highest, item) => Math.max(highest, item.sequence), afterSequence);
   return {
     session_id: '00000000-0000-4000-8000-000000000001',
     after_sequence: afterSequence,
@@ -67,10 +65,7 @@ describe('TranscriptPanel', () => {
     canonical = [segment(1, 'pertama')];
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     vi.mocked(fetchTranscriptPage).mockImplementation(async (_sessionId, afterSequence) => {
-      return page(
-        afterSequence,
-        canonical.filter((item) => item.sequence > afterSequence),
-      );
+      return page(afterSequence, canonical.filter((item) => item.sequence > afterSequence));
     });
   });
 
