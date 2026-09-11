@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
 _TUS_UPLOAD_ID = re.compile(r"^[A-Za-z0-9._~-]{8,160}$")
 
 
