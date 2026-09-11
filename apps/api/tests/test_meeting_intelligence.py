@@ -49,7 +49,7 @@ def process_result(
 
 @pytest.mark.asyncio
 async def test_fake_adapter_proves_safe_command_shape_and_structured_result() -> None:
-    transcript = '\"; touch /tmp/recantor-pwned; $(echo should-not-run)\\nKeputusan: lanjut pilot.'
+    transcript = '"; touch /tmp/recantor-pwned; $(echo should-not-run)\\nKeputusan: lanjut pilot.'
     adapter = FakeProcessAdapter(
         [
             process_result(stdout=b"Logged in using ChatGPT\n"),
