@@ -1,5 +1,6 @@
 import re
 from functools import lru_cache
+from pathlib import PurePosixPath
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +22,11 @@ class Settings(BaseSettings):
     audio_storage_path: str = "./data/audio"
     recording_heartbeat_timeout_seconds: int = 20
     recording_max_chunk_bytes: int = 16 * 1024 * 1024
+    upload_max_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=1)
+    upload_max_duration_seconds: int = Field(default=12 * 60 * 60, ge=1)
+    upload_capability_ttl_seconds: int = Field(default=24 * 60 * 60, ge=60)
+    upload_tus_storage_prefix: str = "uploads/tus"
+    tus_public_endpoint: str = "http://localhost:1080/files/"
     realtime_max_pcm_packet_bytes: int = 64 * 1024
     realtime_vad_pre_roll_ms: int = 200
     realtime_vad_min_voiced_ms: int = 160
@@ -53,6 +59,25 @@ class Settings(BaseSettings):
         if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", normalized) is None:
             raise ValueError("STT queue name must use only A-Z, a-z, 0-9, dot, dash, underscore")
         return normalized
+
+    @field_validator("upload_tus_storage_prefix")
+    @classmethod
+    def validate_upload_tus_storage_prefix(cls, value: str) -> str:
+        normalized = value.strip().strip("/")
+        path = PurePosixPath(normalized)
+        if not normalized or path.is_absolute() or ".." in path.parts:
+            raise ValueError(
+                "upload tus storage prefix must be relative and stay inside audio root"
+            )
+        return normalized
+
+    @field_validator("tus_public_endpoint")
+    @classmethod
+    def validate_tus_public_endpoint(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("tus public endpoint must be an http(s) URL")
+        return normalized.rstrip("/") + "/"
 
     @model_validator(mode="after")
     def validate_stt_retry_window(self) -> "Settings":
