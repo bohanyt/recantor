@@ -106,7 +106,9 @@ async function latestBrowserSession(page: Page): Promise<BrowserSession> {
 
     try {
       const transaction = database.transaction('sessions', 'readonly');
-      const sessions = (await requestResult(transaction.objectStore('sessions').getAll())) as Array<{
+      const sessions = (await requestResult(
+        transaction.objectStore('sessions').getAll(),
+      )) as Array<{
         sessionId: string;
         writerId: string;
         captureEpoch: number;
@@ -147,9 +149,7 @@ test('missing-audio safety state fits every required laptop viewport', async ({ 
   await expect(page.getByTestId('recorder-message')).toContainText(
     'Recording capture generation 1',
   );
-  await expect
-    .poll(() => pendingCount(page), { timeout: 15_000 })
-    .toBeGreaterThanOrEqual(3);
+  await expect.poll(() => pendingCount(page), { timeout: 15_000 }).toBeGreaterThanOrEqual(3);
 
   await evictSequence(page, 2);
   await page.reload();

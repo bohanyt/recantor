@@ -95,10 +95,7 @@ type RecorderPanelProps = {
   onCaptureActivityChange?: (active: boolean) => void;
 };
 
-export function RecorderPanel({
-  serviceDiagnostics,
-  onCaptureActivityChange,
-}: RecorderPanelProps) {
+export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: RecorderPanelProps) {
   const controller = useMemo(() => new FencedRecorderController(), []);
   const snapshot = useSyncExternalStore(
     controller.subscribe,
@@ -112,9 +109,7 @@ export function RecorderPanel({
   }, [controller]);
 
   useEffect(() => {
-    onCaptureActivityChange?.(
-      snapshot.phase === 'requesting' || snapshot.phase === 'recording',
-    );
+    onCaptureActivityChange?.(snapshot.phase === 'requesting' || snapshot.phase === 'recording');
   }, [onCaptureActivityChange, snapshot.phase]);
 
   const ux = deriveRecorderUx(snapshot);
