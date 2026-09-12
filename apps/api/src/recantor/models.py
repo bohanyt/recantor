@@ -53,6 +53,16 @@ class STTJobState(StrEnum):
     CLAIMED = "claimed"
     RETRY_WAIT = "retry_wait"
     SUCCEEDED = "succeeded"
+    NO_SPEECH = "no_speech"
+    FAILED = "failed"
+
+
+class UploadProcessingState(StrEnum):
+    PENDING = "pending"
+    CLAIMED = "claimed"
+    RETRY_WAIT = "retry_wait"
+    WAITING_STT = "waiting_stt"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
 
 
@@ -70,9 +80,7 @@ class RecordingSession(Base):
     active_writer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     capture_epoch: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recovery_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     interrupted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     final_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     final_monotonic_end_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -141,8 +149,7 @@ class UploadRecord(Base):
         CheckConstraint("declared_byte_length > 0", name="ck_upload_declared_byte_length_positive"),
         CheckConstraint("received_bytes >= 0", name="ck_upload_received_bytes_nonnegative"),
         CheckConstraint(
-            "received_bytes <= declared_byte_length",
-            name="ck_upload_received_bytes_within_declared",
+            "received_bytes <= declared_byte_length", name="ck_upload_received_bytes_within_declared"
         ),
         CheckConstraint(
             "declared_duration_ms IS NULL OR declared_duration_ms > 0",
@@ -157,29 +164,23 @@ class UploadRecord(Base):
             name="ck_upload_byte_length_matches_declared",
         ),
         CheckConstraint(
-            "(completed_at IS NULL AND storage_key IS NULL AND sha256 IS NULL "
-            "AND byte_length IS NULL) OR "
-            "(completed_at IS NOT NULL AND storage_key IS NOT NULL "
-            "AND length(btrim(storage_key)) > 0 AND sha256 IS NOT NULL "
-            "AND sha256 ~ '^[0-9a-f]{64}$' AND byte_length > 0)",
+            "(completed_at IS NULL AND storage_key IS NULL AND sha256 IS NULL AND byte_length IS NULL) OR "
+            "(completed_at IS NOT NULL AND storage_key IS NOT NULL AND length(btrim(storage_key)) > 0 "
+            "AND sha256 IS NOT NULL AND sha256 ~ '^[0-9a-f]{64}$' AND byte_length > 0)",
             name="ck_upload_completion_shape",
         ),
         Index("ix_upload_records_expires_at", "expires_at"),
     )
 
     session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("recording_sessions.id", ondelete="CASCADE"),
-        primary_key=True,
+        Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), primary_key=True
     )
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     declared_byte_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
     declared_duration_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tus_upload_id: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
-    received_bytes: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, server_default=text("0")
-    )
+    received_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default=text("0"))
     storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     byte_length: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -187,9 +188,7 @@ class UploadRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     failure_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -199,14 +198,10 @@ class TranscriptSegment(Base):
     __tablename__ = "transcript_segments"
     __table_args__ = (
         UniqueConstraint("session_id", "sequence", name="uq_transcript_segment_session_sequence"),
-        UniqueConstraint(
-            "session_id", "producer_key", name="uq_transcript_segment_session_producer_key"
-        ),
+        UniqueConstraint("session_id", "producer_key", name="uq_transcript_segment_session_producer_key"),
         CheckConstraint("sequence >= 1", name="ck_transcript_segment_sequence_positive"),
         CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_transcript_segment_timing"),
-        CheckConstraint(
-            "length(btrim(producer_key)) > 0", name="ck_transcript_segment_producer_key_nonblank"
-        ),
+        CheckConstraint("length(btrim(producer_key)) > 0", name="ck_transcript_segment_producer_key_nonblank"),
         CheckConstraint("length(btrim(text)) > 0", name="ck_transcript_segment_text_nonblank"),
     )
 
@@ -220,33 +215,19 @@ class TranscriptSegment(Base):
     end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     language: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class TranscriptionUtterance(Base):
     __tablename__ = "transcription_utterances"
     __table_args__ = (
-        UniqueConstraint(
-            "session_id", "sequence", name="uq_transcription_utterance_session_sequence"
-        ),
-        UniqueConstraint(
-            "session_id", "producer_key", name="uq_transcription_utterance_session_producer_key"
-        ),
+        UniqueConstraint("session_id", "sequence", name="uq_transcription_utterance_session_sequence"),
+        UniqueConstraint("session_id", "producer_key", name="uq_transcription_utterance_session_producer_key"),
         UniqueConstraint("id", "session_id", name="uq_transcription_utterance_id_session"),
         CheckConstraint("sequence >= 1", name="ck_transcription_utterance_sequence_positive"),
-        CheckConstraint(
-            "start_ms >= 0 AND end_ms > start_ms", name="ck_transcription_utterance_timing"
-        ),
-        CheckConstraint(
-            "length(btrim(producer_key)) > 0",
-            name="ck_transcription_utterance_producer_key_nonblank",
-        ),
-        CheckConstraint(
-            "length(btrim(content_type)) > 0",
-            name="ck_transcription_utterance_content_type_nonblank",
-        ),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_transcription_utterance_timing"),
+        CheckConstraint("length(btrim(producer_key)) > 0", name="ck_transcription_utterance_producer_key_nonblank"),
+        CheckConstraint("length(btrim(content_type)) > 0", name="ck_transcription_utterance_content_type_nonblank"),
         CheckConstraint("byte_length > 0", name="ck_transcription_utterance_byte_length_positive"),
     )
 
@@ -262,9 +243,7 @@ class TranscriptionUtterance(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     byte_length: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class STTJob(Base):
@@ -278,18 +257,18 @@ class STTJob(Base):
         ),
         CheckConstraint("attempt_count >= 0", name="ck_stt_job_attempt_count_nonnegative"),
         CheckConstraint(
-            "state IN ('pending', 'claimed', 'retry_wait', 'succeeded', 'failed')",
+            "state IN ('pending', 'claimed', 'retry_wait', 'succeeded', 'no_speech', 'failed')",
             name="ck_stt_job_state",
         ),
         CheckConstraint(
-            "(state = 'claimed' AND claim_token IS NOT NULL "
-            "AND length(btrim(claim_token)) > 0 AND claim_expires_at IS NOT NULL) "
-            "OR (state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
+            "(state = 'claimed' AND claim_token IS NOT NULL AND length(btrim(claim_token)) > 0 "
+            "AND claim_expires_at IS NOT NULL) OR "
+            "(state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
             name="ck_stt_job_claim_shape",
         ),
         CheckConstraint(
-            "(state = 'retry_wait' AND next_attempt_at IS NOT NULL) "
-            "OR (state <> 'retry_wait' AND next_attempt_at IS NULL)",
+            "(state = 'retry_wait' AND next_attempt_at IS NOT NULL) OR "
+            "(state <> 'retry_wait' AND next_attempt_at IS NULL)",
             name="ck_stt_job_retry_time_shape",
         ),
         Index("ix_stt_jobs_session_state", "session_id", "state"),
@@ -303,31 +282,92 @@ class STTJob(Base):
         Uuid(as_uuid=True), ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False
     )
     state: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default=STTJobState.PENDING.value,
-        server_default=text("'pending'"),
+        String(32), nullable=False, default=STTJobState.PENDING.value, server_default=text("'pending'")
     )
-    attempt_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-        server_default=text("0"),
-    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    claim_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_delivery_attempt_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_delivery_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class UploadMediaProcessing(Base):
+    __tablename__ = "upload_media_processing"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('pending','claimed','retry_wait','waiting_stt','succeeded','failed')",
+            name="ck_upload_processing_state",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_upload_processing_attempt_count_nonnegative"),
+        CheckConstraint(
+            "(state = 'claimed' AND claim_token IS NOT NULL AND length(btrim(claim_token)) > 0 "
+            "AND claim_expires_at IS NOT NULL) OR "
+            "(state <> 'claimed' AND claim_token IS NULL AND claim_expires_at IS NULL)",
+            name="ck_upload_processing_claim_shape",
+        ),
+        CheckConstraint(
+            "(state = 'retry_wait' AND next_attempt_at IS NOT NULL) OR "
+            "(state <> 'retry_wait' AND next_attempt_at IS NULL)",
+            name="ck_upload_processing_retry_shape",
+        ),
+        CheckConstraint("source_byte_length > 0", name="ck_upload_processing_source_bytes_positive"),
+        CheckConstraint("source_sha256 ~ '^[0-9a-f]{64}$'", name="ck_upload_processing_source_sha"),
+        CheckConstraint(
+            "expected_utterance_count IS NULL OR expected_utterance_count >= 0",
+            name="ck_upload_processing_expected_count_nonnegative",
+        ),
+        CheckConstraint(
+            "normalized_total_samples IS NULL OR normalized_total_samples >= 0",
+            name="ck_upload_processing_samples_nonnegative",
+        ),
+        CheckConstraint(
+            "(normalized_storage_key IS NULL AND normalized_sha256 IS NULL "
+            "AND normalized_byte_length IS NULL AND normalized_total_samples IS NULL) OR "
+            "(normalized_storage_key IS NOT NULL AND length(btrim(normalized_storage_key)) > 0 "
+            "AND normalized_sha256 ~ '^[0-9a-f]{64}$' AND normalized_byte_length > 0 "
+            "AND normalized_total_samples >= 0)",
+            name="ck_upload_processing_normalized_shape",
+        ),
+        Index("ix_upload_processing_state_retry", "state", "next_attempt_at"),
+        Index("ix_upload_processing_claim_expiry", "state", "claim_expires_at"),
+    )
+
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("upload_records.session_id", ondelete="CASCADE"), primary_key=True
+    )
+    source_storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_byte_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=UploadProcessingState.PENDING.value, server_default=text("'pending'")
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    selected_audio_stream: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    normalization_spec_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    normalized_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    normalized_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_byte_length: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    normalized_total_samples: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    segmentation_spec_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    segmentation_params_json: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_utterance_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
