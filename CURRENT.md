@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34661797997
+snapshot_seq: 34661823817
 
-collected_at: 2026-09-12T00:29:34.188580Z
+collected_at: 2026-09-12T00:30:02.169146Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -654,6 +654,7 @@ Confirmed
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #41 state=open updated=2026-09-12T00:29:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -662,7 +663,6 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 ISSUE #45 state=open updated=2026-09-11T06:56:47Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #43 state=open updated=2026-09-11T06:49:41Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
@@ -671,4 +671,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34661797997 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34661823817 sections=6
