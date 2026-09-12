@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34664553087
+snapshot_seq: 34665041073
 
-collected_at: 2026-09-12T01:20:59.650959Z
+collected_at: 2026-09-12T01:30:53.687653Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T01:20:50Z
+issue_updated_at: 2026-09-12T01:30:41Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,31 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641932547 author=bohanyt
-CONTROL_TOWER_INTEGRATION_LEASE_V1
-owner: Primary Control Tower
-scope: integration-branch-only
-branch: integration/cloud-alpha-2026-09-11
-base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
-accepted_candidates:
-  - PR #49 head fb110308ee1a2a6a93ee05b97da5fe0cef472c74
-  - PR #51 head 5394ee4e20f711cc5b234ade1b220cbf69a3b870
-write_scope:
-  - integrate only the accepted #42 and #44 candidate commits into integration/cloud-alpha-2026-09-11
-  - no main write
-  - no #47 integration
-  - no feature implementation
-post_write_obligation:
-  - run/inspect exact integrated-head CI/Compose/E2E
-  - record resulting integration SHA and evidence on #41
-lease_expires_at: 2026-09-11T23:59:00Z
-
-User explicitly authorized: "integrate #49 dan #51 ke integration branch".
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5641968750 author=bohanyt
 ## CONTROL_TOWER_INTEGRATION_RESULT_V1 — #42 + #44 integrated, exact-head cloud proof green
 
@@ -684,11 +659,39 @@ exclusions:
   - #46 export/result UI, #47 Codex, auth/diarization/summaries
   - second transcript model/store or
 ...[COMMENT_5642497036_TRUNCATED chars=122]
+
+---
+
+comment_id=5642547020 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/RecorderPanel.tsx
+  - apps/web/src/recording/** presentation/status/action components only
+  - apps/web/src/UploadPanel.tsx presentation copy/composition only
+  - apps/web/src/index.css
+  - focused apps/web unit tests and Chromium E2E for #43 product shell/accessibility/layout, including composition-only updates to existing upload/transcript recorder tests where navigation requires it
+  - README.md
+  - .env.example
+  - docs/CURRENT.md truth reconciliation only
+exclusions:
+  - no backend Python/models/routes/migrations
+  - no infra/compose.yaml edits
+  - no apps/web/src/transcript/** edits
+  - no generated apps/web/src/api/** edits
+  - no recorder domain/state-machine redesign under apps/web/src/recorder/**
+  - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
+lease_expires_at: 2026-09-12T02:00:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T01:20:50Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T01:30:41Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -705,4 +708,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34664553087 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34665041073 sections=6
