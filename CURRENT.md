@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34662593224
+snapshot_seq: 34662622547
 
-collected_at: 2026-09-12T00:43:59.406373Z
+collected_at: 2026-09-12T00:44:41.337217Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -662,8 +662,8 @@ For alpha v1, CT freezes the implementation contract as:
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #41 state=open updated=2026-09-12T00:43:46Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #45 state=open updated=2026-09-12T00:30:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -679,4 +679,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34662593224 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34662622547 sections=6
