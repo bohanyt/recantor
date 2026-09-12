@@ -184,7 +184,9 @@ services:
         "--prefetch-multiplier=1",
         "--loglevel=INFO",
       ]
-    environment: *stt-worker-environment
+    environment:
+      <<: *stt-worker-environment
+      STT_QUEUE_NAME: "${STT_UPLOAD_QUEUE_NAME:-stt-upload}"
     volumes:
       - recantor-audio:/data/audio:ro
     depends_on:
