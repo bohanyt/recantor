@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34664429297
+snapshot_seq: 34664553087
 
-collected_at: 2026-09-12T01:18:35.600097Z
+collected_at: 2026-09-12T01:20:59.650959Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T01:18:23Z
+issue_updated_at: 2026-09-12T01:20:50Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,28 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641903294 author=bohanyt
-## CONTROL_TOWER_GOAL_RESET_V1 — return to first installable alpha
-
-The Control Tower has spent enough cycles on tooling/review mechanics. Re-anchor all next work to the #41 product goal.
-
-### Product goal that wins
-
-Deliver a coherent first installable alpha with:
-1. **Live** — reliable browser recording + automatic Groq STT + reconnect-safe canonical transcript UI.
-2. **Upload recording** — resumable upload -> durable media processing -> canonical transcript -> exports.
-3. **Desktop product UX/setup** — clear Live/Upload shell, human status, diagnostics hidden by default, truthful minimal Groq setup.
-4. One **final #48 Windows acceptance campaign** after cloud evidence is exhausted.
-
-### Fresh frontier
-
-- #42 / PR #49 @ `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`: Reviewer B delta CLEAN (0 blocker / 0 should-fix); Reviewer J delta CLEAN (0 blocker / 0 should-fix). Treat as **cloud-review accepted / integration candidate**.
-- #44 / PR #51 @ `5394ee4e20f711cc5b234ade1b220cbf69a3b870`: Reviewer K delta **CLEAN / K-B1 CLOSED**; Upload Foundation CI `34657014697` SUCCESS and standard CI `34657014766` SUCCESS. Treat as **cloud-review accepted / integration candidate**.
-- #47 / PR #50 @
-...[COMMENT_5641903294_TRUNCATED chars=1657]
-
----
-
 comment_id=5641932547 author=bohanyt
 CONTROL_TOWER_INTEGRATION_LEASE_V1
 owner: Primary Control Tower
@@ -674,11 +652,43 @@ exclusions:
   - no recorder domain/state-machine redesign under apps/web/src/recorder/**
   - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
 lease_expires_at: 2026-09-12T01:43:00Z
+
+---
+
+comment_id=5642497036 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: N
+issue: #45
+mode: implementation
+branch: agent-n/issue-45-upload-processing
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+write_scope:
+  - apps/api/src/recantor/media_*.py and apps/api/src/recantor/upload_processing*.py (new #45 media-processing runtime/reconcile/storage modules)
+  - apps/api/src/recantor/models.py
+  - apps/api/src/recantor/utterance.py only if required for #45 deterministic upload utterance integration
+  - apps/api/src/recantor/stt.py
+  - apps/api/src/recantor/stt_jobs.py
+  - apps/api/src/recantor/stt_tasks.py
+  - apps/api/src/recantor/stt_reconciler.py
+  - apps/api/src/recantor/uploads.py
+  - apps/api/src/recantor/upload_storage.py
+  - apps/api/src/recantor/settings.py
+  - apps/api/alembic/versions/0009_*.py
+  - apps/api/Dockerfile
+  - infra/compose.yaml
+  - apps/api/tests/** focused #45 media/STT/upload-processing fixtures and regressions
+  - CI-only fake-Groq/proof workflow support if required for #45 exact proof
+exclusions:
+  - apps/web/** and all #43 product-shell/presentation files
+  - README.md, .env.example, docs/CURRENT.md
+  - #46 export/result UI, #47 Codex, auth/diarization/summaries
+  - second transcript model/store or
+...[COMMENT_5642497036_TRUNCATED chars=122]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T01:18:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T01:20:50Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -695,4 +705,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34664429297 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34664553087 sections=6
