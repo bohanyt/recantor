@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34665780932
+snapshot_seq: 34665870687
 
-collected_at: 2026-09-12T01:46:15.577191Z
+collected_at: 2026-09-12T01:48:05.506830Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T01:46:02Z
+issue_updated_at: 2026-09-12T01:47:54Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,22 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5642053092 author=bohanyt
-## OPUS_SWARM_REVIEW_V1 — independent whole-system review and next swarm plan
-
-Read-only adversarial review. No code, branch, PR-state, or integration mutation was performed. This comment is the only write.
-
-### Exact objects reviewed (fresh, not from ACC)
-
-- ACC orientation: `agent-context/CURRENT.md`, `snapshot_seq 34659907819`, sentinel `END_OF_AGENT_CONTEXT kind=CURRENT seq=34659907819 sections=6` — VALID, and consistent with fresh GitHub.
-- Integration branch `integration/cloud-alpha-2026-09-11` exact head: **`ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`** ("Integrate Phase 3A resumable upload foundation (#51)", 2026-09-11T23:50:40Z). Unchanged since `CONTROL_TOWER_INTEGRATION_RESULT_V1`.
-- DRAFT PR #53 exact head: **`ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`**, base `main` @ `59ff57502a9a1d84ad332cab106c46c256482d23`, `draft=true`, `mergeable_state=clean`, 51 files / +7434 / −33. All five check runs SUCCESS: `backend`, `frontend`, `e2e`, `compose-smoke` (run `34659603660`), `upload-e2e` (run `34659603680`).
-- Fresh #41 comments through `5641976528`; #43, #45, #46, #48 bodies and comments; #47 disposition.
-- Integrated code read at `ff7d8ac`: `models.py`, `stt_jobs.py`, `stt.py`,
-...[COMMENT_5642053092_TRUNCATED chars=36062]
-
----
-
 comment_id=5642178679 author=bohanyt
 ## CONTROL_TOWER_STATUS_2026_09_12_V1
 
@@ -705,11 +689,39 @@ exclusions:
   - #46 export/result UI, #47 Codex, auth/diarization/summaries
   - second transcript model/store or
 ...[COMMENT_5642631930_TRUNCATED chars=122]
+
+---
+
+comment_id=5642642464 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/RecorderPanel.tsx
+  - apps/web/src/recording/** presentation/status/action components only
+  - apps/web/src/UploadPanel.tsx presentation copy/composition only
+  - apps/web/src/index.css
+  - focused apps/web unit tests and Chromium E2E for #43 product shell/accessibility/layout, including composition-only updates to existing upload/transcript recorder tests where navigation requires it
+  - README.md
+  - .env.example
+  - docs/CURRENT.md truth reconciliation only
+exclusions:
+  - no backend Python/models/routes/migrations
+  - no infra/compose.yaml edits
+  - no apps/web/src/transcript/** edits
+  - no generated apps/web/src/api/** edits
+  - no recorder domain/state-machine redesign under apps/web/src/recorder/**
+  - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
+lease_expires_at: 2026-09-12T02:10:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T01:46:02Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T01:47:54Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #54 state=open updated=2026-09-12T01:42:58Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -728,4 +740,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34665780932 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34665870687 sections=6
