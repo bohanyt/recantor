@@ -1,0 +1,77 @@
+name: Agent N finish lint cleanup
+
+on:
+  push:
+    branches: [agent-n/issue-45-upload-processing]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent-n/issue-45-upload-processing
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: '0.10.0'
+      - name: Apply exact lint cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+
+          media = Path('apps/api/src/recantor/media_processing.py')
+          text = media.read_text()
+          if 'import contextlib\n' not in text:
+              text = text.replace('import asyncio\n', 'import asyncio\nimport contextlib\n', 1)
+          old = '''        try:\n            process.kill()\n        except ProcessLookupError:\n            pass\n'''
+          new = '''        with contextlib.suppress(ProcessLookupError):\n            process.kill()\n'''
+          if text.count(old) != 1:
+              raise SystemExit('process-kill lint shape changed')
+          text = text.replace(old, new, 1)
+          old = '''        try:\n            normalized_temp.unlink(missing_ok=True)\n        except OSError:\n            pass\n'''
+          new = '''        with contextlib.suppress(OSError):\n            normalized_temp.unlink(missing_ok=True)\n'''
+          if text.count(old) != 1:
+              raise SystemExit('temp-unlink lint shape changed')
+          text = text.replace(old, new, 1)
+          old = '        source = wave.open(str(path), "rb")\n'
+          new = '        source = wave.open(str(path), "rb")  # noqa: SIM115 -- errors are normalized below\n'
+          if text.count(old) != 1:
+              raise SystemExit('wave-open lint shape changed')
+          text = text.replace(old, new, 1)
+          media.write_text(text)
+
+          models = Path('apps/api/src/recantor/models.py')
+          text = models.read_text()
+          old = '''            "(completed_at IS NULL AND storage_key IS NULL AND sha256 IS NULL AND byte_length IS NULL) OR "\n            "(completed_at IS NOT NULL AND storage_key IS NOT NULL AND length(btrim(storage_key)) > 0 "\n'''
+          new = '''            "(completed_at IS NULL AND storage_key IS NULL "\n            "AND sha256 IS NULL AND byte_length IS NULL) OR "\n            "(completed_at IS NOT NULL AND storage_key IS NOT NULL "\n            "AND length(btrim(storage_key)) > 0 "\n'''
+          if text.count(old) != 1:
+              raise SystemExit('completion constraint lint shape changed')
+          models.write_text(text.replace(old, new, 1))
+
+          tests = Path('apps/api/tests/test_media_processing.py')
+          text = tests.read_text()
+          old = '''        payload = ('{"text":"%s","language":"id"}' % self.__class__.response_text).encode()\n'''
+          new = '''        payload = f'{{"text":"{self.__class__.response_text}","language":"id"}}'.encode()\n'''
+          if text.count(old) != 1:
+              raise SystemExit('fake Groq payload lint shape changed')
+          tests.write_text(text.replace(old, new, 1))
+      - name: Verify and format
+        run: |
+          uv sync --project apps/api --frozen --dev
+          uv run --project apps/api ruff format apps/api
+          uv run --project apps/api ruff check apps/api
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api
+          git commit -m 'Finish Issue 45 lint cleanup'
+          git push origin HEAD:agent-n/issue-45-upload-processing
