@@ -227,7 +227,7 @@ services:
         "recantor.media_tasks:celery_app",
         "worker",
         "-Q",
-        "${MEDIA_UPLOAD_QUEUE_NAME:-media-upload}",
+        "${MEDIA_QUEUE_NAME:-media-upload}",
         "--concurrency=1",
         "--prefetch-multiplier=1",
         "--loglevel=INFO",
@@ -239,7 +239,7 @@ services:
       AUDIO_STORAGE_PATH: /data/audio
       UPLOAD_TUS_STORAGE_PREFIX: uploads/tus
       UPLOAD_MAX_DURATION_SECONDS: "${UPLOAD_MAX_DURATION_SECONDS:-43200}"
-      MEDIA_UPLOAD_QUEUE_NAME: "${MEDIA_UPLOAD_QUEUE_NAME:-media-upload}"
+      MEDIA_QUEUE_NAME: "${MEDIA_QUEUE_NAME:-media-upload}"
       MEDIA_CLAIM_LEASE_SECONDS: "${MEDIA_CLAIM_LEASE_SECONDS:-1200}"
       MEDIA_MAX_ATTEMPTS: "${MEDIA_MAX_ATTEMPTS:-3}"
       MEDIA_RETRY_BASE_SECONDS: "${MEDIA_RETRY_BASE_SECONDS:-5}"
@@ -265,7 +265,7 @@ services:
       RECANTOR_ENV: development
       DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
       REDIS_URL: redis://redis:6379/0
-      MEDIA_UPLOAD_QUEUE_NAME: "${MEDIA_UPLOAD_QUEUE_NAME:-media-upload}"
+      MEDIA_QUEUE_NAME: "${MEDIA_QUEUE_NAME:-media-upload}"
       MEDIA_RECONCILE_INTERVAL_SECONDS: "${MEDIA_RECONCILE_INTERVAL_SECONDS:-1}"
     depends_on:
       migrate:

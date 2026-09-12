@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     stt_upload_reconcile_per_session_limit: int = Field(default=2, ge=1, le=32)
     stt_dispatch_reenqueue_seconds: float = Field(default=15.0, ge=1, le=3600)
 
-    media_upload_queue_name: str = "media-upload"
+    media_queue_name: str = "media-upload"
     media_claim_lease_seconds: float = Field(default=1200.0, ge=30, le=7200)
     media_max_attempts: int = Field(default=3, ge=1, le=10)
     media_retry_base_seconds: float = Field(default=5.0, ge=0.1, le=300)
@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     )
     log_level: str = "INFO"
 
-    @field_validator("stt_queue_name", "stt_upload_queue_name", "media_upload_queue_name")
+    @field_validator("stt_queue_name", "stt_upload_queue_name", "media_queue_name")
     @classmethod
     def validate_queue_name(cls, value: str) -> str:
         normalized = value.strip()

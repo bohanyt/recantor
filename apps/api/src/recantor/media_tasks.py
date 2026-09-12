@@ -38,7 +38,7 @@ def ensure_media_wake_capacity(target: int) -> int:
         return 0
 
     settings = get_settings()
-    queue_name = settings.media_upload_queue_name
+    queue_name = settings.media_queue_name
     redis_client = Redis.from_url(settings.redis_url)
     lock = redis_client.lock(
         f"recantor:media:wake-coalesce:{queue_name}",
