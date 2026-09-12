@@ -87,7 +87,7 @@ describe('deriveRecorderUx', () => {
       }),
     );
     expect(fenced.actions).toEqual({ primary: null, secondary: [], danger: [] });
-    expect(fenced.audio.label).toMatch(/Audio retained here/);
+    expect(fenced.audio.label).toMatch(/Orphaned local evidence/);
     expect(fenced.audio.tone).toBe('danger');
   });
 

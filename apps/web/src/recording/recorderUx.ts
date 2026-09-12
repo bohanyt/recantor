@@ -89,7 +89,7 @@ function lifecycleStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
 function audioStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   if (snapshot.captureFenced && snapshot.pendingChunks > 0) {
     return {
-      label: 'Audio retained here — action blocked',
+      label: 'Orphaned local evidence — action blocked',
       detail:
         'This tab no longer owns the session. Local audio is retained as evidence and is not safe to sync under the stale capture generation.',
       tone: 'danger',
