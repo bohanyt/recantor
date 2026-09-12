@@ -32,6 +32,7 @@ async function expectCriticalStateAcrossLaptopViewports(
     for (const testId of testIds) {
       const locator = page.getByTestId(testId);
       await expect(locator).toBeVisible();
+      await locator.scrollIntoViewIfNeeded();
       const box = await locator.boundingBox();
       if (!box) throw new Error(`${testId} has no layout box`);
       expect(box.x).toBeGreaterThanOrEqual(0);

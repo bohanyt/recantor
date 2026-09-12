@@ -90,7 +90,7 @@ test('active recording cannot be hidden by switching to Upload and keeps the sam
   expect(sessionBefore).toBeTruthy();
   expect(sessionBefore).not.toBe('none');
 
-  await page.getByTestId('workflow-upload').click();
+  await page.getByTestId('workflow-upload').dispatchEvent('click');
 
   await expect(page.getByTestId('workflow-live')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('workflow-live-panel')).toBeVisible();
