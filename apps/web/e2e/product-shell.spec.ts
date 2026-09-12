@@ -85,10 +85,7 @@ test('normal UI omits stale phase/developer setup copy', async ({ page }) => {
 });
 
 test('README quick-start GROQ key reaches only server-side Compose services', () => {
-  test.skip(
-    process.env.CI !== 'true',
-    'Exact .env loading proof runs only in clean CI checkouts.',
-  );
+  test.skip(process.env.CI !== 'true', 'Exact .env loading proof runs only in clean CI checkouts.');
 
   const root = process.env.GITHUB_WORKSPACE ?? path.resolve(process.cwd(), '../..');
   const envPath = path.join(root, '.env');
@@ -103,16 +100,7 @@ test('README quick-start GROQ key reaches only server-side Compose services', ()
     delete childEnv.GROQ_API_KEY;
     const rendered = execFileSync(
       'docker',
-      [
-        'compose',
-        '--env-file',
-        '.env',
-        '-f',
-        'infra/compose.yaml',
-        'config',
-        '--format',
-        'json',
-      ],
+      ['compose', '--env-file', '.env', '-f', 'infra/compose.yaml', 'config', '--format', 'json'],
       { cwd: root, env: childEnv, encoding: 'utf8' },
     );
     const config = JSON.parse(rendered) as {
