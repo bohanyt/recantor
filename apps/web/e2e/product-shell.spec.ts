@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const formatterTargets = [
   'e2e/product-shell.spec.ts',
@@ -20,10 +21,12 @@ test('temporary CI formatter capture', () => {
     cwd: webRoot,
     encoding: 'utf8',
   });
-  for (const target of formatterTargets) {
-    const encoded = Buffer.from(readFileSync(path.join(webRoot, target), 'utf8')).toString('base64');
-    console.log(`PRETTIER_CAPTURE:${target}:${encoded}`);
-  }
+  const formatted = Object.fromEntries(
+    formatterTargets.map((target) => [target, readFileSync(path.join(webRoot, target), 'utf8')]),
+  );
+  console.log(
+    `PRETTIER_GZIP_CAPTURE:${gzipSync(JSON.stringify(formatted)).toString('base64')}`,
+  );
 });
 
 const laptopViewports = [
@@ -104,7 +107,6 @@ test('normal UI omits stale phase/developer setup copy', async ({ page }) => {
   await expect(page.locator('body')).not.toContainText('STT_PRIMARY_PROVIDER');
   await expect(page.locator('body')).not.toContainText('STT_FALLBACK_PROVIDER');
 });
-
 
 test('README quick-start GROQ key reaches only server-side Compose services', () => {
   test.skip(process.env.CI !== 'true', 'Exact .env auto-loading proof runs only in clean CI checkouts.');
