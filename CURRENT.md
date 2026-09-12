@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34662622547
+snapshot_seq: 34664429297
 
-collected_at: 2026-09-12T00:44:41.337217Z
+collected_at: 2026-09-12T01:18:35.600097Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T00:43:46Z
+issue_updated_at: 2026-09-12T01:18:23Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,18 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641744447 author=bohanyt
-## CONTROL_TOWER_STATUS_V4 — review persistence gap + #51 hardened candidate
-
-Fresh compiler orientation: `agent-context/CURRENT.md` snapshot_seq `34657235159`, canonical branch `integration/cloud-alpha-2026-09-11`, canonical head `e7f248f5a717e6ffdf2d3c58ebaa581d735123c4`.
-
-Current candidates:
-- #49 / #42 head `fb110308ee1a2a6a93ee05b97da5fe0cef472c74`, OPEN DRAFT. Hardened implementation landed. Existing workflow run #304 is red only because it predates the #38 test-clock baseline repair; focused #42/backend realtime, frontend, E2E and Compose evidence at that head were green. B/J delta reviewers were run by the operator, but the prompt incorrectly said `No writes`, so their new findings are not yet durable in GitHub. Their prior reviews at the old head do not accept the hardened delta.
-- #50 / #47 head `652581b62c6f7ca392a5e235f3a5231f25370709`, OPEN DRAFT. Security/process reconciliation landed. Existing workflow run #306 is red only because it predates the #38 test-clock baseline repair; all 15 focused #47 security/process tests plus frontend/E2E/Compose were green. Reviewer F was run by the operator, but the prompt incorrectly forbade writes, so the delta result is not yet du
-...[COMMENT_5641744447_TRUNCATED chars=1277]
-
----
-
 comment_id=5641903294 author=bohanyt
 ## CONTROL_TOWER_GOAL_RESET_V1 — return to first installable alpha
 
@@ -658,12 +646,40 @@ For alpha v1, CT freezes the implementation contract as:
 - v1 parameter snapshot follows the existing detector baseline except for the upload hard cap: pre-roll 200 ms, minimum voiced 160 ms, trailing silence 600 ms, hard max 180000 ms, absolute threshold -50 dBFS, noise margin 12 dB, initial noise -65 dBFS, noise alpha 0.95;
 - retry/restart reprocesses deterministically from norm
 ...[COMMENT_5642263583_TRUNCATED chars=583]
+
+---
+
+comment_id=5642484337 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/RecorderPanel.tsx
+  - apps/web/src/recording/** presentation/status/action components only
+  - apps/web/src/UploadPanel.tsx presentation copy/composition only
+  - apps/web/src/index.css
+  - focused apps/web unit tests and Chromium E2E for #43 product shell/accessibility/layout, including composition-only updates to existing upload/transcript recorder tests where navigation requires it
+  - README.md
+  - .env.example
+  - docs/CURRENT.md truth reconciliation only
+exclusions:
+  - no backend Python/models/routes/migrations
+  - no infra/compose.yaml edits
+  - no apps/web/src/transcript/** edits
+  - no generated apps/web/src/api/** edits
+  - no recorder domain/state-machine redesign under apps/web/src/recorder/**
+  - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
+lease_expires_at: 2026-09-12T01:43:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-12T01:18:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
-ISSUE #41 state=open updated=2026-09-12T00:43:46Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -679,4 +695,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34662622547 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34664429297 sections=6
