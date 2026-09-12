@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34678458835
+snapshot_seq: 34678515979
 
-collected_at: 2026-09-12T06:34:02.915354Z
+collected_at: 2026-09-12T06:35:20.077555Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T06:33:52Z
+issue_updated_at: 2026-09-12T06:35:10Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,38 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5642687659 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - apps/api/src/recantor/media_*.py and apps/api/src/recantor/upload_processing*.py (new #45 media-processing runtime/reconcile/storage modules)
-  - apps/api/src/recantor/models.py
-  - apps/api/src/recantor/utterance.py only if required for #45 deterministic upload utterance integration
-  - apps/api/src/recantor/stt.py
-  - apps/api/src/recantor/stt_jobs.py
-  - apps/api/src/recantor/stt_tasks.py
-  - apps/api/src/recantor/stt_reconciler.py
-  - apps/api/src/recantor/uploads.py
-  - apps/api/src/recantor/upload_storage.py
-  - apps/api/src/recantor/settings.py
-  - apps/api/alembic/versions/0009_*.py
-  - apps/api/Dockerfile
-  - infra/compose.yaml
-  - apps/api/tests/** focused #45 media/STT/upload-processing fixtures and regressions
-  - CI-only fake-Groq/proof workflow support if required for #45 exact proof
-exclusions:
-  - apps/web/** and all #43 product-shell/presentation files
-  - README.md, .env.example, docs/CURRENT.md
-  - #46 export/result UI, #47 Codex, auth/diarization/summaries
-  - second transcript model/store or
-...[COMMENT_5642687659_TRUNCATED chars=122]
-
----
-
 comment_id=5642712328 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: M
@@ -706,11 +674,27 @@ write_scope:
   - apps/web focused unit/E2E coverage for active-recording workflow navigation, constrained laptop safety states, and live-region behavior
   - no backend, transcript internals, upload domain redesign, #45/#46/#47, integration-branch writes, or local Windows acceptance
 lease_expires_at: 2026-09-12T07:00:00Z
+
+---
+
+comment_id=5644228061 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: N
+issue: #45
+mode: implementation
+branch: agent-n/issue-45-upload-processing
+base_sha: fbe8a3d510ce3532a7d2cbc3d0d3e08d3eb999d5
+write_scope:
+  - infra/compose.yaml media-worker/media-reconciler queue wiring only
+  - apps/api/src/recantor/settings.py media queue setting name only
+  - apps/api/src/recantor/media_tasks.py media queue setting reference only
+  - focused queue-contract test adjustment only if required; do not weaken/delete the existing Media processing CI assertion
+lease_expires_at: 2026-09-12T06:57:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T06:33:52Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T06:35:10Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #55 state=open updated=2026-09-12T06:31:38Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-12T06:31:26Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #43 state=open updated=2026-09-12T03:35:40Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -731,4 +715,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34678458835 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34678515979 sections=6
