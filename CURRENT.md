@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34669107442
+snapshot_seq: 34669866824
 
-collected_at: 2026-09-12T02:58:40.183427Z
+collected_at: 2026-09-12T03:15:27.935127Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -728,11 +728,11 @@ lease_expires_at: 2026-09-12T03:30:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #43 state=open updated=2026-09-12T03:15:16Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
+PR #55 state=open updated=2026-09-12T03:09:38Z title=Issue #45: durable uploaded-media processing
+PR #54 state=open updated=2026-09-12T03:09:19Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #41 state=open updated=2026-09-12T02:58:30Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #55 state=open updated=2026-09-12T02:01:49Z title=Issue #45: durable uploaded-media processing
-PR #54 state=open updated=2026-09-12T02:00:38Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
-ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -742,11 +742,11 @@ ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: 
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #55 draft=True updated=2026-09-12T02:01:49Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-45-upload-processing title=Issue #45: durable uploaded-media processing
-PR #54 draft=True updated=2026-09-12T02:00:38Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
+PR #55 draft=True updated=2026-09-12T03:09:38Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-45-upload-processing title=Issue #45: durable uploaded-media processing
+PR #54 draft=True updated=2026-09-12T03:09:19Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
 PR #53 draft=True updated=2026-09-11T23:51:23Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34669107442 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34669866824 sections=6
