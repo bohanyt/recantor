@@ -87,6 +87,9 @@ async function waitForDurableCompletion(
   );
 }
 
+const durableUploadMessage =
+  'Durably uploaded. The file is stored safely; uploaded-media processing is not available in this alpha yet.';
+
 export function UploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const uppyRef = useRef<Uppy | null>(null);
@@ -115,7 +118,7 @@ export function UploadPanel() {
     setFile(nextFile);
     if (nextFile) {
       setPhase('ready');
-      setMessage('Ready to start or resume this recording.');
+      setMessage('Ready to start or resume this recording upload.');
     } else {
       setPhase('idle');
       setMessage('Choose an existing recording to upload.');
@@ -144,7 +147,7 @@ export function UploadPanel() {
         clearUploadRecovery(recovery);
         setProgress(100);
         setPhase('complete');
-        setMessage('Durably uploaded. Ready for downstream transcription processing.');
+        setMessage(durableUploadMessage);
         return;
       }
 
@@ -183,8 +186,8 @@ export function UploadPanel() {
             setPhase('complete');
             setMessage(
               durable.completed_at
-                ? 'Durably uploaded. Ready for downstream transcription processing.'
-                : 'Durable upload confirmation is pending.',
+                ? durableUploadMessage
+                : 'Durable upload confirmation is pending. No processing result is claimed yet.',
             );
           })
           .catch((error: unknown) => {
@@ -235,21 +238,28 @@ export function UploadPanel() {
   const busy = ['preparing', 'uploading', 'paused', 'verifying'].includes(phase);
 
   return (
-    <section className="mt-6 rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-7">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <section
+      className="mt-6 min-w-0 rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-7"
+      aria-labelledby="upload-recording-heading"
+    >
+      <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-            Existing recording
+            Upload recording
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-            Upload without starting over.
+          <h2 id="upload-recording-heading" className="mt-2 text-2xl font-semibold tracking-tight">
+            Resume a large transfer without starting over.
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            WAV, MP3, M4A, OGG, WebM, or MP4. The transfer uses resumable tus storage; a completed
-            bar is not treated as durable until the Recantor API confirms the stored object.
+            WAV, MP3, M4A, OGG, WebM, or MP4. Uploads use resumable tus storage and are only shown
+            as complete after Recantor confirms durable server state.
+          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            Uploaded-media processing is not available in this alpha yet. FFmpeg normalization,
+            transcription processing, and export results are not implemented in this workflow.
           </p>
         </div>
-        <div className="min-w-28 rounded-2xl border border-[var(--border)] px-4 py-3 text-right">
+        <div className="min-w-28 shrink-0 rounded-2xl border border-[var(--border)] px-4 py-3 text-left sm:text-right">
           <p
             className="font-mono text-2xl font-semibold tabular-nums"
             data-testid="upload-progress"
@@ -283,7 +293,7 @@ export function UploadPanel() {
         />
         <button
           type="button"
-          className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          className="min-h-11 rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
           onClick={() => inputRef.current?.click()}
           disabled={busy}
         >
@@ -291,7 +301,7 @@ export function UploadPanel() {
         </button>
         <p className="mt-3 text-sm text-[var(--muted)]">or drop one file here</p>
         {file ? (
-          <p className="mt-3 text-sm font-medium" data-testid="upload-selected-file">
+          <p className="mt-3 break-words text-sm font-medium" data-testid="upload-selected-file">
             {file.name} · {bytesLabel(file.size)}
           </p>
         ) : null}
@@ -299,7 +309,11 @@ export function UploadPanel() {
 
       <div
         className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--background)]"
-        aria-hidden="true"
+        role="progressbar"
+        aria-label="Upload progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
       >
         <div
           className="h-full bg-[var(--accent)] transition-[width]"
@@ -307,14 +321,19 @@ export function UploadPanel() {
         />
       </div>
 
-      <p className="mt-4 text-sm leading-6 text-[var(--muted)]" data-testid="upload-message">
+      <p
+        className="mt-4 text-sm leading-6 text-[var(--muted)]"
+        data-testid="upload-message"
+        role={phase === 'error' ? 'alert' : 'status'}
+        aria-live={phase === 'error' ? undefined : 'polite'}
+      >
         {message}
       </p>
 
       <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"
-          className="rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-50"
+          className="min-h-11 rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-50"
           onClick={() => void start()}
           disabled={!file || busy || phase === 'complete'}
           data-testid="upload-start"
@@ -323,7 +342,7 @@ export function UploadPanel() {
         </button>
         <button
           type="button"
-          className="rounded-full border border-[var(--border)] px-5 py-2 text-sm font-semibold disabled:opacity-50"
+          className="min-h-11 rounded-full border border-[var(--border)] px-5 py-2 text-sm font-semibold disabled:opacity-50"
           onClick={pause}
           disabled={phase !== 'uploading'}
           data-testid="upload-pause"
@@ -332,7 +351,7 @@ export function UploadPanel() {
         </button>
         <button
           type="button"
-          className="rounded-full border border-[var(--border)] px-5 py-2 text-sm font-semibold disabled:opacity-50"
+          className="min-h-11 rounded-full border border-[var(--border)] px-5 py-2 text-sm font-semibold disabled:opacity-50"
           onClick={resume}
           disabled={phase !== 'paused' && phase !== 'error'}
           data-testid="upload-resume"

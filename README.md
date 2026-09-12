@@ -1,32 +1,34 @@
 # Recantor
 
-Recantor is a self-hosted recording and meeting-intelligence platform focused on reliable audio capture first, then transcription, diarization, summaries, and exports.
+Recantor is a self-hosted recording and transcription project built around one rule: **capture safety is independent from downstream intelligence**.
 
-The project is designed for two primary workflows:
+The current cloud-alpha integration line has two web workflows:
 
-- **Live Intelligence** — authenticated browser recording, live transcript updates, speaker processing, and rolling meeting intelligence.
-- **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then produce a durable transcript and exports. A bounded guest path may operate without login.
+- **Live** — reliable browser archive recording plus an independent realtime speech lane, durable STT scheduling, canonical transcript recovery, and live transcript display.
+- **Upload recording** — resumable transfer of an existing WAV/MP3/M4A/OGG/WebM/MP4 file into durable upload storage. Uploaded-media normalization/transcription processing is not implemented yet.
 
-## Core principles
+## Reliability principles
 
-1. **Capture is infrastructure. Intelligence is downstream.** Recording must remain safe even if STT, diarization, an LLM, or the network is degraded.
-2. **The server owns the session.** Browsers and future native apps are clients of the same recording protocol.
-3. **Durable before clever.** Audio is persisted and acknowledged before downstream processing is considered successful.
-4. **Concurrent users are normal.** Work is isolated by session.
-5. **Failures must be visible.** Missing audio is reported honestly; Recantor must never silently pretend continuity.
+1. Archive audio is persisted locally before upload and removed from the browser spool only after durable server ACK.
+2. One capture writer owns a live session at a time; stale/fenced clients retain evidence but cannot mutate that session.
+3. Finalization has an explicit high-water boundary; missing audio is never silently invented away.
+4. Realtime STT and transcript delivery may degrade without weakening archive recording safety.
+5. PostgreSQL and audio storage are durable truth. Redis/Celery and WebSocket delivery are coordination paths, not canonical meeting state.
+
+Desktop Chrome/Edge on an awake computer is the first browser reliability target. Continuous capture through sleep, shutdown, execution-suspending lock behavior, or mobile background suspension is not claimed.
 
 ## Current stack
 
 - Web: React + TypeScript + Vite + Tailwind CSS
-- Server state: TanStack Query
-- Browser recovery spool: Dexie / IndexedDB
+- Browser recovery: Dexie / IndexedDB
 - API: Python + FastAPI + Pydantic
 - Database: PostgreSQL + SQLAlchemy 2 + Alembic
+- Live STT scheduling: PostgreSQL-authoritative jobs with Celery + Redis delivery/reconciliation
+- STT provider: server-side Groq Whisper adapter (`whisper-large-v3-turbo` by default)
+- Transcript delivery: canonical HTTP cursor reads plus ephemeral WebSocket wake hints
+- Existing-recording upload: Uppy + tus/tusd with durable Recantor completion evidence
 - Development orchestration: Docker Compose
 - Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
-- API contract: FastAPI OpenAPI -> generated TypeScript client
-
-The current Phase 2 core includes the realtime utterance/VAD path, canonical transcript storage, and a Groq Whisper STT provider boundary. Planned downstream capabilities include Celery/Redis live STT processing, realtime transcript delivery, faster-whisper local fallback, diarization, meeting summaries, FFmpeg normalization, and tus-based resumable existing-file uploads. They are not current capability claims unless `docs/CURRENT.md` says otherwise.
 
 ## Quick start
 
@@ -35,56 +37,70 @@ The development stack requires Docker with Docker Compose.
 ```bash
 git clone https://github.com/bohanyt/recantor.git
 cd recantor
-docker compose -f infra/compose.yaml up --build
+cp .env.example .env
 ```
 
-Compose starts PostgreSQL and Redis, runs Alembic migrations, then starts the API and web application.
+Open `.env` and set the server-side key:
+
+```text
+GROQ_API_KEY=your-groq-key-here
+```
+
+A fake value such as `fake-local-config-check` is sufficient to verify that Compose passes the variable into the API and STT worker, but real live transcription requires a valid Groq key. Recantor does not need a browser-side provider key and does not implement provider/fallback selectors in normal setup.
+
+Then start the stack, passing the repository environment file explicitly:
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml up --build
+```
+
+The explicit `--env-file .env` keeps setup truthful even though the Compose file lives under `infra/`. The current Compose file forwards `GROQ_API_KEY` to both `api` and `stt-worker`, while keeping it out of the web service.
 
 Open:
 
-- Web recorder: `http://localhost:5173`
+- Web app: `http://localhost:5173`
 - API docs: `http://localhost:8000/docs`
 - Process liveness: `http://localhost:8000/healthz`
 - PostgreSQL readiness: `http://localhost:8000/readyz`
+- tus upload endpoint (protocol endpoint, not a human UI): `http://localhost:1080/files/`
 
 Stop the stack:
 
 ```bash
-docker compose -f infra/compose.yaml down
+docker compose --env-file .env -f infra/compose.yaml down
 ```
 
-Delete development database/audio volumes too when you intentionally want a clean slate:
+Delete development database/audio volumes too only when you intentionally want a clean slate:
 
 ```bash
-docker compose -f infra/compose.yaml down -v
+docker compose --env-file .env -f infra/compose.yaml down -v
 ```
 
-## What the recorder currently does
+## What works on the current integration line
 
-The reliable archive recorder is implemented. It uses `MediaRecorder`, persists emitted fragments to a Dexie/IndexedDB recovery spool, uploads sequenced audio to the API, keeps local evidence until durable server ACK, supports recovery/finalization, fences stale capture writers, and makes unresolved continuity/gaps explicit.
+### Live recording and canonical transcript
 
-A clean Stop declares a final high-water boundary; the server reaches `COMPLETE` only after expected sequences are durably present or explicitly represented as loss. Persisted `audio_completeness` distinguishes full, partial, and empty terminal audio evidence.
+The archive recorder uses `MediaRecorder`, persists emitted fragments to IndexedDB, uploads sequence-numbered audio with ownership/hash/timing evidence, keeps local evidence until durable server ACK, supports recovery/finalization, fences stale capture writers, and makes unresolved continuity explicit.
 
-The browser also has an independent realtime lane that taps the same microphone stream through Web Audio/AudioWorklet, sends sample-clock PCM to the server, endpoints speech with a bounded VAD baseline, and stores independently decodable durable utterance WAV work. The merged STT boundary can verify one of those durable utterances, send it to Groq Whisper, and commit one retry-safe canonical transcript segment. Realtime/STT failure remains downstream degradation and does not participate in archive ACK semantics.
+The independent realtime lane uses the same microphone stream through Web Audio/AudioWorklet, commits independently decodable durable utterance WAV work, and feeds the durable live STT scheduler. PostgreSQL-backed scheduling/claim/retry/fairness from Issue #38 is present on the integration line. Canonical `TranscriptSegment` rows remain the transcript source of truth; the #42 UI uses HTTP cursor recovery and WebSocket delivery only as a wake hint.
 
-## Current project status
+Archive-audio safety and transcription state are intentionally separate. A delayed transcript never means archive audio is unsafe, and a safe archive does not imply transcription succeeded.
 
-**Phase 1 capture reliability is closed.** The bounded real-platform witness used an ordinary Microsoft Edge window on an awake Windows 11 laptop with a real microphone and proved archive capture/ACK progress through a whole-window minimize interval. This does not claim continuous capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile browser suspension.
+### Existing-recording upload
 
-**Phase 2 foundations through real provider execution are merged.** The repository now has:
+The #44 upload foundation is present on the integration line. Uppy/tus can pause, reload, resume the same durable upload, and verifies Recantor server completion before showing the transfer as durably uploaded.
 
-- terminal audio completeness;
-- canonical PostgreSQL transcript segments with reconnect cursor semantics;
-- durable independently decodable `TranscriptionUtterance` work;
-- a real browser PCM/VAD utterance producer, validated on Windows/Edge with 71 durable WAV utterances while archive capture remained `COMPLETE`/`full`;
-- an owned provider-neutral STT boundary with Groq `whisper-large-v3-turbo` as the first adapter;
-- a bounded real-provider witness where durable real-microphone utterances produced canonical transcript rows without weakening archive capture.
+That is the current boundary. The following are **not** current upload capabilities:
 
-PR #37 merged as `f0a0f2e068cb1003619010595928c0273912e61c`; post-merge CI run `34456347492` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
+- FFmpeg/ffprobe validation or normalization of uploaded media;
+- segmentation and upload-to-STT processing (#45);
+- uploaded-recording transcript/result/export UX (#46).
 
-**Issue #38 is the current Phase 2E slice:** add automatic durable live STT queueing, PostgreSQL-backed claim/reconciliation semantics, provider retry handling, and multi-session fairness using Celery/Redis only as delivery/coordination rather than durable truth. Realtime transcript fanout/UI, local faster-whisper fallback, diarization, summaries, production auth, and native mobile recording remain downstream.
+## Configuration truth
 
-See [`docs/CURRENT.md`](docs/CURRENT.md) for exact evidence and immediate next work.
+`apps/api/src/recantor/settings.py` is the backend settings authority. Current STT configuration is direct Groq configuration: `GROQ_API_KEY` plus optional endpoint/model/timeout overrides. There is no implemented `STT_PRIMARY_PROVIDER`, `STT_FALLBACK_PROVIDER`, or `LOCAL_STT_BASE_URL` selector in current backend settings.
+
+`.env.example` documents implemented development inputs only. Keep real secrets in local environment configuration; never commit them.
 
 ## Development checks
 
@@ -108,21 +124,19 @@ pnpm --dir apps/web test
 pnpm --dir apps/web build
 ```
 
-GitHub Actions additionally proves PostgreSQL migrations/readiness, Redis reachability, Chromium web -> API -> PostgreSQL smoke behavior, API restart durability, and the Docker Compose path.
+GitHub Actions also exercises PostgreSQL migrations/readiness, Redis, Chromium web/API/PostgreSQL behavior, recorder recovery/fencing paths, durable live STT scheduling, resumable upload, and Docker Compose smoke coverage.
 
-## Reliability boundary
+## Production exposure boundary
 
-Desktop Chrome/Edge on an awake computer is the first web reliability target. Mobile web is useful while active, but Recantor does not claim continuous recording through mobile background suspension, desktop sleep, or shutdown.
-
-The public upstream stays deployment-agnostic. Organization-specific branding, domains, authentication policy, infrastructure, and secrets belong in deployment configuration or downstream forks/overlays.
+The current alpha is trusted-development software. Production authentication/authorization, retention/deletion behavior, abuse controls, and deployment hardening remain required before exposing live recordings or sensitive transcript data to untrusted users.
 
 ## Documentation
 
-- [`docs/CURRENT.md`](docs/CURRENT.md) — operational source of truth and immediate next step
+- [`docs/CURRENT.md`](docs/CURRENT.md) — operational source of truth and immediate next work
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) — product scope and user-facing behavior
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture and reliability contracts
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased delivery plan
-- [`docs/decisions/0001-foundation-stack.md`](docs/decisions/0001-foundation-stack.md) — initial stack decision
+- [`docs/decisions/0001-foundation-stack.md`](docs/decisions/0001-foundation-stack.md) — foundation stack ADR
 - [`docs/decisions/0002-recording-access-guardrails.md`](docs/decisions/0002-recording-access-guardrails.md) — recording/access guardrails
 - [`AGENTS.md`](AGENTS.md) — working contract for humans and coding agents
 
