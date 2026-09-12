@@ -299,7 +299,9 @@ async def claim_next_upload_processing(now: datetime | None = None) -> MediaClai
                 processing.claim_expires_at = None
                 processing.last_error_category = "scheduler"
                 processing.last_error_code = "retry_budget_exhausted"
-                processing.last_error_message = "automatic media processing attempt budget exhausted"
+                processing.last_error_message = (
+                    "automatic media processing attempt budget exhausted"
+                )
                 processing.completed_at = current
                 continue
 
@@ -358,9 +360,13 @@ async def _load_claim_source(claim: MediaClaim) -> _SourceIdentity:
     if record.tus_upload_id is None:
         raise MediaPermanentError("upload_binding_missing", "completed upload has no tus binding")
     if record.storage_key is None or record.sha256 is None or record.byte_length is None:
-        raise MediaPermanentError("completed_upload_missing", "completed upload evidence is incomplete")
+        raise MediaPermanentError(
+            "completed_upload_missing", "completed upload evidence is incomplete"
+        )
     if record.completed_at is None:
-        raise MediaPermanentError("completed_upload_missing", "completed upload timestamp is missing")
+        raise MediaPermanentError(
+            "completed_upload_missing", "completed upload timestamp is missing"
+        )
     return _SourceIdentity(
         session_id=claim.session_id,
         tus_upload_id=record.tus_upload_id,
@@ -451,6 +457,8 @@ async def probe_media(path: Path) -> MediaProbe:
             "format=format_name,duration:stream=index,codec_type,codec_name,duration",
             "-of",
             "json",
+            "-protocol_whitelist",
+            "file",
             str(path),
         ],
         timeout=float(settings.media_probe_timeout_seconds),
@@ -495,7 +503,9 @@ async def probe_media(path: Path) -> MediaProbe:
         part.strip().lower() for part in raw_format["format_name"].split(",") if part.strip()
     )
     if not set(format_names).intersection(_SUPPORTED_FORMAT_NAMES):
-        raise MediaPermanentError("unsupported_container", "uploaded media container is unsupported")
+        raise MediaPermanentError(
+            "unsupported_container", "uploaded media container is unsupported"
+        )
 
     durations = [
         duration
@@ -643,6 +653,8 @@ async def _load_or_create_normalized(
                 "-threads",
                 "1",
                 "-copyts",
+                "-protocol_whitelist",
+                "file",
                 "-i",
                 str(source_path),
                 "-map",
@@ -720,8 +732,10 @@ def _upload_vad() -> EnergyEndpointDetector:
     )
 
 
-def upload_utterance_producer_key(ordinal: int, start_sample: int, end_sample: int) -> str:
-    return f"{SEGMENTATION_SPEC_ID}:{ordinal:08d}:{start_sample}:{end_sample}"
+def upload_utterance_producer_key(ordinal: int) -> str:
+    # Ordinal is the semantic slot. Timing/payload drift must conflict on the same key rather
+    # than creating an alternate overlapping utterance identity.
+    return f"{SEGMENTATION_SPEC_ID}:{ordinal:08d}"
 
 
 async def _commit_candidate(
@@ -746,7 +760,7 @@ async def _commit_candidate(
             await commit_utterance_work(
                 db,
                 session_id=claim.session_id,
-                producer_key=upload_utterance_producer_key(ordinal, start_sample, end_sample),
+                producer_key=upload_utterance_producer_key(ordinal),
                 start_ms=start_ms,
                 end_ms=end_ms,
                 content_type="audio/wav",
@@ -900,14 +914,23 @@ async def _record_processing_error(claim: MediaClaim, exc: MediaProcessingError)
         current = await _database_now(db)
         processing.claim_token = None
         processing.claim_expires_at = None
-        code = exc.code if isinstance(exc, (MediaPermanentError, MediaRetryableError)) else "worker_error"
+        code = (
+            exc.code
+            if isinstance(exc, (MediaPermanentError, MediaRetryableError))
+            else "worker_error"
+        )
         processing.last_error_category = (
             "transient" if isinstance(exc, MediaRetryableError) else "media"
         )
         processing.last_error_code = code[:96]
         processing.last_error_message = _safe_message(str(exc), code)
-        if isinstance(exc, MediaRetryableError) and processing.attempt_count < settings.media_max_attempts:
-            delay = float(settings.media_retry_base_seconds) * (2 ** max(0, processing.attempt_count - 1))
+        if (
+            isinstance(exc, MediaRetryableError)
+            and processing.attempt_count < settings.media_max_attempts
+        ):
+            delay = float(settings.media_retry_base_seconds) * (
+                2 ** max(0, processing.attempt_count - 1)
+            )
             processing.state = UploadProcessingState.RETRY_WAIT.value
             processing.next_attempt_at = current + timedelta(seconds=delay)
             processing.completed_at = None
@@ -943,7 +966,7 @@ async def execute_upload_processing_claim(claim: MediaClaim) -> bool:
         return True
     except MediaProcessingStale:
         return False
-    except UploadStorageError as exc:
+    except UploadStorageError:
         await _record_processing_error(
             claim,
             MediaPermanentError("source_integrity", "completed upload source failed verification"),
@@ -1005,7 +1028,9 @@ async def _converge_waiting_stt(batch_size: int = 100) -> tuple[int, int]:
                 processing.state = UploadProcessingState.FAILED.value
                 processing.last_error_category = "identity"
                 processing.last_error_code = "expected_utterance_identity_missing"
-                processing.last_error_message = "waiting upload processing has no expected utterance set"
+                processing.last_error_message = (
+                    "waiting upload processing has no expected utterance set"
+                )
                 processing.completed_at = await _database_now(db)
                 failed += 1
                 continue
@@ -1040,7 +1065,9 @@ async def _converge_waiting_stt(batch_size: int = 100) -> tuple[int, int]:
                     processing.state = UploadProcessingState.FAILED.value
                     processing.last_error_category = "identity"
                     processing.last_error_code = "segmentation_identity_drift"
-                    processing.last_error_message = "upload utterance set exceeds durable expected count"
+                    processing.last_error_message = (
+                        "upload utterance set exceeds durable expected count"
+                    )
                     processing.completed_at = await _database_now(db)
                     failed += 1
                 continue
@@ -1048,7 +1075,9 @@ async def _converge_waiting_stt(batch_size: int = 100) -> tuple[int, int]:
                 processing.state = UploadProcessingState.FAILED.value
                 processing.last_error_category = "stt"
                 processing.last_error_code = "stt_terminal_failure"
-                processing.last_error_message = "one or more upload STT jobs reached terminal failure"
+                processing.last_error_message = (
+                    "one or more upload STT jobs reached terminal failure"
+                )
                 processing.completed_at = await _database_now(db)
                 failed += 1
                 continue

@@ -107,7 +107,9 @@ def _safe_message(message: str, *, fallback: str) -> str:
 
 def _effective_lease_seconds() -> float:
     settings = get_settings()
-    return max(float(settings.stt_claim_lease_seconds), float(settings.groq_stt_timeout_seconds) + 10.0)
+    return max(
+        float(settings.stt_claim_lease_seconds), float(settings.groq_stt_timeout_seconds) + 10.0
+    )
 
 
 def _retry_delay_seconds(category: STTErrorCategory, attempt_count: int) -> float:
@@ -139,7 +141,8 @@ async def _canonical_exists(db: AsyncSession, *, session_id: UUID, utterance_id:
         await db.scalar(
             select(TranscriptSegment.id).where(
                 TranscriptSegment.session_id == session_id,
-                TranscriptSegment.producer_key == transcript_producer_key_for_utterance(utterance_id),
+                TranscriptSegment.producer_key
+                == transcript_producer_key_for_utterance(utterance_id),
             )
         )
         is not None
@@ -197,7 +200,9 @@ async def _claim_locked_job(
     lease_seconds: float,
 ) -> STTClaim | None:
     settings = get_settings()
-    canonical = await _canonical_exists(db, session_id=job.session_id, utterance_id=job.utterance_id)
+    canonical = await _canonical_exists(
+        db, session_id=job.session_id, utterance_id=job.utterance_id
+    )
     if canonical:
         _mark_succeeded(job)
         return None
@@ -248,7 +253,9 @@ async def claim_stt_job(
     if lease <= 0:
         raise STTJobError("STT claim lease must be positive")
     async with get_sessionmaker()() as db, db.begin():
-        job = await db.scalar(select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update())
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == utterance_id).with_for_update()
+        )
         if job is None:
             return None
         current = now or await _database_now(db)
@@ -266,7 +273,11 @@ async def _claim_next_reserved_stt_job(
     lease = lease_seconds if lease_seconds is not None else _effective_lease_seconds()
     if lease <= 0:
         raise STTJobError("STT claim lease must be positive")
-    cooldown = float(settings.stt_dispatch_reenqueue_seconds) if cooldown_seconds is None else cooldown_seconds
+    cooldown = (
+        float(settings.stt_dispatch_reenqueue_seconds)
+        if cooldown_seconds is None
+        else cooldown_seconds
+    )
     if cooldown < 0:
         raise STTJobError("STT dispatch cooldown must be non-negative")
 
@@ -301,7 +312,9 @@ async def _claim_next_reserved_stt_job(
 
 
 async def _claim_commit_is_current(db: AsyncSession, claim: STTClaim) -> bool:
-    job = await db.scalar(select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update())
+    job = await db.scalar(
+        select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+    )
     return (
         job is not None
         and job.session_id == claim.session_id
@@ -312,7 +325,9 @@ async def _claim_commit_is_current(db: AsyncSession, claim: STTClaim) -> bool:
 
 async def _complete_claim_success(claim: STTClaim) -> bool:
     async with get_sessionmaker()() as db, db.begin():
-        job = await db.scalar(select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update())
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+        )
         if job is None:
             return False
         if await _canonical_exists(db, session_id=job.session_id, utterance_id=job.utterance_id):
@@ -323,7 +338,9 @@ async def _complete_claim_success(claim: STTClaim) -> bool:
 
 async def _complete_claim_no_speech(claim: STTClaim) -> bool:
     async with get_sessionmaker()() as db, db.begin():
-        job = await db.scalar(select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update())
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+        )
         if job is None:
             return False
         if await _canonical_exists(db, session_id=job.session_id, utterance_id=job.utterance_id):
@@ -346,12 +363,16 @@ async def _record_claim_failure(
 ) -> STTExecutionResult:
     settings = get_settings()
     async with get_sessionmaker()() as db, db.begin():
-        job = await db.scalar(select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update())
+        job = await db.scalar(
+            select(STTJob).where(STTJob.utterance_id == claim.utterance_id).with_for_update()
+        )
         if job is None:
             return STTExecutionResult(STTExecutionStatus.STALE, None, 0)
         if await _canonical_exists(db, session_id=job.session_id, utterance_id=job.utterance_id):
             _mark_succeeded(job)
-            return STTExecutionResult(STTExecutionStatus.SUCCEEDED, STTJobState.SUCCEEDED, job.attempt_count)
+            return STTExecutionResult(
+                STTExecutionStatus.SUCCEEDED, STTJobState.SUCCEEDED, job.attempt_count
+            )
         if job.state != STTJobState.CLAIMED.value or job.claim_token != claim.token:
             return STTExecutionResult(
                 STTExecutionStatus.STALE,
@@ -364,7 +385,10 @@ async def _record_claim_failure(
         job.last_error_code = code[:96]
         job.last_error_message = _safe_message(message, fallback=code)
         _clear_claim(job)
-        retryable = retry_category in _RETRYABLE_PROVIDER_CATEGORIES or retry_category == STTErrorCategory.CONFIGURATION
+        retryable = (
+            retry_category in _RETRYABLE_PROVIDER_CATEGORIES
+            or retry_category == STTErrorCategory.CONFIGURATION
+        )
         if retryable and job.attempt_count < settings.stt_max_attempts:
             delay = _retry_delay_seconds(retry_category, job.attempt_count)
             job.state = STTJobState.RETRY_WAIT.value
@@ -391,7 +415,9 @@ async def _stale_execution_result(claim: STTClaim) -> STTExecutionResult:
     )
 
 
-async def _execute_claim(*, claim: STTClaim, provider: STTProvider, now: datetime | None = None) -> STTExecutionResult:
+async def _execute_claim(
+    *, claim: STTClaim, provider: STTProvider, now: datetime | None = None
+) -> STTExecutionResult:
     async def commit_guard(db: AsyncSession) -> bool:
         return await _claim_commit_is_current(db, claim)
 
@@ -411,7 +437,11 @@ async def _execute_claim(*, claim: STTClaim, provider: STTProvider, now: datetim
         async with get_sessionmaker()() as db:
             job = await db.get(STTJob, claim.utterance_id)
         state = None if job is None else STTJobState(job.state)
-        status = STTExecutionStatus.SUCCEEDED if state == STTJobState.SUCCEEDED else STTExecutionStatus.NO_SPEECH
+        status = (
+            STTExecutionStatus.SUCCEEDED
+            if state == STTJobState.SUCCEEDED
+            else STTExecutionStatus.NO_SPEECH
+        )
         return STTExecutionResult(status, state, claim.attempt_count)
     except STTProviderError as exc:
         return await _record_claim_failure(
@@ -453,7 +483,9 @@ async def _execute_claim(*, claim: STTClaim, provider: STTProvider, now: datetim
     completed = await _complete_claim_success(claim)
     if not completed:
         return await _stale_execution_result(claim)
-    return STTExecutionResult(STTExecutionStatus.SUCCEEDED, STTJobState.SUCCEEDED, claim.attempt_count)
+    return STTExecutionResult(
+        STTExecutionStatus.SUCCEEDED, STTJobState.SUCCEEDED, claim.attempt_count
+    )
 
 
 async def execute_stt_job(
@@ -527,25 +559,35 @@ async def requeue_failed_stt_job(
 
 async def _ensure_missing_jobs(batch_size: int) -> int:
     async with get_sessionmaker()() as db:
-        missing = list((await db.scalars(
-            select(TranscriptionUtterance)
-            .outerjoin(STTJob, STTJob.utterance_id == TranscriptionUtterance.id)
-            .where(STTJob.utterance_id.is_(None))
-            .order_by(
-                TranscriptionUtterance.created_at,
-                TranscriptionUtterance.session_id,
-                TranscriptionUtterance.sequence,
-            )
-            .limit(batch_size)
-        )).all())
+        missing = list(
+            (
+                await db.scalars(
+                    select(TranscriptionUtterance)
+                    .outerjoin(STTJob, STTJob.utterance_id == TranscriptionUtterance.id)
+                    .where(STTJob.utterance_id.is_(None))
+                    .order_by(
+                        TranscriptionUtterance.created_at,
+                        TranscriptionUtterance.session_id,
+                        TranscriptionUtterance.sequence,
+                    )
+                    .limit(batch_size)
+                )
+            ).all()
+        )
         if not missing:
             return 0
         statement = (
             insert(STTJob)
-            .values([
-                {"utterance_id": work.id, "session_id": work.session_id, "state": STTJobState.PENDING.value}
-                for work in missing
-            ])
+            .values(
+                [
+                    {
+                        "utterance_id": work.id,
+                        "session_id": work.session_id,
+                        "state": STTJobState.PENDING.value,
+                    }
+                    for work in missing
+                ]
+            )
             .on_conflict_do_nothing(index_elements=[STTJob.utterance_id])
             .returning(STTJob.utterance_id)
         )
@@ -557,17 +599,24 @@ async def _ensure_missing_jobs(batch_size: int) -> int:
 async def _converge_canonical(batch_size: int) -> int:
     transcript_key = func.concat("utterance:", cast(STTJob.utterance_id, String))
     async with get_sessionmaker()() as db, db.begin():
-        jobs = list((await db.scalars(
-            select(STTJob)
-            .join(TranscriptSegment, and_(
-                TranscriptSegment.session_id == STTJob.session_id,
-                TranscriptSegment.producer_key == transcript_key,
-            ))
-            .where(STTJob.state != STTJobState.SUCCEEDED.value)
-            .order_by(STTJob.updated_at, STTJob.utterance_id)
-            .limit(batch_size)
-            .with_for_update(of=STTJob, skip_locked=True)
-        )).all())
+        jobs = list(
+            (
+                await db.scalars(
+                    select(STTJob)
+                    .join(
+                        TranscriptSegment,
+                        and_(
+                            TranscriptSegment.session_id == STTJob.session_id,
+                            TranscriptSegment.producer_key == transcript_key,
+                        ),
+                    )
+                    .where(STTJob.state != STTJobState.SUCCEEDED.value)
+                    .order_by(STTJob.updated_at, STTJob.utterance_id)
+                    .limit(batch_size)
+                    .with_for_update(of=STTJob, skip_locked=True)
+                )
+            ).all()
+        )
         for job in jobs:
             _mark_succeeded(job)
         return len(jobs)
@@ -576,24 +625,36 @@ async def _converge_canonical(batch_size: int) -> int:
 async def _repair_false_succeeded(batch_size: int) -> int:
     transcript_key = func.concat("utterance:", cast(STTJob.utterance_id, String))
     async with get_sessionmaker()() as db, db.begin():
-        jobs = list((await db.scalars(
-            select(STTJob)
-            .outerjoin(TranscriptSegment, and_(
-                TranscriptSegment.session_id == STTJob.session_id,
-                TranscriptSegment.producer_key == transcript_key,
-            ))
-            .where(STTJob.state == STTJobState.SUCCEEDED.value, TranscriptSegment.id.is_(None))
-            .order_by(STTJob.updated_at, STTJob.utterance_id)
-            .limit(batch_size)
-            .with_for_update(of=STTJob, skip_locked=True)
-        )).all())
+        jobs = list(
+            (
+                await db.scalars(
+                    select(STTJob)
+                    .outerjoin(
+                        TranscriptSegment,
+                        and_(
+                            TranscriptSegment.session_id == STTJob.session_id,
+                            TranscriptSegment.producer_key == transcript_key,
+                        ),
+                    )
+                    .where(
+                        STTJob.state == STTJobState.SUCCEEDED.value, TranscriptSegment.id.is_(None)
+                    )
+                    .order_by(STTJob.updated_at, STTJob.utterance_id)
+                    .limit(batch_size)
+                    .with_for_update(of=STTJob, skip_locked=True)
+                )
+            ).all()
+        )
         for job in jobs:
             _repair_false_success(job)
         return len(jobs)
 
 
 def _delivery_reservation_expression(current: datetime, cooldown_before: datetime):
-    recent = and_(STTJob.last_delivery_attempt_at.is_not(None), STTJob.last_delivery_attempt_at > cooldown_before)
+    recent = and_(
+        STTJob.last_delivery_attempt_at.is_not(None),
+        STTJob.last_delivery_attempt_at > cooldown_before,
+    )
     pending = STTJob.state == STTJobState.PENDING.value
     due_retry = and_(
         STTJob.state == STTJobState.RETRY_WAIT.value,
@@ -701,7 +762,10 @@ async def _reserve_fair_candidates(
                 )
                 .join(TranscriptionUtterance, TranscriptionUtterance.id == STTJob.utterance_id)
                 .join(RecordingSession, RecordingSession.id == STTJob.session_id)
-                .where(_session_class_expression(workload_class), _eligible_expression(current, cooldown_before))
+                .where(
+                    _session_class_expression(workload_class),
+                    _eligible_expression(current, cooldown_before),
+                )
                 .subquery()
             )
             outstanding_count = func.coalesce(outstanding.c.outstanding_count, 0)
@@ -709,17 +773,28 @@ async def _reserve_fair_candidates(
                 session_history.c.last_delivery_attempt_at,
                 session_history.c.oldest_created_at,
             )
-            candidate_ids = list((await db.scalars(
-                select(ranked.c.utterance_id)
-                .outerjoin(outstanding, outstanding.c.session_id == ranked.c.session_id)
-                .outerjoin(session_history, session_history.c.session_id == ranked.c.session_id)
-                .where(
-                    outstanding_count < per_session_limit,
-                    ranked.c.session_rank <= per_session_limit - outstanding_count,
-                )
-                .order_by(ranked.c.session_rank, service_turn, ranked.c.session_id, ranked.c.utterance_id)
-                .limit(available_global)
-            )).all())
+            candidate_ids = list(
+                (
+                    await db.scalars(
+                        select(ranked.c.utterance_id)
+                        .outerjoin(outstanding, outstanding.c.session_id == ranked.c.session_id)
+                        .outerjoin(
+                            session_history, session_history.c.session_id == ranked.c.session_id
+                        )
+                        .where(
+                            outstanding_count < per_session_limit,
+                            ranked.c.session_rank <= per_session_limit - outstanding_count,
+                        )
+                        .order_by(
+                            ranked.c.session_rank,
+                            service_turn,
+                            ranked.c.session_id,
+                            ranked.c.utterance_id,
+                        )
+                        .limit(available_global)
+                    )
+                ).all()
+            )
         else:
             candidate_ids = []
 
@@ -731,7 +806,10 @@ async def _reserve_fair_candidates(
             )
             statement = (
                 update(STTJob)
-                .where(STTJob.utterance_id.in_(candidate_ids), _eligible_expression(current, cooldown_before))
+                .where(
+                    STTJob.utterance_id.in_(candidate_ids),
+                    _eligible_expression(current, cooldown_before),
+                )
                 .values(last_delivery_attempt_at=stamp)
                 .returning(STTJob.utterance_id)
             )
@@ -778,7 +856,11 @@ async def reconcile_stt_jobs(
         raise STTJobError("STT reconcile batch size must be positive")
     if session_limit < 1:
         raise STTJobError("STT per-session reconcile limit must be positive")
-    cooldown = float(settings.stt_dispatch_reenqueue_seconds) if cooldown_seconds is None else cooldown_seconds
+    cooldown = (
+        float(settings.stt_dispatch_reenqueue_seconds)
+        if cooldown_seconds is None
+        else cooldown_seconds
+    )
     if cooldown < 0:
         raise STTJobError("STT dispatch cooldown must be non-negative")
     if enqueue is None and ensure_wake_capacity is None:
@@ -830,7 +912,10 @@ async def read_stt_diagnostics(
 ) -> tuple[dict[str, int], list[STTJob]]:
     if failure_limit < 1 or failure_limit > 100:
         raise STTJobError("failure_limit must be between 1 and 100")
-    if await db.scalar(select(RecordingSession.id).where(RecordingSession.id == session_id)) is None:
+    if (
+        await db.scalar(select(RecordingSession.id).where(RecordingSession.id == session_id))
+        is None
+    ):
         raise STTJobNotFound("recording session not found")
     grouped = (
         await db.execute(
@@ -842,10 +927,14 @@ async def read_stt_diagnostics(
     counts = {state.value: 0 for state in STTJobState}
     for state, count in grouped:
         counts[state] = int(count)
-    failures = list((await db.scalars(
-        select(STTJob)
-        .where(STTJob.session_id == session_id, STTJob.last_error_category.is_not(None))
-        .order_by(STTJob.updated_at.desc(), STTJob.utterance_id)
-        .limit(failure_limit)
-    )).all())
+    failures = list(
+        (
+            await db.scalars(
+                select(STTJob)
+                .where(STTJob.session_id == session_id, STTJob.last_error_category.is_not(None))
+                .order_by(STTJob.updated_at.desc(), STTJob.utterance_id)
+                .limit(failure_limit)
+            )
+        ).all()
+    )
     return counts, failures

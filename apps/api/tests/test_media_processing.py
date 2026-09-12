@@ -53,8 +53,8 @@ from recantor.realtime_audio import PcmFrame, encode_pcm_wav
 from recantor.settings import get_settings
 from recantor.stt import GroqSTTProvider, STTRequest, STTResult
 from recantor.stt_jobs import (
-    STTWorkloadClass,
     STTExecutionStatus,
+    STTWorkloadClass,
     execute_next_reserved_stt_job,
     execute_stt_job,
     reconcile_stt_jobs,
@@ -80,8 +80,7 @@ class SequenceProvider:
 def _tone_pcm(milliseconds: int, *, amplitude: int = 9000) -> bytes:
     samples = round(UPLOAD_SAMPLE_RATE * milliseconds / 1000)
     return b"".join(
-        struct.pack("<h", amplitude if index % 2 == 0 else -amplitude)
-        for index in range(samples)
+        struct.pack("<h", amplitude if index % 2 == 0 else -amplitude) for index in range(samples)
     )
 
 
@@ -231,7 +230,9 @@ def _segment_boundaries(pcm: bytes) -> list[tuple[int, int]]:
             break
         frame = PcmFrame(sample_offset=sample_offset, pcm=chunk)
         sample_offset += frame.sample_count
-        output.extend((candidate.start_sample, candidate.end_sample) for candidate in detector.feed(frame))
+        output.extend(
+            (candidate.start_sample, candidate.end_sample) for candidate in detector.feed(frame)
+        )
     candidate = detector.flush()
     if candidate is not None:
         output.append((candidate.start_sample, candidate.end_sample))
@@ -446,13 +447,16 @@ async def test_normalized_first_durable_evidence_crash_rules(clean_recording_sta
         selected_audio_stream=0,
         temp_path=temp,
     )
-    assert storage.verify_committed(
-        session_id=session_id,
-        source_storage_key=source_key,
-        source_sha256=source_hash,
-        source_byte_length=123,
-        selected_audio_stream=0,
-    ) == media
+    assert (
+        storage.verify_committed(
+            session_id=session_id,
+            source_storage_key=source_key,
+            source_sha256=source_hash,
+            source_byte_length=123,
+            selected_audio_stream=0,
+        )
+        == media
+    )
 
     # Once manifest evidence is durable, deleting/mutating the WAV is a loud integrity error;
     # it is never silently regenerated in a new identity.
@@ -560,7 +564,9 @@ async def test_instrumented_slow_completion_hash_does_not_block_event_loop_or_ro
 
 
 @pytest.mark.asyncio
-async def test_media_claim_restart_and_lost_wake_recover_from_postgres(clean_recording_state, tmp_path: Path):
+async def test_media_claim_restart_and_lost_wake_recover_from_postgres(
+    clean_recording_state, tmp_path: Path
+):
     del clean_recording_state
     session_id, _, _ = await _create_completed_upload(
         tmp_path,
@@ -601,7 +607,7 @@ async def test_blank_stt_is_terminal_no_speech_and_upload_still_succeeds(
         first, _ = await commit_utterance_work(
             db,
             session_id=session_id,
-            producer_key=upload_utterance_producer_key(1, 0, 8000),
+            producer_key=upload_utterance_producer_key(1),
             start_ms=0,
             end_ms=500,
             content_type="audio/wav",
@@ -611,7 +617,7 @@ async def test_blank_stt_is_terminal_no_speech_and_upload_still_succeeds(
         second, _ = await commit_utterance_work(
             db,
             session_id=session_id,
-            producer_key=upload_utterance_producer_key(2, 8000, 16000),
+            producer_key=upload_utterance_producer_key(2),
             start_ms=500,
             end_ms=1000,
             content_type="audio/wav",
@@ -621,7 +627,9 @@ async def test_blank_stt_is_terminal_no_speech_and_upload_still_succeeds(
     provider = SequenceProvider(
         [STTResult(text="spoken", language="id"), STTResult(text="   ", language="id")]
     )
-    assert (await execute_stt_job(utterance_id=first.id, provider=provider)).status == STTExecutionStatus.SUCCEEDED
+    assert (
+        await execute_stt_job(utterance_id=first.id, provider=provider)
+    ).status == STTExecutionStatus.SUCCEEDED
     blank = await execute_stt_job(utterance_id=second.id, provider=provider)
     assert blank.status == STTExecutionStatus.NO_SPEECH
 

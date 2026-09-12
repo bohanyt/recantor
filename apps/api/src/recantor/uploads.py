@@ -14,7 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recantor.media_spec import NORMALIZATION_SPEC_ID, SEGMENTATION_PARAMS_JSON, SEGMENTATION_SPEC_ID
+from recantor.media_spec import (
+    NORMALIZATION_SPEC_ID,
+    SEGMENTATION_PARAMS_JSON,
+    SEGMENTATION_SPEC_ID,
+)
 from recantor.models import (
     RecordingSession,
     SessionKind,
@@ -189,7 +193,9 @@ async def _existing_upload(
     byte_length: int,
     duration_ms: int | None,
 ) -> tuple[RecordingSession, UploadRecord] | None:
-    session = await db.scalar(select(RecordingSession).where(RecordingSession.client_request_id == client_request_id))
+    session = await db.scalar(
+        select(RecordingSession).where(RecordingSession.client_request_id == client_request_id)
+    )
     if session is None:
         return None
     if session.kind != SessionKind.UPLOAD.value:
@@ -197,7 +203,9 @@ async def _existing_upload(
     record = await db.get(UploadRecord, session.id)
     if record is None:
         raise UploadConflict("upload session is missing its durable upload record")
-    if session.recovery_token_hash is None or not hmac.compare_digest(session.recovery_token_hash, token_hash):
+    if session.recovery_token_hash is None or not hmac.compare_digest(
+        session.recovery_token_hash, token_hash
+    ):
         raise UploadConflict("idempotency key capability does not match")
     if not _metadata_matches(
         record,
@@ -293,7 +301,9 @@ async def get_upload_session(
     return session, record
 
 
-def upload_session_response(session: RecordingSession, record: UploadRecord) -> UploadSessionResponse:
+def upload_session_response(
+    session: RecordingSession, record: UploadRecord
+) -> UploadSessionResponse:
     return UploadSessionResponse(
         session_id=session.id,
         client_request_id=session.client_request_id,
@@ -337,7 +347,10 @@ def _validate_hook_identity(record: UploadRecord, request: TusHookRequest) -> No
         raise UploadConflict("tus upload length does not match the declared file")
     filename = upload.metadata.get("filename")
     filetype = upload.metadata.get("filetype") or "application/octet-stream"
-    if filename != record.original_filename or _normalize_content_type(filetype) != record.content_type:
+    if (
+        filename != record.original_filename
+        or _normalize_content_type(filetype) != record.content_type
+    ):
         raise UploadConflict("tus upload metadata does not match the declared file")
     if upload.offset > record.declared_byte_length:
         raise UploadConflict("tus upload offset exceeds the declared file length")
@@ -391,7 +404,9 @@ async def _process_nonfinish_hook(
         await db.commit()
         return
     _bind_tus_upload(record, upload.id)
-    record.received_bytes = max(record.received_bytes, min(upload.offset, record.declared_byte_length))
+    record.received_bytes = max(
+        record.received_bytes, min(upload.offset, record.declared_byte_length)
+    )
     record.updated_at = utcnow()
     await db.commit()
 
@@ -444,7 +459,10 @@ async def _publish_completion(
     _validate_hook_identity(record, request)
     upload = request.event.upload
     _bind_tus_upload(record, upload.id)
-    if record.tus_upload_id != binding.upload_id or record.declared_byte_length != binding.expected_bytes:
+    if (
+        record.tus_upload_id != binding.upload_id
+        or record.declared_byte_length != binding.expected_bytes
+    ):
         raise UploadConflict("upload binding changed while completion was being hashed")
     if upload.offset != binding.expected_bytes:
         raise UploadConflict("tus completion identity changed before publish")
@@ -475,7 +493,12 @@ async def _publish_completion(
         session.state = SessionState.UPLOADED.value
         session.updated_at = completed_at
 
-    if record.completed_at is None or record.storage_key is None or record.sha256 is None or record.byte_length is None:
+    if (
+        record.completed_at is None
+        or record.storage_key is None
+        or record.sha256 is None
+        or record.byte_length is None
+    ):
         raise UploadConflict("completed upload identity is incomplete")
     processing = await db.get(UploadMediaProcessing, record.session_id)
     if processing is None:
@@ -493,7 +516,9 @@ async def _publish_completion(
             )
         )
     elif not _processing_identity_matches(processing, record):
-        raise UploadConflict("upload processing identity drifted from immutable completion evidence")
+        raise UploadConflict(
+            "upload processing identity drifted from immutable completion evidence"
+        )
     await db.commit()
 
 
@@ -526,7 +551,13 @@ async def _process_completion_hook(
 
 
 async def process_tusd_hook(db: AsyncSession, request: TusHookRequest) -> TusHookResponse:
-    if request.type not in {"pre-create", "post-create", "post-receive", "pre-finish", "post-finish"}:
+    if request.type not in {
+        "pre-create",
+        "post-create",
+        "post-receive",
+        "pre-finish",
+        "post-finish",
+    }:
         return TusHookResponse()
     try:
         session_id = _hook_session_id(request)

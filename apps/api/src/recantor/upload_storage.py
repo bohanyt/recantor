@@ -74,8 +74,18 @@ class FilesystemUploadStorage:
         except OSError as exc:
             raise UploadStorageError("completed tus upload could not be hashed") from exc
 
-        identity_before = (open_before.st_dev, open_before.st_ino, open_before.st_size, open_before.st_mtime_ns)
-        identity_after = (open_after.st_dev, open_after.st_ino, open_after.st_size, open_after.st_mtime_ns)
+        identity_before = (
+            open_before.st_dev,
+            open_before.st_ino,
+            open_before.st_size,
+            open_before.st_mtime_ns,
+        )
+        identity_after = (
+            open_after.st_dev,
+            open_after.st_ino,
+            open_after.st_size,
+            open_after.st_mtime_ns,
+        )
         if identity_before != identity_after or identity_after[2] != expected_bytes:
             raise UploadStorageError("completed tus upload changed while it was being hashed")
         try:
@@ -95,7 +105,9 @@ class FilesystemUploadStorage:
             mtime_ns=after.st_mtime_ns,
         )
 
-    def revalidate_completed(self, upload_id: str, evidence: StoredUpload, *, expected_bytes: int) -> None:
+    def revalidate_completed(
+        self, upload_id: str, evidence: StoredUpload, *, expected_bytes: int
+    ) -> None:
         path = self._path_for(upload_id)
         expected_key = path.relative_to(self.root).as_posix()
         if evidence.key != expected_key or evidence.byte_length != expected_bytes:
@@ -105,7 +117,12 @@ class FilesystemUploadStorage:
         except OSError as exc:
             raise UploadStorageError("completed tus upload is missing during publish") from exc
         current_identity = (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
-        evidence_identity = (evidence.device, evidence.inode, evidence.byte_length, evidence.mtime_ns)
+        evidence_identity = (
+            evidence.device,
+            evidence.inode,
+            evidence.byte_length,
+            evidence.mtime_ns,
+        )
         if current_identity != evidence_identity:
             raise UploadStorageError("completed tus upload changed before durable publish")
 

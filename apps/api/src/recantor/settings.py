@@ -62,7 +62,9 @@ class Settings(BaseSettings):
     media_reconcile_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
     media_probe_timeout_seconds: float = Field(default=20.0, ge=1, le=120)
     media_normalize_timeout_seconds: float = Field(default=900.0, ge=10, le=3600)
-    media_subprocess_output_limit_bytes: int = Field(default=256 * 1024, ge=4096, le=4 * 1024 * 1024)
+    media_subprocess_output_limit_bytes: int = Field(
+        default=256 * 1024, ge=4096, le=4 * 1024 * 1024
+    )
     log_level: str = "INFO"
 
     @field_validator("stt_queue_name", "stt_upload_queue_name", "media_upload_queue_name")
@@ -81,7 +83,9 @@ class Settings(BaseSettings):
         normalized = value.strip().strip("/")
         path = PurePosixPath(normalized)
         if not normalized or path.is_absolute() or ".." in path.parts:
-            raise ValueError("upload tus storage prefix must be relative and stay inside audio root")
+            raise ValueError(
+                "upload tus storage prefix must be relative and stay inside audio root"
+            )
         return normalized
 
     @field_validator("tus_public_endpoint")

@@ -160,8 +160,13 @@ class FilesystemNormalizedMediaStorage:
             raise NormalizedMediaConflict("normalized manifest source length identity drifted")
         if identity.normalization_spec_id != NORMALIZATION_SPEC_ID:
             raise NormalizedMediaConflict("normalized manifest specification identity drifted")
-        if selected_audio_stream is not None and identity.selected_audio_stream != selected_audio_stream:
-            raise NormalizedMediaConflict("normalized manifest selected audio stream identity drifted")
+        if (
+            selected_audio_stream is not None
+            and identity.selected_audio_stream != selected_audio_stream
+        ):
+            raise NormalizedMediaConflict(
+                "normalized manifest selected audio stream identity drifted"
+            )
         if (
             identity.sample_rate != UPLOAD_SAMPLE_RATE
             or identity.channels != UPLOAD_CHANNELS
