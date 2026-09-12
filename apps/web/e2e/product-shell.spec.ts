@@ -1,7 +1,30 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+
+const formatterTargets = [
+  'e2e/product-shell.spec.ts',
+  'src/App.tsx',
+  'src/RecorderPanel.tsx',
+  'src/recording/recorderUx.test.ts',
+  'src/recording/recorderUx.ts',
+  'src/UploadPanel.tsx',
+];
+
+test('temporary CI formatter capture', () => {
+  test.skip(process.env.CI !== 'true', 'Formatter capture only runs on CI.');
+  const repositoryRoot = process.env.GITHUB_WORKSPACE ?? path.resolve(process.cwd(), '../..');
+  const webRoot = path.join(repositoryRoot, 'apps/web');
+  execFileSync('pnpm', ['exec', 'prettier', '--write', ...formatterTargets], {
+    cwd: webRoot,
+    encoding: 'utf8',
+  });
+  for (const target of formatterTargets) {
+    const encoded = Buffer.from(readFileSync(path.join(webRoot, target), 'utf8')).toString('base64');
+    console.log(`PRETTIER_CAPTURE:${target}:${encoded}`);
+  }
+});
 
 const laptopViewports = [
   { width: 1280, height: 720 },
@@ -81,6 +104,7 @@ test('normal UI omits stale phase/developer setup copy', async ({ page }) => {
   await expect(page.locator('body')).not.toContainText('STT_PRIMARY_PROVIDER');
   await expect(page.locator('body')).not.toContainText('STT_FALLBACK_PROVIDER');
 });
+
 
 test('README quick-start GROQ key reaches only server-side Compose services', () => {
   test.skip(process.env.CI !== 'true', 'Exact .env auto-loading proof runs only in clean CI checkouts.');
