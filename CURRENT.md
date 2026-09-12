@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34661823817
+snapshot_seq: 34661849471
 
-collected_at: 2026-09-12T00:30:02.169146Z
+collected_at: 2026-09-12T00:30:29.467357Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -661,7 +661,7 @@ ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex s
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
-ISSUE #45 state=open updated=2026-09-11T06:56:47Z title=Phase 3B: uploaded-media normalization and durable queued transcription
+ISSUE #45 state=open updated=2026-09-12T00:30:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
@@ -671,4 +671,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34661823817 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34661849471 sections=6
