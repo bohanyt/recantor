@@ -1,8 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { gzipSync } from 'node:zlib';
 
 const formatterTargets = [
   'e2e/product-shell.spec.ts',
@@ -13,7 +12,7 @@ const formatterTargets = [
   'src/UploadPanel.tsx',
 ];
 
-test('temporary CI formatter capture', () => {
+test('temporary CI formatter diff capture', () => {
   test.skip(process.env.CI !== 'true', 'Formatter capture only runs on CI.');
   const repositoryRoot = process.env.GITHUB_WORKSPACE ?? path.resolve(process.cwd(), '../..');
   const webRoot = path.join(repositoryRoot, 'apps/web');
@@ -21,12 +20,12 @@ test('temporary CI formatter capture', () => {
     cwd: webRoot,
     encoding: 'utf8',
   });
-  const formatted = Object.fromEntries(
-    formatterTargets.map((target) => [target, readFileSync(path.join(webRoot, target), 'utf8')]),
-  );
-  console.log(
-    `PRETTIER_GZIP_CAPTURE:${gzipSync(JSON.stringify(formatted)).toString('base64')}`,
-  );
+  const repositoryTargets = formatterTargets.map((target) => `apps/web/${target}`);
+  const diff = execFileSync('git', ['diff', '--no-color', '--', ...repositoryTargets], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  console.log(`PRETTIER_DIFF_CAPTURE_START\n${diff}\nPRETTIER_DIFF_CAPTURE_END`);
 });
 
 const laptopViewports = [
