@@ -95,7 +95,10 @@ type RecorderPanelProps = {
   onCaptureActivityChange?: (active: boolean) => void;
 };
 
-export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: RecorderPanelProps) {
+export function RecorderPanel({
+  serviceDiagnostics,
+  onCaptureActivityChange,
+}: RecorderPanelProps) {
   const controller = useMemo(() => new FencedRecorderController(), []);
   const snapshot = useSyncExternalStore(
     controller.subscribe,
@@ -109,7 +112,9 @@ export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: R
   }, [controller]);
 
   useEffect(() => {
-    onCaptureActivityChange?.(snapshot.phase === 'requesting' || snapshot.phase === 'recording');
+    onCaptureActivityChange?.(
+      snapshot.phase === 'requesting' || snapshot.phase === 'recording',
+    );
   }, [onCaptureActivityChange, snapshot.phase]);
 
   const ux = deriveRecorderUx(snapshot);
@@ -288,7 +293,11 @@ export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: R
               </p>
               <dl className="mt-4 grid gap-x-5 gap-y-3 sm:grid-cols-2">
                 <Diagnostic label="Lifecycle phase" value={`recorder/${snapshot.phase}`} />
-                <Diagnostic label="Session" value={snapshot.sessionId ?? 'none'} testId="session-id" />
+                <Diagnostic
+                  label="Session"
+                  value={snapshot.sessionId ?? 'none'}
+                  testId="session-id"
+                />
                 <Diagnostic
                   label="Pending local audio"
                   value={pendingAudioLabel(snapshot)}

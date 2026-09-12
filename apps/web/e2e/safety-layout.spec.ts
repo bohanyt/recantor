@@ -33,21 +33,11 @@ async function expectCriticalStateAcrossLaptopViewports(
       const locator = page.getByTestId(testId);
       await expect(locator).toBeVisible();
       const box = await locator.boundingBox();
-      if (!box) throw new Error(`${testId} has no layout box at ${viewport.width}x${viewport.height}`);
-      expect(box.x, `${testId} starts outside ${viewport.width}x${viewport.height}`).toBeGreaterThanOrEqual(
-        0,
-      );
-      expect(
-        box.x + box.width,
-        `${testId} overflows ${viewport.width}x${viewport.height}`,
-      ).toBeLessThanOrEqual(viewport.width);
-      expect(box.y, `${testId} starts above ${viewport.width}x${viewport.height}`).toBeGreaterThanOrEqual(
-        0,
-      );
-      expect(
-        box.y,
-        `${testId} starts below initial ${viewport.width}x${viewport.height} viewport`,
-      ).toBeLessThan(viewport.height);
+      if (!box) throw new Error(`${testId} has no layout box`);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeLessThan(viewport.height);
     }
   }
 }
@@ -138,29 +128,27 @@ async function latestBrowserSession(page: Page): Promise<BrowserSession> {
 
 async function externalClaim(page: Page, session: BrowserSession): Promise<void> {
   expect(session.recoveryToken).toBeTruthy();
-  const response = await page.request.post(
-    `${API_BASE_URL}/api/v1/sessions/${session.sessionId}/capture/claim`,
-    {
-      data: {
-        writer_id: 'layout-fence-writer',
-        expected_epoch: session.captureEpoch,
-        recovery_token: session.recoveryToken,
-      },
+  const url = `${API_BASE_URL}/api/v1/sessions/${session.sessionId}/capture/claim`;
+  const response = await page.request.post(url, {
+    data: {
+      writer_id: 'layout-fence-writer',
+      expected_epoch: session.captureEpoch,
+      recovery_token: session.recoveryToken,
     },
-  );
+  });
   expect(response.ok()).toBeTruthy();
 }
 
-test('recoverable missing-audio and destructive-loss controls fit every required laptop viewport', async ({
-  page,
-}) => {
+test('missing-audio safety state fits every required laptop viewport', async ({ page }) => {
   await page.route(CHUNK_ROUTE, async (route) => route.abort('failed'));
   await page.goto('/');
   await page.getByTestId('start-recording').click();
   await expect(page.getByTestId('recorder-message')).toContainText(
     'Recording capture generation 1',
   );
-  await expect.poll(() => pendingCount(page), { timeout: 15_000 }).toBeGreaterThanOrEqual(3);
+  await expect
+    .poll(() => pendingCount(page), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(3);
 
   await evictSequence(page, 2);
   await page.reload();
@@ -179,9 +167,7 @@ test('recoverable missing-audio and destructive-loss controls fit every required
   ]);
 });
 
-test('fenced retained-evidence warning fits every required laptop viewport with mutations withheld', async ({
-  page,
-}) => {
+test('fenced state fits every required laptop viewport', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('start-recording').click();
   await expect(page.getByTestId('recorder-message')).toContainText(
@@ -208,7 +194,7 @@ test('fenced retained-evidence warning fits every required laptop viewport with 
   await expectCriticalStateAcrossLaptopViewports(page, ['durability-state', 'fenced-warning']);
 });
 
-test('unsafe local-spool recovery controls fit every required laptop viewport', async ({ page }) => {
+test('unsafe local-spool state fits every required laptop viewport', async ({ page }) => {
   await page.addInitScript(() => {
     const originalAdd = IDBObjectStore.prototype.add;
     IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) {
