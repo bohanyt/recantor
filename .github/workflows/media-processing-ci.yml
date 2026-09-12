@@ -1,0 +1,89 @@
+name: Media processing CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "infra/compose.yaml"
+      - ".github/workflows/media-processing-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.10.0"
+  DATABASE_URL: postgresql+psycopg://recantor:recantor@localhost:5432/recantor
+  REDIS_URL: redis://localhost:6379/0
+
+jobs:
+  media-processing:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: recantor
+          POSTGRES_USER: recantor
+          POSTGRES_PASSWORD: recantor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recantor -d recantor"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install media runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+      - name: Install API dependencies
+        run: uv sync --project apps/api --frozen --dev
+      - name: Migrate database
+        run: uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
+      - name: Run uploaded-media proof suite
+        run: uv run --project apps/api pytest -q apps/api/tests/test_media_processing.py
+      - name: Verify Compose media runtime and queue isolation
+        run: |
+          docker compose -f infra/compose.yaml build media-worker
+          docker compose -f infra/compose.yaml run --rm --no-deps media-worker ffmpeg -version
+          docker compose -f infra/compose.yaml run --rm --no-deps media-worker ffprobe -version
+          docker compose -f infra/compose.yaml config --format json > /tmp/compose.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path('/tmp/compose.json').read_text())
+          services = config['services']
+          assert services['media-worker']['environment']['MEDIA_QUEUE_NAME'] == 'media-upload'
+          assert services['stt-worker']['environment']['STT_QUEUE_NAME'] == 'stt-live'
+          assert services['stt-upload-worker']['environment']['STT_QUEUE_NAME'] == 'stt-upload'
+          assert '--concurrency=1' in services['media-worker']['command']
+          assert '--concurrency=1' in services['stt-upload-worker']['command']
+          for name in ('stt-worker', 'stt-upload-worker'):
+              mounts = [m for m in services[name].get('volumes', []) if m.get('target') == '/data/audio']
+              assert len(mounts) == 1 and mounts[0].get('read_only') is True, (name, mounts)
+          media_mounts = [m for m in services['media-worker'].get('volumes', []) if m.get('target') == '/data/audio']
+          assert len(media_mounts) == 1 and not media_mounts[0].get('read_only', False), media_mounts
+          PY

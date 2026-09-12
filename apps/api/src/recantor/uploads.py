@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import PurePath
@@ -12,7 +14,19 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recantor.models import RecordingSession, SessionKind, SessionState, UploadRecord
+from recantor.media_spec import (
+    NORMALIZATION_SPEC_ID,
+    SEGMENTATION_PARAMS_JSON,
+    SEGMENTATION_SPEC_ID,
+)
+from recantor.models import (
+    RecordingSession,
+    SessionKind,
+    SessionState,
+    UploadMediaProcessing,
+    UploadProcessingState,
+    UploadRecord,
+)
 from recantor.settings import get_settings
 from recantor.upload_contracts import (
     TusHookHttpResponse,
@@ -20,7 +34,7 @@ from recantor.upload_contracts import (
     TusHookResponse,
     UploadSessionResponse,
 )
-from recantor.upload_storage import FilesystemUploadStorage, UploadStorageError
+from recantor.upload_storage import FilesystemUploadStorage, StoredUpload, UploadStorageError
 
 
 class UploadError(RuntimeError):
@@ -57,6 +71,13 @@ _ALLOWED_CONTENT_TYPES: dict[str, set[str]] = {
 }
 _CAPABILITY_HEADER = "x-recantor-upload-token"
 _SESSION_METADATA_KEY = "recantor_session_id"
+
+
+@dataclass(frozen=True)
+class _CompletionBinding:
+    session_id: UUID
+    upload_id: str
+    expected_bytes: int
 
 
 def utcnow() -> datetime:
@@ -366,7 +387,7 @@ def _bind_tus_upload(record: UploadRecord, upload_id: str | None) -> None:
         raise UploadConflict("upload session is already bound to a different tus upload")
 
 
-async def _process_hook_locked(
+async def _process_nonfinish_hook(
     db: AsyncSession,
     request: TusHookRequest,
     *,
@@ -377,45 +398,156 @@ async def _process_hook_locked(
     _validate_capability(session, record, capability_token)
     _validate_hook_identity(record, request)
     upload = request.event.upload
-
     if request.type == "pre-create":
         if record.tus_upload_id is not None:
             raise UploadConflict("upload session already has a tus upload")
+        await db.commit()
         return
-
     _bind_tus_upload(record, upload.id)
     record.received_bytes = max(
-        record.received_bytes,
-        min(upload.offset, record.declared_byte_length),
+        record.received_bytes, min(upload.offset, record.declared_byte_length)
     )
     record.updated_at = utcnow()
-
-    if request.type in {"pre-finish", "post-finish"}:
-        if upload.offset != record.declared_byte_length:
-            raise UploadConflict("tus completion arrived before all declared bytes")
-        stored = get_upload_storage().inspect_completed(
-            record.tus_upload_id,
-            expected_bytes=record.declared_byte_length,
-        )
-        if record.completed_at is not None:
-            if (
-                record.storage_key != stored.key
-                or record.byte_length != stored.byte_length
-                or record.sha256 != stored.sha256
-            ):
-                raise UploadConflict("duplicate completion does not match durable upload evidence")
-        else:
-            record.storage_key = stored.key
-            record.sha256 = stored.sha256
-            record.byte_length = stored.byte_length
-            record.received_bytes = stored.byte_length
-            record.completed_at = utcnow()
-            record.failure_code = None
-            record.failure_message = None
-            session.state = SessionState.UPLOADED.value
-            session.updated_at = record.completed_at
-
     await db.commit()
+
+
+async def _prepare_completion(
+    db: AsyncSession,
+    request: TusHookRequest,
+    *,
+    session_id: UUID,
+    capability_token: str,
+) -> _CompletionBinding:
+    # This transaction only validates/binds the durable upload row. It is committed BEFORE
+    # whole-file hashing, so no upload-row lock or database transaction spans O(file-size) I/O.
+    session, record = await _load_upload(db, session_id, for_update=True)
+    _validate_capability(session, record, capability_token)
+    _validate_hook_identity(record, request)
+    upload = request.event.upload
+    _bind_tus_upload(record, upload.id)
+    if upload.offset != record.declared_byte_length:
+        raise UploadConflict("tus completion arrived before all declared bytes")
+    record.received_bytes = max(record.received_bytes, record.declared_byte_length)
+    record.updated_at = utcnow()
+    binding = _CompletionBinding(session_id, record.tus_upload_id, record.declared_byte_length)
+    await db.commit()
+    return binding
+
+
+def _processing_identity_matches(processing: UploadMediaProcessing, record: UploadRecord) -> bool:
+    return (
+        processing.source_storage_key == record.storage_key
+        and processing.source_sha256 == record.sha256
+        and processing.source_byte_length == record.byte_length
+        and _as_aware(processing.source_completed_at) == _as_aware(record.completed_at)
+        and processing.normalization_spec_id == NORMALIZATION_SPEC_ID
+        and processing.segmentation_spec_id == SEGMENTATION_SPEC_ID
+        and processing.segmentation_params_json == SEGMENTATION_PARAMS_JSON
+    )
+
+
+async def _publish_completion(
+    db: AsyncSession,
+    request: TusHookRequest,
+    *,
+    binding: _CompletionBinding,
+    capability_token: str,
+    stored: StoredUpload,
+) -> None:
+    session, record = await _load_upload(db, binding.session_id, for_update=True)
+    _validate_capability(session, record, capability_token)
+    _validate_hook_identity(record, request)
+    upload = request.event.upload
+    _bind_tus_upload(record, upload.id)
+    if (
+        record.tus_upload_id != binding.upload_id
+        or record.declared_byte_length != binding.expected_bytes
+    ):
+        raise UploadConflict("upload binding changed while completion was being hashed")
+    if upload.offset != binding.expected_bytes:
+        raise UploadConflict("tus completion identity changed before publish")
+
+    # Revalidate the path/inode/size/mtime evidence after reacquiring the row lock. The bytes
+    # were hashed outside the transaction, but publication is conditional on that same object.
+    get_upload_storage().revalidate_completed(
+        binding.upload_id,
+        stored,
+        expected_bytes=binding.expected_bytes,
+    )
+    if record.completed_at is not None:
+        if (
+            record.storage_key != stored.key
+            or record.byte_length != stored.byte_length
+            or record.sha256 != stored.sha256
+        ):
+            raise UploadConflict("duplicate completion does not match durable upload evidence")
+    else:
+        completed_at = utcnow()
+        record.storage_key = stored.key
+        record.sha256 = stored.sha256
+        record.byte_length = stored.byte_length
+        record.received_bytes = stored.byte_length
+        record.completed_at = completed_at
+        record.failure_code = None
+        record.failure_message = None
+        session.state = SessionState.UPLOADED.value
+        session.updated_at = completed_at
+
+    if (
+        record.completed_at is None
+        or record.storage_key is None
+        or record.sha256 is None
+        or record.byte_length is None
+    ):
+        raise UploadConflict("completed upload identity is incomplete")
+    processing = await db.get(UploadMediaProcessing, record.session_id)
+    if processing is None:
+        db.add(
+            UploadMediaProcessing(
+                session_id=record.session_id,
+                source_storage_key=record.storage_key,
+                source_sha256=record.sha256,
+                source_byte_length=record.byte_length,
+                source_completed_at=record.completed_at,
+                state=UploadProcessingState.PENDING.value,
+                normalization_spec_id=NORMALIZATION_SPEC_ID,
+                segmentation_spec_id=SEGMENTATION_SPEC_ID,
+                segmentation_params_json=SEGMENTATION_PARAMS_JSON,
+            )
+        )
+    elif not _processing_identity_matches(processing, record):
+        raise UploadConflict(
+            "upload processing identity drifted from immutable completion evidence"
+        )
+    await db.commit()
+
+
+async def _process_completion_hook(
+    db: AsyncSession,
+    request: TusHookRequest,
+    *,
+    session_id: UUID,
+    capability_token: str,
+) -> None:
+    binding = await _prepare_completion(
+        db,
+        request,
+        session_id=session_id,
+        capability_token=capability_token,
+    )
+    # Hashing is explicitly off the asyncio event loop and outside any database transaction.
+    stored = await asyncio.to_thread(
+        get_upload_storage().inspect_completed,
+        binding.upload_id,
+        expected_bytes=binding.expected_bytes,
+    )
+    await _publish_completion(
+        db,
+        request,
+        binding=binding,
+        capability_token=capability_token,
+        stored=stored,
+    )
 
 
 async def process_tusd_hook(db: AsyncSession, request: TusHookRequest) -> TusHookResponse:
@@ -432,13 +564,22 @@ async def process_tusd_hook(db: AsyncSession, request: TusHookRequest) -> TusHoo
         token = _hook_header(request, _CAPABILITY_HEADER)
         if not token:
             raise UploadForbidden("upload capability header is missing")
-        await _process_hook_locked(
-            db,
-            request,
-            session_id=session_id,
-            capability_token=token,
-        )
+        if request.type in {"pre-finish", "post-finish"}:
+            await _process_completion_hook(
+                db,
+                request,
+                session_id=session_id,
+                capability_token=token,
+            )
+        else:
+            await _process_nonfinish_hook(
+                db,
+                request,
+                session_id=session_id,
+                capability_token=token,
+            )
     except UploadStorageError:
+        await db.rollback()
         raise
     except UploadError as exc:
         await db.rollback()

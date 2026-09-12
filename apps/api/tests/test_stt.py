@@ -14,6 +14,7 @@ from recantor.settings import get_settings
 from recantor.stt import (
     GroqSTTProvider,
     STTErrorCategory,
+    STTNoSpeech,
     STTProviderError,
     STTRequest,
     STTResult,
@@ -148,9 +149,8 @@ async def test_blank_provider_text_is_not_committed(client: AsyncClient) -> None
     work = await create_work(session_id=session_id)
     provider = FakeProvider(STTResult(text="   "))
 
-    with pytest.raises(STTProviderError) as exc_info:
+    with pytest.raises(STTNoSpeech):
         await transcribe_utterance(session_id=session_id, work_id=work.id, provider=provider)
-    assert exc_info.value.category == STTErrorCategory.MALFORMED_RESPONSE
 
     async with get_sessionmaker()() as db:
         count = await db.scalar(
