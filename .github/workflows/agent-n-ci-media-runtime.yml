@@ -1,0 +1,36 @@
+name: Agent N wire media runtime CI
+
+on:
+  push:
+    branches: [agent-n/issue-45-upload-processing]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent-n/issue-45-upload-processing
+          fetch-depth: 0
+      - name: Add ffmpeg runtime to backend proof lane
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('.github/workflows/ci.yml')
+          text = path.read_text()
+          old = '''      - name: Install API dependencies\n        run: uv sync --project apps/api --frozen --dev\n'''
+          new = '''      - name: Install media runtime\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y ffmpeg\n          ffmpeg -version\n          ffprobe -version\n      - name: Install API dependencies\n        run: uv sync --project apps/api --frozen --dev\n'''
+          if text.count(old) != 1:
+              raise SystemExit('backend CI dependency step shape changed')
+          path.write_text(text.replace(old, new, 1))
+      - name: Commit CI proof wiring
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/ci.yml
+          git commit -m 'Run media processing proofs with FFmpeg in CI'
+          git push origin HEAD:agent-n/issue-45-upload-processing
