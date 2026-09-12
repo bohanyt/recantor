@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34678515979
+snapshot_seq: 34678788087
 
-collected_at: 2026-09-12T06:35:20.077555Z
+collected_at: 2026-09-12T06:41:43.227042Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T06:35:10Z
+issue_updated_at: 2026-09-12T06:41:32Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,34 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5642712328 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: M
-issue: #43
-mode: implementation
-branch: agent-m/issue-43-product-shell
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - apps/web/src/App.tsx
-  - apps/web/src/RecorderPanel.tsx
-  - apps/web/src/recording/** presentation/status/action components only
-  - apps/web/src/UploadPanel.tsx presentation copy/composition only
-  - apps/web/src/index.css
-  - focused apps/web unit tests and Chromium E2E for #43 product shell/accessibility/layout, including composition-only updates to existing upload/transcript recorder tests where navigation requires it
-  - README.md
-  - .env.example
-  - docs/CURRENT.md truth reconciliation only
-exclusions:
-  - no backend Python/models/routes/migrations
-  - no infra/compose.yaml edits
-  - no apps/web/src/transcript/** edits
-  - no generated apps/web/src/api/** edits
-  - no recorder domain/state-machine redesign under apps/web/src/recorder/**
-  - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
-lease_expires_at: 2026-09-12T02:30:00Z
-
----
-
 comment_id=5642956567 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: N
@@ -690,13 +662,31 @@ write_scope:
   - apps/api/src/recantor/media_tasks.py media queue setting reference only
   - focused queue-contract test adjustment only if required; do not weaken/delete the existing Media processing CI assertion
 lease_expires_at: 2026-09-12T06:57:00Z
+
+---
+
+comment_id=5644256637 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: N
+issue: #45
+mode: implementation
+branch: agent-n/issue-45-upload-processing
+base_sha: d398a631ba827c24e595c8a3f695dd9e2bf2a791
+write_scope:
+  - infra/compose.yaml stt-upload-worker queue-environment truth only, to make resolved Compose STT_QUEUE_NAME match the queue the worker actually consumes
+  - preserve media-worker MEDIA_QUEUE_NAME=media-upload, stt-worker STT_QUEUE_NAME=stt-live, and all existing Media processing CI assertions unchanged
+exclusions:
+  - no workflow assertion weakening/deletion
+  - no runtime/provider/transcript/domain redesign
+  - no integration-branch write, merge, mark-ready, local Windows witness, #46, or #47
+lease_expires_at: 2026-09-12T07:00:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T06:35:10Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #55 state=open updated=2026-09-12T06:31:38Z title=Issue #45: durable uploaded-media processing
-PR #54 state=open updated=2026-09-12T06:31:26Z title=Issue #43: first-alpha product shell and truthful setup
+ISSUE #41 state=open updated=2026-09-12T06:41:32Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #54 state=open updated=2026-09-12T06:38:10Z title=Issue #43: first-alpha product shell and truthful setup
+PR #55 state=open updated=2026-09-12T06:37:16Z title=Issue #45: durable uploaded-media processing
 ISSUE #43 state=open updated=2026-09-12T03:35:40Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -708,11 +698,11 @@ ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: 
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #55 draft=True updated=2026-09-12T06:31:38Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-45-upload-processing title=Issue #45: durable uploaded-media processing
-PR #54 draft=True updated=2026-09-12T06:31:26Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
+PR #54 draft=True updated=2026-09-12T06:38:10Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
+PR #55 draft=True updated=2026-09-12T06:37:16Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-45-upload-processing title=Issue #45: durable uploaded-media processing
 PR #53 draft=True updated=2026-09-12T03:23:39Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34678515979 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34678788087 sections=6
