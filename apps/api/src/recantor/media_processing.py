@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import math
 import os
@@ -392,10 +393,8 @@ async def _read_bounded(stream: asyncio.StreamReader, limit: int) -> bytes:
 
 async def _stop_process(process: asyncio.subprocess.Process) -> None:
     if process.returncode is None:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             process.kill()
-        except ProcessLookupError:
-            pass
     await process.wait()
 
 
@@ -707,10 +706,8 @@ async def _load_or_create_normalized(
             temp_path=normalized_temp,
         )
     finally:
-        try:
+        with contextlib.suppress(OSError):
             normalized_temp.unlink(missing_ok=True)
-        except OSError:
-            pass
     await _project_normalized(claim, media)
     return media
 
@@ -792,7 +789,7 @@ async def segment_normalized(claim: MediaClaim, media: NormalizedMedia) -> int:
     sample_offset = 0
     ordinal = 0
     try:
-        source = wave.open(str(path), "rb")
+        source = wave.open(str(path), "rb")  # noqa: SIM115 -- errors are normalized below
     except (OSError, wave.Error) as exc:
         raise MediaPermanentError(
             "normalized_storage_integrity",

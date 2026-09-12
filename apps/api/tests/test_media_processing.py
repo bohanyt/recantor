@@ -780,7 +780,7 @@ class _GroqHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length)
         self.__class__.requests.append(body)
-        payload = ('{"text":"%s","language":"id"}' % self.__class__.response_text).encode()
+        payload = f'{{"text":"{self.__class__.response_text}","language":"id"}}'.encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
