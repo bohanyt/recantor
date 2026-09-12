@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34668605367
+snapshot_seq: 34668994085
 
-collected_at: 2026-09-12T02:47:09.766714Z
+collected_at: 2026-09-12T02:55:55.308193Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T02:47:00Z
+issue_updated_at: 2026-09-12T02:55:45Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,38 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5642497036 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - apps/api/src/recantor/media_*.py and apps/api/src/recantor/upload_processing*.py (new #45 media-processing runtime/reconcile/storage modules)
-  - apps/api/src/recantor/models.py
-  - apps/api/src/recantor/utterance.py only if required for #45 deterministic upload utterance integration
-  - apps/api/src/recantor/stt.py
-  - apps/api/src/recantor/stt_jobs.py
-  - apps/api/src/recantor/stt_tasks.py
-  - apps/api/src/recantor/stt_reconciler.py
-  - apps/api/src/recantor/uploads.py
-  - apps/api/src/recantor/upload_storage.py
-  - apps/api/src/recantor/settings.py
-  - apps/api/alembic/versions/0009_*.py
-  - apps/api/Dockerfile
-  - infra/compose.yaml
-  - apps/api/tests/** focused #45 media/STT/upload-processing fixtures and regressions
-  - CI-only fake-Groq/proof workflow support if required for #45 exact proof
-exclusions:
-  - apps/web/** and all #43 product-shell/presentation files
-  - README.md, .env.example, docs/CURRENT.md
-  - #46 export/result UI, #47 Codex, auth/diarization/summaries
-  - second transcript model/store or
-...[COMMENT_5642497036_TRUNCATED chars=122]
-
----
-
 comment_id=5642547020 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: M
@@ -736,11 +704,41 @@ exclusions:
   - #46 export/result UI
   - #47 Codex
 lease_expires_at: 2026-09-12T03:10:00Z
+
+---
+
+comment_id=5642999917 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+existing_branch_head: 6bea3888989ca06737fddf3759d6182c60bb6c43
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/RecorderPanel.tsx
+  - apps/web/src/recording/** presentation/status/action components only
+  - apps/web/src/UploadPanel.tsx presentation copy/composition only
+  - apps/web/src/index.css
+  - focused apps/web unit tests and Chromium E2E for #43 product shell/accessibility/layout, including composition-only updates to existing upload/transcript/recorder tests where navigation requires it
+  - README.md
+  - .env.example
+  - docs/CURRENT.md truth reconciliation only
+exclusions:
+  - no backend Python/models/routes/migrations
+  - no infra/compose.yaml edits
+  - no apps/web/src/transcript/** edits
+  - no generated apps/web/src/api/** edits
+  - no recorder domain/state-machine redesign under apps/web/src/recorder/**
+  - no #45 media/FFmpeg/STT work, #46 export/result implementation, or #47 Codex work
+  - no integration/cloud-alpha-2026-09-11 direct writes
+lease_expires_at: 2026-09-12T03:15:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T02:47:00Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T02:55:45Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #55 state=open updated=2026-09-12T02:01:49Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-12T02:00:38Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -761,4 +759,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34668605367 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34668994085 sections=6
