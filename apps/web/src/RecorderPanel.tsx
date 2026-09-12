@@ -78,9 +78,7 @@ function ProductStatusCard({
   return (
     <section
       className={`min-w-0 rounded-2xl border p-4 ${toneClass[status.tone]}`}
-      role={status.tone === 'danger' ? 'alert' : 'status'}
-      aria-live={status.tone === 'danger' ? undefined : 'polite'}
-      aria-atomic="true"
+      role={status.tone === 'danger' ? 'alert' : undefined}
       data-testid={testId}
     >
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -94,9 +92,10 @@ function ProductStatusCard({
 
 type RecorderPanelProps = {
   serviceDiagnostics?: ReactNode;
+  onCaptureActivityChange?: (active: boolean) => void;
 };
 
-export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
+export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: RecorderPanelProps) {
   const controller = useMemo(() => new FencedRecorderController(), []);
   const snapshot = useSyncExternalStore(
     controller.subscribe,
@@ -108,6 +107,10 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
     void controller.initialize();
     return () => controller.dispose();
   }, [controller]);
+
+  useEffect(() => {
+    onCaptureActivityChange?.(snapshot.phase === 'requesting' || snapshot.phase === 'recording');
+  }, [onCaptureActivityChange, snapshot.phase]);
 
   const ux = deriveRecorderUx(snapshot);
 
@@ -168,7 +171,13 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <div className="min-w-0 rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
           <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
+            <div
+              className="min-w-0"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              data-testid="recording-lifecycle-status"
+            >
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
                 Live recording
               </p>
@@ -279,7 +288,7 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
               </p>
               <dl className="mt-4 grid gap-x-5 gap-y-3 sm:grid-cols-2">
                 <Diagnostic label="Lifecycle phase" value={`recorder/${snapshot.phase}`} />
-                <Diagnostic label="Session" value={snapshot.sessionId ?? 'none'} />
+                <Diagnostic label="Session" value={snapshot.sessionId ?? 'none'} testId="session-id" />
                 <Diagnostic
                   label="Pending local audio"
                   value={pendingAudioLabel(snapshot)}

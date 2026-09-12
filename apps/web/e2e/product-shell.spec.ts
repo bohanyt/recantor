@@ -76,6 +76,36 @@ test('workflow navigation, diagnostics, and focus treatment are keyboard reachab
   await expect(page.getByTestId('health-state')).toBeVisible();
 });
 
+test('active recording cannot be hidden by switching to Upload and keeps the same session stoppable', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByTestId('start-recording').click();
+  await expect(page.getByTestId('recording-lifecycle-status')).toContainText('recording');
+  await expect(page.getByTestId('stop-recording')).toBeVisible();
+  await expect(page.getByTestId('workflow-upload')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('active-recording-workflow-guard')).toBeVisible();
+
+  const sessionBefore = await page.getByTestId('session-id').textContent();
+  expect(sessionBefore).toBeTruthy();
+  expect(sessionBefore).not.toBe('none');
+
+  await page.getByTestId('workflow-upload').click();
+
+  await expect(page.getByTestId('workflow-live')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('workflow-live-panel')).toBeVisible();
+  await expect(page.getByTestId('workflow-upload-panel')).not.toBeVisible();
+  await expect(page.getByTestId('recording-lifecycle-status')).toContainText('recording');
+  await expect(page.getByTestId('stop-recording')).toBeVisible();
+  await expect(page.getByTestId('session-id')).toHaveText(sessionBefore!);
+
+  await page.waitForTimeout(2_200);
+  await page.getByTestId('stop-recording').click();
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
+
 test('normal UI omits stale phase/developer setup copy', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).not.toContainText('Phase 1 reliable capture');

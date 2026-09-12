@@ -40,6 +40,7 @@ function ServiceStatus({ title, value, detail, state, testId }: ServiceStatusPro
 
 export default function App() {
   const [workflow, setWorkflow] = useState<Workflow>('live');
+  const [liveCaptureActive, setLiveCaptureActive] = useState(false);
   const health = useQuery({
     queryKey: ['healthz'],
     queryFn: fetchHealth,
@@ -63,6 +64,11 @@ export default function App() {
     : readiness.isSuccess
       ? 'online'
       : 'unavailable';
+
+  const selectWorkflow = (nextWorkflow: Workflow): void => {
+    if (nextWorkflow === 'upload' && liveCaptureActive) return;
+    setWorkflow(nextWorkflow);
+  };
 
   const serviceDiagnostics = (
     <div>
@@ -113,42 +119,59 @@ export default function App() {
             </p>
           </div>
 
-          <nav
-            className="grid w-full min-w-0 grid-cols-2 gap-2 rounded-2xl bg-[var(--surface-muted)] p-1.5 lg:w-auto lg:min-w-[22rem]"
-            aria-label="Primary workflow"
-          >
-            <button
-              type="button"
-              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
-                workflow === 'live'
-                  ? 'bg-[var(--surface)] shadow-sm'
-                  : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-              }`}
-              aria-current={workflow === 'live' ? 'page' : undefined}
-              onClick={() => setWorkflow('live')}
-              data-testid="workflow-live"
+          <div className="min-w-0">
+            <nav
+              className="grid w-full min-w-0 grid-cols-2 gap-2 rounded-2xl bg-[var(--surface-muted)] p-1.5 lg:w-auto lg:min-w-[22rem]"
+              aria-label="Primary workflow"
             >
-              Live
-            </button>
-            <button
-              type="button"
-              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
-                workflow === 'upload'
-                  ? 'bg-[var(--surface)] shadow-sm'
-                  : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-              }`}
-              aria-current={workflow === 'upload' ? 'page' : undefined}
-              onClick={() => setWorkflow('upload')}
-              data-testid="workflow-upload"
-            >
-              Upload recording
-            </button>
-          </nav>
+              <button
+                type="button"
+                className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                  workflow === 'live'
+                    ? 'bg-[var(--surface)] shadow-sm'
+                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                }`}
+                aria-current={workflow === 'live' ? 'page' : undefined}
+                onClick={() => selectWorkflow('live')}
+                data-testid="workflow-live"
+              >
+                Live
+              </button>
+              <button
+                type="button"
+                className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                  workflow === 'upload'
+                    ? 'bg-[var(--surface)] shadow-sm'
+                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                } ${liveCaptureActive ? 'cursor-not-allowed opacity-60' : ''}`}
+                aria-current={workflow === 'upload' ? 'page' : undefined}
+                aria-disabled={liveCaptureActive ? 'true' : undefined}
+                aria-describedby={liveCaptureActive ? 'active-recording-workflow-guard' : undefined}
+                onClick={() => selectWorkflow('upload')}
+                data-testid="workflow-upload"
+              >
+                Upload recording
+              </button>
+            </nav>
+            {liveCaptureActive && (
+              <p
+                id="active-recording-workflow-guard"
+                className="mt-2 max-w-[22rem] text-xs leading-5 text-[var(--danger)]"
+                role="status"
+                data-testid="active-recording-workflow-guard"
+              >
+                Recording is active. Stop the Live recording before opening Upload recording.
+              </p>
+            )}
+          </div>
         </div>
       </header>
 
       <div hidden={workflow !== 'live'} data-testid="workflow-live-panel">
-        <RecorderPanel serviceDiagnostics={serviceDiagnostics} />
+        <RecorderPanel
+          serviceDiagnostics={serviceDiagnostics}
+          onCaptureActivityChange={setLiveCaptureActive}
+        />
       </div>
 
       <div hidden={workflow !== 'upload'} data-testid="workflow-upload-panel">
