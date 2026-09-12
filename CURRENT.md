@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34660644844
+snapshot_seq: 34661797997
 
-collected_at: 2026-09-12T00:09:13.011649Z
+collected_at: 2026-09-12T00:29:34.188580Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T00:09:01Z
+issue_updated_at: 2026-09-12T00:29:23Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,30 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641570960 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: H
-issue: #44
-mode: implementation
-branch: agent-h/issue-44-upload-foundation
-base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
-current_head_at_lease: dae0f6be5d6428e842bedfb2e268ac323ef0dc14
-write_scope:
-  - reconcile existing PR #51 branch against current integration baseline without touching integration
-  - close K-B1 with direct real-tusd HEAD Upload-Offset proof and same-upload resume-from-prior-offset evidence
-  - strengthen UploadRecord completion SHA-256 schema/model constraints and focused schema tests required by #45 durable source identity
-  - add bounded mid-upload API+tusd restart/recovery witness inside upload-specific E2E only
-  - upload-specific CI/Compose/test wiring only as required by those proofs
-exclusions:
-  - no #45 FFmpeg/STT processing implementation
-  - no #46 export/result implementation
-  - no integration-branch writes
-  - no local Windows witness
-  - no merge or mark-ready
-lease_expires_at: 2026-09-11T23:20:00Z
-
----
-
 comment_id=5641651260 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: H
@@ -648,11 +624,37 @@ Read-only adversarial review. No code, branch, PR-state, or integration mutation
 - Fresh #41 comments through `5641976528`; #43, #45, #46, #48 bodies and comments; #47 disposition.
 - Integrated code read at `ff7d8ac`: `models.py`, `stt_jobs.py`, `stt.py`,
 ...[COMMENT_5642053092_TRUNCATED chars=36062]
+
+---
+
+comment_id=5642178679 author=bohanyt
+## CONTROL_TOWER_STATUS_2026_09_12_V1
+
+Primary Control Tower takeover is complete. Compiler `agent-context/CURRENT.md` was used only for orientation; all state below was fresh-rechecked against GitHub. The quarantined manual Drive SOURCE was not used.
+
+### Authoritative checkpoint
+
+- canonical branch: `integration/cloud-alpha-2026-09-11`
+- exact head: `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
+- persistent integration checkpoint: DRAFT PR #53, OPEN / DRAFT / unmerged, exact head `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`, base `main`
+- exact-head standard CI: run `34659603660` / #312 — SUCCESS (`backend`, `frontend`, `e2e`, `compose-smoke`)
+- exact-head Upload Foundation CI: run `34659603680` / #13 — SUCCESS (`upload-e2e`)
+- #42 realtime transcript/live transcript UI: integrated/cloud-green, completed
+- #44 resumable upload foundation: integrated/cloud-green, completed
+- active implementation leases: **none**
+- active integration-branch lease: **none**
+
+### Opus review reconciliation
+
+Latest `OPUS_SWARM_REVIEW_V1` (`5642053092`) exists, so the handoff gate is satisfied. Its core-path findings were checked against the current integrated code rather than accepted blindly.
+
+Confirmed
+...[COMMENT_5642178679_TRUNCATED chars=4939]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-12T00:09:01Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T00:29:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -669,4 +671,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34660644844 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34661797997 sections=6
