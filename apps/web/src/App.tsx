@@ -104,7 +104,9 @@ export default function App() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
               Self-hosted recording alpha
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{env.appName}</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              {env.appName}
+            </h1>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)] sm:text-base">
               Record live with archive-audio safety kept separate from transcription, or resume a
               durable upload of an existing recording.
@@ -154,9 +156,9 @@ export default function App() {
       </div>
 
       <footer className="mt-auto pt-8 text-xs leading-5 text-[var(--muted)]">
-        Live archive capture and canonical transcript recovery are independent safety paths. Existing
-        recording uploads are resumable; uploaded-media processing and exports are not available in
-        this alpha yet.
+        Live archive capture and canonical transcript recovery are independent safety paths.
+        Existing recording uploads are resumable; uploaded-media processing and exports are not
+        available in this alpha yet.
       </footer>
     </main>
   );

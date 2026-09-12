@@ -41,7 +41,8 @@ describe('deriveRecorderUx', () => {
       danger: [],
     });
     expect(
-      deriveRecorderUx(snapshot({ phase: 'finalizing', sessionId: 's1', pendingChunks: 1 })).actions,
+      deriveRecorderUx(snapshot({ phase: 'finalizing', sessionId: 's1', pendingChunks: 1 }))
+        .actions,
     ).toEqual({
       primary: 'defer-finalization',
       secondary: [],
@@ -51,7 +52,8 @@ describe('deriveRecorderUx', () => {
 
   it('preserves recoverable actions and never offers resume while audio is known missing', () => {
     expect(
-      deriveRecorderUx(snapshot({ phase: 'recoverable', sessionId: 's1', pendingChunks: 2 })).actions,
+      deriveRecorderUx(snapshot({ phase: 'recoverable', sessionId: 's1', pendingChunks: 2 }))
+        .actions,
     ).toEqual({
       primary: 'resume',
       secondary: ['finish-recovered', 'sync'],
@@ -111,7 +113,7 @@ describe('deriveRecorderUx', () => {
     const unsafe = deriveRecorderUx(
       snapshot({ phase: 'recoverable', sessionId: 's1', localWriteFailed: true }),
     );
-    expect(unsafe.audio.label).toBe('Audio storage unsafe');
+    expect(unsafe.audio.label).toBe('Unsafe audio storage');
     expect(unsafe.audio.tone).toBe('danger');
 
     const offline = deriveRecorderUx(
@@ -131,6 +133,8 @@ describe('deriveRecorderUx', () => {
       snapshot({ phase: 'complete', sessionId: 's1', realtimeStatus: 'inactive' }),
     );
     expect(complete.transcription.label).toBe('Processing may continue');
-    expect(complete.transcription.detail).toMatch(/does not claim downstream transcription is complete/i);
+    expect(complete.transcription.detail).toMatch(
+      /does not claim downstream transcription is complete/i,
+    );
   });
 });

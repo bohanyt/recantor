@@ -48,13 +48,13 @@ GROQ_API_KEY=your-groq-key-here
 
 A fake value such as `fake-local-config-check` is sufficient to verify that Compose passes the variable into the API and STT worker, but real live transcription requires a valid Groq key. Recantor does not need a browser-side provider key and does not implement provider/fallback selectors in normal setup.
 
-Then start the stack:
+Then start the stack, passing the repository environment file explicitly:
 
 ```bash
-docker compose -f infra/compose.yaml up --build
+docker compose --env-file .env -f infra/compose.yaml up --build
 ```
 
-Compose reads the repository `.env` automatically. The current Compose file forwards `GROQ_API_KEY` to both `api` and `stt-worker`, while keeping it out of the web service.
+The explicit `--env-file .env` keeps setup truthful even though the Compose file lives under `infra/`. The current Compose file forwards `GROQ_API_KEY` to both `api` and `stt-worker`, while keeping it out of the web service.
 
 Open:
 
@@ -67,13 +67,13 @@ Open:
 Stop the stack:
 
 ```bash
-docker compose -f infra/compose.yaml down
+docker compose --env-file .env -f infra/compose.yaml down
 ```
 
 Delete development database/audio volumes too only when you intentionally want a clean slate:
 
 ```bash
-docker compose -f infra/compose.yaml down -v
+docker compose --env-file .env -f infra/compose.yaml down -v
 ```
 
 ## What works on the current integration line

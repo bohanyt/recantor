@@ -1,6 +1,10 @@
 import { type ReactNode, useEffect, useMemo, useSyncExternalStore } from 'react';
 
-import { deriveRecorderUx, type ProductStatus, type RecorderActionId } from './recording/recorderUx';
+import {
+  deriveRecorderUx,
+  type ProductStatus,
+  type RecorderActionId,
+} from './recording/recorderUx';
 import { FencedRecorderController, type FencedRecorderSnapshot } from './recorder/fencedController';
 import { TranscriptPanel } from './transcript/TranscriptPanel';
 
@@ -123,7 +127,9 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
     if (action === 'defer-finalization') return 'Keep locally and finish later';
     if (action === 'resume') return 'Resume recording';
     if (action === 'finish-recovered') {
-      return snapshot.missingSequences.length > 0 ? 'Retry missing audio' : 'Finish recovered audio';
+      return snapshot.missingSequences.length > 0
+        ? 'Retry missing audio'
+        : 'Finish recovered audio';
     }
     if (action === 'declare-missing-gaps') return 'Declare missing audio as lost & finish';
     return 'Sync now';
@@ -166,7 +172,10 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
                 Live recording
               </p>
-              <h2 id="live-recording-heading" className="mt-2 text-2xl font-semibold capitalize tracking-tight">
+              <h2
+                id="live-recording-heading"
+                className="mt-2 text-2xl font-semibold capitalize tracking-tight"
+              >
                 {ux.lifecycle.label}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
@@ -181,7 +190,9 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
               >
                 {durationLabel(snapshot.elapsedMs)}
               </p>
-              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">Elapsed</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+                Elapsed
+              </p>
             </div>
           </div>
 
@@ -226,7 +237,8 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
               </p>
               <p className="mt-2 leading-6 text-[var(--muted)]">
                 Retry recovery first if these fragments may still exist locally. Declaring them lost
-                creates an explicit, permanent continuity gap; Recantor never does that automatically.
+                creates an explicit, permanent continuity gap; Recantor never does that
+                automatically.
               </p>
             </div>
           )}
@@ -246,7 +258,10 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
           )}
 
           {snapshot.error && !snapshot.captureFenced && (
-            <p className="mt-4 rounded-2xl border border-[var(--danger)] bg-[var(--danger-surface)] p-4 text-sm font-medium text-[var(--danger)]" role="alert">
+            <p
+              className="mt-4 rounded-2xl border border-[var(--danger)] bg-[var(--danger-surface)] p-4 text-sm font-medium text-[var(--danger)]"
+              role="alert"
+            >
               {snapshot.error}
             </p>
           )}
@@ -263,7 +278,7 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
                 {recorderMessage(snapshot)}
               </p>
               <dl className="mt-4 grid gap-x-5 gap-y-3 sm:grid-cols-2">
-                <Diagnostic label="Lifecycle phase" value={snapshot.phase} />
+                <Diagnostic label="Lifecycle phase" value={`recorder/${snapshot.phase}`} />
                 <Diagnostic label="Session" value={snapshot.sessionId ?? 'none'} />
                 <Diagnostic
                   label="Pending local audio"
@@ -303,7 +318,8 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
               </dl>
               {snapshot.realtimeError && (
                 <p className="mt-4 text-[var(--muted)]" data-testid="realtime-error">
-                  Realtime speech detail: {snapshot.realtimeError}
+                  Archive recording continues independently. Realtime speech detail:{' '}
+                  {snapshot.realtimeError}
                 </p>
               )}
               {serviceDiagnostics && <div className="mt-5">{serviceDiagnostics}</div>}
@@ -319,15 +335,7 @@ export function RecorderPanel({ serviceDiagnostics }: RecorderPanelProps) {
   );
 }
 
-function Diagnostic({
-  label,
-  value,
-  testId,
-}: {
-  label: string;
-  value: string;
-  testId?: string;
-}) {
+function Diagnostic({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">

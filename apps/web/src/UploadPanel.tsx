@@ -20,14 +20,7 @@ const VERIFY_ATTEMPTS = 20;
 const VERIFY_DELAY_MS = 250;
 
 type UploadPhase =
-  | 'idle'
-  | 'ready'
-  | 'preparing'
-  | 'uploading'
-  | 'paused'
-  | 'verifying'
-  | 'complete'
-  | 'error';
+  'idle' | 'ready' | 'preparing' | 'uploading' | 'paused' | 'verifying' | 'complete' | 'error';
 
 function bytesLabel(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;

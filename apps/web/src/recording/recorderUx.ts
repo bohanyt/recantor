@@ -34,7 +34,8 @@ function lifecycleStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   if (snapshot.captureFenced) {
     return {
       label: 'Needs attention',
-      detail: 'Recording ownership changed. This tab will not start new capture or mutate retained evidence.',
+      detail:
+        'Recording ownership changed. This tab will not start new capture or mutate retained evidence.',
       tone: 'warning',
     };
   }
@@ -104,7 +105,7 @@ function audioStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   }
   if (snapshot.localWriteFailed) {
     return {
-      label: 'Audio storage unsafe',
+      label: 'Unsafe audio storage',
       detail: 'The browser recovery spool failed. Do not assume unsynced audio is safely retained.',
       tone: 'danger',
     };
@@ -112,7 +113,8 @@ function audioStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   if (snapshot.missingSequences.length > 0) {
     return {
       label: 'Audio missing — action required',
-      detail: 'The server still expects one or more audio sequences. Retry recovery or explicitly declare confirmed loss.',
+      detail:
+        'The server still expects one or more audio sequences. Retry recovery or explicitly declare confirmed loss.',
       tone: 'danger',
     };
   }
@@ -135,14 +137,16 @@ function audioStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   if (snapshot.phase === 'complete' && snapshot.gapCount > 0) {
     return {
       label: 'Audio finalized with declared loss',
-      detail: 'The server has terminal audio evidence, including an explicitly declared continuity gap.',
+      detail:
+        'The server has terminal audio evidence, including an explicitly declared continuity gap.',
       tone: 'warning',
     };
   }
   if (snapshot.sessionId && snapshot.phase === 'recoverable') {
     return {
       label: 'Audio recovery ready',
-      detail: 'Known local audio is synced; choose whether to resume capture or finish the recovered recording.',
+      detail:
+        'Known local audio is synced; choose whether to resume capture or finish the recovered recording.',
       tone: 'warning',
     };
   }
@@ -178,14 +182,16 @@ function transcriptionStatus(snapshot: FencedRecorderSnapshot): ProductStatus {
   if (snapshot.realtimeStatus === 'live') {
     return {
       label: 'Transcribing',
-      detail: 'Realtime speech work is active. Canonical committed transcript text appears in the transcript panel.',
+      detail:
+        'Realtime speech work is active. Canonical committed transcript text appears in the transcript panel.',
       tone: 'positive',
     };
   }
   if (snapshot.realtimeStatus === 'degraded' || snapshot.realtimeError) {
     return {
       label: 'Transcription delayed',
-      detail: 'Live speech processing is degraded. Archive recording continues independently and canonical transcript recovery can catch up later.',
+      detail:
+        'Live speech processing is degraded. Archive recording continues independently and canonical transcript recovery can catch up later.',
       tone: 'warning',
     };
   }
@@ -218,7 +224,11 @@ export function deriveRecorderActions(snapshot: FencedRecorderSnapshot): Recorde
       primary = 'resume';
       secondary.push('finish-recovered');
     }
-  } else if (snapshot.phase === 'idle' || snapshot.phase === 'complete' || snapshot.phase === 'error') {
+  } else if (
+    snapshot.phase === 'idle' ||
+    snapshot.phase === 'complete' ||
+    snapshot.phase === 'error'
+  ) {
     primary = 'start';
   }
 
