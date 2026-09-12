@@ -146,7 +146,10 @@ async def _create_completed_upload(
         segmentation_params_json=SEGMENTATION_PARAMS_JSON,
     )
     async with get_sessionmaker()() as db:
-        db.add_all([session, record])
+        db.add(session)
+        await db.flush()
+        db.add(record)
+        await db.flush()
         if add_processing:
             db.add(processing)
         await db.commit()
@@ -675,6 +678,8 @@ async def test_upload_backlog_cannot_consume_live_reserved_headroom(clean_record
     )
     async with get_sessionmaker()() as db:
         db.add(upload_session)
+        await db.flush()
+        jobs: list[STTJob] = []
         for index in range(200):
             utterance_id = uuid4()
             db.add(
@@ -691,13 +696,15 @@ async def test_upload_backlog_cannot_consume_live_reserved_headroom(clean_record
                     storage_key=f"bulk/{index}",
                 )
             )
-            db.add(
+            jobs.append(
                 STTJob(
                     utterance_id=utterance_id,
                     session_id=upload_session.id,
                     state=STTJobState.PENDING.value,
                 )
             )
+        await db.flush()
+        db.add_all(jobs)
         await db.commit()
 
     live_session = RecordingSession(
