@@ -13,24 +13,40 @@
   background: #f7f7f5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --foreground: #171717;
+  --background: #f7f7f5;
   --surface: #ffffff;
   --surface-muted: #f7f7f4;
   --border: #deded8;
   --muted: #66665f;
   --accent: #2557d6;
   --danger: #b42318;
+  --danger-surface: #fff5f3;
+  --warning-border: #c58a16;
+  --warning-surface: #fff9e8;
+  --positive-border: #48936a;
+  --positive-surface: #effaf3;
+  --focus-ring: #2557d6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f5f5f2;
     background: #11110f;
+    --foreground: #f5f5f2;
+    --background: #11110f;
     --surface: #1a1a17;
     --surface-muted: #151512;
     --border: #34342e;
     --muted: #abab9f;
     --accent: #8ca9ff;
     --danger: #ff938a;
+    --danger-surface: #2c1716;
+    --warning-border: #b9964b;
+    --warning-surface: #272215;
+    --positive-border: #6caf87;
+    --positive-surface: #14241a;
+    --focus-ring: #b9c9ff;
   }
 }
 
@@ -53,4 +69,13 @@ button {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+summary {
+  list-style-position: inside;
 }

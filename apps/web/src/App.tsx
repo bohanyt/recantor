@@ -1,39 +1,45 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { fetchHealth, fetchReadiness } from './api';
 import { env } from './env';
 import { RecorderPanel } from './RecorderPanel';
 import { UploadPanel } from './UploadPanel';
 
-type StatusCardProps = {
+type Workflow = 'live' | 'upload';
+
+type ServiceStatusProps = {
   title: string;
-  label: string;
+  value: string;
   detail: string;
-  state: 'loading' | 'online' | 'offline';
+  state: 'checking' | 'online' | 'unavailable';
   testId: string;
 };
 
-function StatusCard({ title, label, detail, state, testId }: StatusCardProps) {
+function ServiceStatus({ title, value, detail, state, testId }: ServiceStatusProps) {
   return (
-    <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-[var(--muted)]">{title}</p>
-          <p className="mt-1 text-lg font-semibold">{label}</p>
+    <section className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {title}
+          </p>
+          <p className="mt-1 font-semibold">{value}</p>
         </div>
         <span
+          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-semibold"
           data-testid={testId}
-          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]"
         >
-          {state === 'loading' ? 'Checking' : state === 'online' ? 'Online' : 'Unavailable'}
+          {state === 'checking' ? 'Checking' : state === 'online' ? 'Online' : 'Unavailable'}
         </span>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--muted)]">{detail}</p>
+      <p className="mt-2 break-words text-xs leading-5 text-[var(--muted)]">{detail}</p>
     </section>
   );
 }
 
 export default function App() {
+  const [workflow, setWorkflow] = useState<Workflow>('live');
   const health = useQuery({
     queryKey: ['healthz'],
     queryFn: fetchHealth,
@@ -47,37 +53,26 @@ export default function App() {
     retry: 1,
   });
 
-  const healthState: StatusCardProps['state'] = health.isPending
-    ? 'loading'
+  const healthState: ServiceStatusProps['state'] = health.isPending
+    ? 'checking'
     : health.isSuccess
       ? 'online'
-      : 'offline';
-  const readinessState: StatusCardProps['state'] = readiness.isPending
-    ? 'loading'
+      : 'unavailable';
+  const readinessState: ServiceStatusProps['state'] = readiness.isPending
+    ? 'checking'
     : readiness.isSuccess
       ? 'online'
-      : 'offline';
+      : 'unavailable';
 
-  return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-8 sm:px-8 sm:py-12">
-      <header className="max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-          Phase 1 reliable capture
-        </p>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">{env.appName}</h1>
-        <p className="mt-4 text-base leading-7 text-[var(--muted)] sm:text-lg">
-          Record meetings without making transcription responsible for the audio. The browser keeps
-          every unacknowledged fragment in a recovery spool and the server owns the durable session.
-        </p>
-      </header>
-
-      <RecorderPanel />
-      <UploadPanel />
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <StatusCard
+  const serviceDiagnostics = (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+        Service diagnostics
+      </p>
+      <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+        <ServiceStatus
           title="API process"
-          label="Liveness"
+          value="Liveness"
           detail={
             health.isSuccess
               ? `Service ${health.data.service} answered without depending on PostgreSQL.`
@@ -86,9 +81,9 @@ export default function App() {
           state={healthState}
           testId="health-state"
         />
-        <StatusCard
+        <ServiceStatus
           title="Durable state"
-          label="PostgreSQL readiness"
+          value="PostgreSQL readiness"
           detail={
             readiness.isSuccess
               ? `Database probe returned ${readiness.data.database}.`
@@ -98,10 +93,70 @@ export default function App() {
           testId="readiness-state"
         />
       </div>
+    </div>
+  );
 
-      <footer className="mt-auto pt-12 text-sm text-[var(--muted)]">
-        This phase proves recording durability and recovery. STT, diarization, and meeting summaries
-        remain downstream work.
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-[90rem] min-w-0 flex-col px-4 py-5 sm:px-6 lg:px-8">
+      <header className="min-w-0 rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
+        <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+              Self-hosted recording alpha
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{env.appName}</h1>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted)] sm:text-base">
+              Record live with archive-audio safety kept separate from transcription, or resume a
+              durable upload of an existing recording.
+            </p>
+          </div>
+
+          <nav
+            className="grid w-full min-w-0 grid-cols-2 gap-2 rounded-2xl bg-[var(--surface-muted)] p-1.5 lg:w-auto lg:min-w-[22rem]"
+            aria-label="Primary workflow"
+          >
+            <button
+              type="button"
+              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                workflow === 'live'
+                  ? 'bg-[var(--surface)] shadow-sm'
+                  : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+              }`}
+              aria-current={workflow === 'live' ? 'page' : undefined}
+              onClick={() => setWorkflow('live')}
+              data-testid="workflow-live"
+            >
+              Live
+            </button>
+            <button
+              type="button"
+              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                workflow === 'upload'
+                  ? 'bg-[var(--surface)] shadow-sm'
+                  : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+              }`}
+              aria-current={workflow === 'upload' ? 'page' : undefined}
+              onClick={() => setWorkflow('upload')}
+              data-testid="workflow-upload"
+            >
+              Upload recording
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <div hidden={workflow !== 'live'} data-testid="workflow-live-panel">
+        <RecorderPanel serviceDiagnostics={serviceDiagnostics} />
+      </div>
+
+      <div hidden={workflow !== 'upload'} data-testid="workflow-upload-panel">
+        <UploadPanel />
+      </div>
+
+      <footer className="mt-auto pt-8 text-xs leading-5 text-[var(--muted)]">
+        Live archive capture and canonical transcript recovery are independent safety paths. Existing
+        recording uploads are resumable; uploaded-media processing and exports are not available in
+        this alpha yet.
       </footer>
     </main>
   );

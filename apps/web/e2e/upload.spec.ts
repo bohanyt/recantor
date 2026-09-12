@@ -148,6 +148,8 @@ test.describe('existing recording resumable upload', () => {
     await page.goto('/');
     await page.evaluate(() => window.localStorage.clear());
     await page.reload();
+    await page.getByTestId('workflow-upload').click();
+    await expect(page.getByTestId('upload-dropzone')).toBeVisible();
   });
 
   test('persists a real tus offset across reload and API/tusd restart, then resumes the same upload', async ({
@@ -221,6 +223,7 @@ test.describe('existing recording resumable upload', () => {
     expect(await tusOffset(request, tusUploadUrl, recovery.capabilityToken)).toBe(persistedOffset);
 
     await page.reload();
+    await page.getByTestId('workflow-upload').click();
     await cdp.send('Network.emulateNetworkConditions', {
       offline: false,
       latency: 0,
