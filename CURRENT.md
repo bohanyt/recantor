@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34679009151
+snapshot_seq: 34679043943
 
-collected_at: 2026-09-12T06:46:46.834271Z
+collected_at: 2026-09-12T06:47:35.498490Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T06:41:32Z
+issue_updated_at: 2026-09-12T06:47:26Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,40 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5642956567 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - apps/api/src/recantor/media_* and upload_processing* backend modules
-  - apps/api/src/recantor/models.py
-  - apps/api/src/recantor/utterance.py only if required by #45
-  - apps/api/src/recantor/stt.py
-  - apps/api/src/recantor/stt_jobs.py
-  - apps/api/src/recantor/stt_tasks.py
-  - apps/api/src/recantor/stt_reconciler.py
-  - apps/api/src/recantor/uploads.py
-  - apps/api/src/recantor/upload_storage.py
-  - apps/api/src/recantor/settings.py
-  - apps/api/alembic/versions/* #45 migration(s)
-  - apps/api/Dockerfile and infra/compose.yaml media/STT worker wiring
-  - focused apps/api/tests media/upload/STT fixtures
-  - CI-only fake Groq support/workflow only if required for the #45 adapter proof
-exclusions:
-  - apps/web/**
-  - README.md
-  - .env.example
-  - docs/CURRENT.md
-  - #43-owned product/UX files
-  - #46 export/result UI
-  - #47 Codex
-lease_expires_at: 2026-09-12T03:10:00Z
-
----
-
 comment_id=5642999917 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: M
@@ -680,14 +646,28 @@ exclusions:
   - no runtime/provider/transcript/domain redesign
   - no integration-branch write, merge, mark-ready, local Windows witness, #46, or #47
 lease_expires_at: 2026-09-12T07:00:00Z
+
+---
+
+comment_id=5644282797 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+current_head: 12f114b74bd053b3299e95d86fd0b6cb5bf74490
+write_scope:
+  - format-only correction in apps/web/src/RecorderPanel.tsx and apps/web/e2e/safety-layout.spec.ts
+  - no behavior/scope expansion; all prior #43 exclusions remain
+lease_expires_at: 2026-09-12T07:15:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-12T06:47:26Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-12T06:46:34Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 PR #54 state=open updated=2026-09-12T06:44:49Z title=Issue #43: first-alpha product shell and truthful setup
 PR #55 state=open updated=2026-09-12T06:42:23Z title=Issue #45: durable uploaded-media processing
-ISSUE #41 state=open updated=2026-09-12T06:41:32Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #43 state=open updated=2026-09-12T03:35:40Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -705,4 +685,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34679009151 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34679043943 sections=6
