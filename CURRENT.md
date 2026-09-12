@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34661849471
+snapshot_seq: 34662593224
 
-collected_at: 2026-09-12T00:30:29.467357Z
+collected_at: 2026-09-12T00:43:59.406373Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T00:29:23Z
+issue_updated_at: 2026-09-12T00:43:46Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,19 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641651260 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: H
-issue: #44
-mode: implementation
-branch: agent-h/issue-44-upload-foundation
-base_sha: e7f248f5a717e6ffdf2d3c58ebaa581d735123c4
-current_head_at_renewal: e966ea806572d9204a792eb6bf97968a3e240e62
-write_scope: unchanged from lease comment 5641570960; stabilization/CI evidence only
-lease_expires_at: 2026-09-11T23:45:00Z
-
----
-
 comment_id=5641744447 author=bohanyt
 ## CONTROL_TOWER_STATUS_V4 — review persistence gap + #51 hardened candidate
 
@@ -650,18 +637,39 @@ Latest `OPUS_SWARM_REVIEW_V1` (`5642053092`) exists, so the handoff gate is sati
 
 Confirmed
 ...[COMMENT_5642178679_TRUNCATED chars=4939]
+
+---
+
+comment_id=5642263583 author=bohanyt
+## CONTROL_TOWER_OWNER_DECISION_2026_09_12_D3
+
+Bohan explicitly approved D3-A:
+
+> upload-specific deterministic VAD, 16 kHz mono s16, silence-aware boundaries, hard max 180 seconds.
+
+This resolves the only owner decision blocking #45. Fresh integration head remains `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`; PR #53 remains DRAFT/unmerged. No integration write is authorized by this decision.
+
+For alpha v1, CT freezes the implementation contract as:
+
+- normalization target: mono signed 16-bit PCM at 16 kHz;
+- streaming segmentation over fixed 20 ms / 320-sample frames;
+- upload-specific immutable `segmentation_spec_id`: `upload-energy-vad-180s-v1` (or an equivalent exact persisted identifier);
+- silence-aware endpointing uses the current deterministic `EnergyEndpointDetector` semantics with a pinned parameter snapshot, not mutable realtime settings at retry time;
+- v1 parameter snapshot follows the existing detector baseline except for the upload hard cap: pre-roll 200 ms, minimum voiced 160 ms, trailing silence 600 ms, hard max 180000 ms, absolute threshold -50 dBFS, noise margin 12 dB, initial noise -65 dBFS, noise alpha 0.95;
+- retry/restart reprocesses deterministically from norm
+...[COMMENT_5642263583_TRUNCATED chars=583]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-12T00:43:46Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #45 state=open updated=2026-09-12T00:30:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
-ISSUE #41 state=open updated=2026-09-12T00:29:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
-ISSUE #45 state=open updated=2026-09-12T00:30:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
@@ -671,4 +679,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34661849471 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34662593224 sections=6
