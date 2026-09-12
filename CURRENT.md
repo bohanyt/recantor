@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34665146775
+snapshot_seq: 34665780932
 
-collected_at: 2026-09-12T01:33:04.126838Z
+collected_at: 2026-09-12T01:46:15.577191Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-12T01:32:51Z
+issue_updated_at: 2026-09-12T01:46:02Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,28 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5641976528 author=bohanyt
-## CONTROL_TOWER_HANDOFF_GATE_2026_09_12_V1 — successor CT must consume independent strategic review first
-
-Current product frontier is now intentionally simple:
-
-- canonical integration branch: `integration/cloud-alpha-2026-09-11`
-- exact integrated/cloud-green head: `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
-- persistent DRAFT integration-checkpoint PR: #53 -> `main`; DO NOT merge without explicit Bohan authorization
-- exact-head CI #312 / `34659603660`: SUCCESS (backend/frontend/Compose/Chromium E2E)
-- exact-head Upload foundation CI #13 / `34659603680`: SUCCESS (real tusd proof)
-- Issue #42: completed/closed after integration
-- Issue #44: completed/closed after integration
-- Issue #47: optional/nonblocking, still has one security blocker; PARK unless owner explicitly reprioritizes
-- ACC Drive activation: tooling/nonblocking; official GitHub `agent-context/CURRENT.md` fallback is sufficient orientation for product work
-
-Remaining alpha path:
-1. #43 — desktop product UX/setup: Live/Upload shell, human status, diagnostics hidden by default, truthful minimal Groq setup.
-2. #45 — uploaded-media FFmpeg/ffprobe normalization + durable processing -> existing STT/Groq -> canonical Trans
-...[COMMENT_5641976528_TRUNCATED chars=1417]
-
----
-
 comment_id=5642053092 author=bohanyt
 ## OPUS_SWARM_REVIEW_V1 — independent whole-system review and next swarm plan
 
@@ -695,12 +673,44 @@ exclusions:
   - #46 export/result UI, #47 Codex, auth/diarization/summaries
   - second transcript model/store or
 ...[COMMENT_5642557957_TRUNCATED chars=122]
+
+---
+
+comment_id=5642631930 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: N
+issue: #45
+mode: implementation
+branch: agent-n/issue-45-upload-processing
+base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
+write_scope:
+  - apps/api/src/recantor/media_*.py and apps/api/src/recantor/upload_processing*.py (new #45 media-processing runtime/reconcile/storage modules)
+  - apps/api/src/recantor/models.py
+  - apps/api/src/recantor/utterance.py only if required for #45 deterministic upload utterance integration
+  - apps/api/src/recantor/stt.py
+  - apps/api/src/recantor/stt_jobs.py
+  - apps/api/src/recantor/stt_tasks.py
+  - apps/api/src/recantor/stt_reconciler.py
+  - apps/api/src/recantor/uploads.py
+  - apps/api/src/recantor/upload_storage.py
+  - apps/api/src/recantor/settings.py
+  - apps/api/alembic/versions/0009_*.py
+  - apps/api/Dockerfile
+  - infra/compose.yaml
+  - apps/api/tests/** focused #45 media/STT/upload-processing fixtures and regressions
+  - CI-only fake-Groq/proof workflow support if required for #45 exact proof
+exclusions:
+  - apps/web/** and all #43 product-shell/presentation files
+  - README.md, .env.example, docs/CURRENT.md
+  - #46 export/result UI, #47 Codex, auth/diarization/summaries
+  - second transcript model/store or
+...[COMMENT_5642631930_TRUNCATED chars=122]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-PR #54 state=open updated=2026-09-12T01:32:57Z title=Issue #43: first-alpha product shell and truthful setup
-ISSUE #41 state=open updated=2026-09-12T01:32:51Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-12T01:46:02Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #54 state=open updated=2026-09-12T01:42:58Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #45 state=open updated=2026-09-12T00:44:17Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-12T00:29:50Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #53 state=open updated=2026-09-11T23:51:23Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -712,10 +722,10 @@ ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: 
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #54 draft=True updated=2026-09-12T01:32:57Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
+PR #54 draft=True updated=2026-09-12T01:42:58Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
 PR #53 draft=True updated=2026-09-11T23:51:23Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34665146775 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34665780932 sections=6
