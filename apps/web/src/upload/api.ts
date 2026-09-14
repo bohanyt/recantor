@@ -65,7 +65,10 @@ export type UploadTranscriptPage = {
 export type UploadExportFormat = 'txt' | 'json' | 'vtt' | 'srt';
 
 export class UploadApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
     super(message);
     this.name = 'UploadApiError';
   }
