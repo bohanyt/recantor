@@ -142,9 +142,7 @@ test('requesting microphone cannot be hidden behind Upload and reaches Stop on t
     upload.click();
   });
 
-  await expect(page.getByTestId('recording-lifecycle-status')).toContainText(
-    'Starting microphone',
-  );
+  await expect(page.getByTestId('recording-lifecycle-status')).toContainText('Starting microphone');
   await expect(page.getByTestId('workflow-upload')).toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByTestId('active-recording-workflow-guard')).toBeVisible();
   await expect(page.getByTestId('workflow-live')).toHaveAttribute('aria-current', 'page');
