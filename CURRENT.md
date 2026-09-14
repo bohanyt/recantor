@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34810148822
+snapshot_seq: 34811803539
 
-collected_at: 2026-09-14T05:34:58.104536Z
+collected_at: 2026-09-14T06:02:35.366952Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T05:34:47Z
+issue_updated_at: 2026-09-14T06:02:22Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,24 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5658529189 author=bohanyt
-CONTROL_TOWER_SUCCESSOR_STATUS_AND_DRIFT_GUARD_2026_09_14_V3
-
-Fresh campaign reconstruction after Agent M/N bounded corrections.
-
-CURRENT CORE LINE
-- `main` remains unchanged at `59ff57502a9a1d84ad332cab106c46c256482d23`.
-- `integration/cloud-alpha-2026-09-11` remains unchanged at `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`, containing reviewed/integrated #42 realtime transcript UI/delivery and #44 resumable upload foundation.
-- checkpoint PR #53 remains OPEN / DRAFT / unmerged against main.
-- no integration write is authorized yet.
-
-CURRENT TWO GATES
-- #43 / PR #54: Agent M corrected the final `requesting`-edge shell race. Exact current head `0dc2295e496da76ff8a9921140ed8be6e95877d5`; CI `34799768412` SUCCESS; Upload foundation CI `34799768377` SUCCESS. Final SOL-R1 delta re-review dispatched in #43 comment `5658526461`.
-- #45 / PR #55: Agent N corrected normalized-publication fencing/atomic first-wins plus the bounded migration/timeline proofs. Exact current head `18453eaabea11fac01f664f73c949c7b2ea7f32c`; CI `34800418027` SUCCESS; Upload foundation CI `34800418012` SUCCESS; Media processing CI `34800418013` SUCCESS. Final P-SOL delta re-review dispatched in #45 comment `565852778
-...[COMMENT_5658529189_TRUNCATED chars=1864]
-
----
-
 comment_id=5658960938 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: successor-ct-integration-2026-09-14
@@ -646,12 +628,28 @@ write_scope:
   - generated client artifacts only if repository generation requires committed outputs
   - docs/CURRENT.md truthful #46 reconciliation
 lease_expires_at: 2026-09-14T06:04:00Z
+
+---
+
+comment_id=5659698774 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: Q
+issue: #46
+mode: implementation
+branch: agent-q/issue-46-upload-results
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+write_scope:
+  - apps/api/src/recantor/routes/uploads.py plus bounded upload-result contracts/helpers and focused tests; no persistence redesign
+  - apps/web/src/UploadPanel.tsx; apps/web/src/upload/{api.ts,recovery.ts}; transcript presentation reuse; focused unit/E2E proof
+  - generated client artifacts only if repository generation requires committed outputs
+  - docs/CURRENT.md truthful #46 reconciliation
+lease_expires_at: 2026-09-14T06:31:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T05:34:47Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #56 state=open updated=2026-09-14T05:23:27Z title=Phase 3C: upload results and canonical transcript exports
+ISSUE #41 state=open updated=2026-09-14T06:02:22Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #56 state=open updated=2026-09-14T06:01:11Z title=Phase 3C: upload results and canonical transcript exports
 ISSUE #46 state=open updated=2026-09-14T04:50:19Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -663,10 +661,10 @@ PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
-PR #56 draft=True updated=2026-09-14T05:23:27Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
+PR #56 draft=True updated=2026-09-14T06:01:11Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
 PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34810148822 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34811803539 sections=6
