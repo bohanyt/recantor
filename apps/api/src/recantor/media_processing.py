@@ -28,6 +28,7 @@ from recantor.media_storage import (
     NormalizedMedia,
     NormalizedMediaConflict,
     NormalizedMediaError,
+    PreparedNormalizedMedia,
 )
 from recantor.models import (
     RecordingSession,
@@ -525,6 +526,36 @@ async def probe_media(path: Path) -> MediaProbe:
     )
 
 
+def _apply_normalized_projection(
+    processing: UploadMediaProcessing,
+    media: NormalizedMedia,
+) -> None:
+    existing = (
+        processing.selected_audio_stream,
+        processing.normalized_storage_key,
+        processing.normalized_sha256,
+        processing.normalized_byte_length,
+        processing.normalized_total_samples,
+    )
+    expected = (
+        media.selected_audio_stream,
+        media.key,
+        media.sha256,
+        media.byte_length,
+        media.total_samples,
+    )
+    if processing.normalized_storage_key is not None and existing != expected:
+        raise MediaPermanentError(
+            "normalized_identity_drift",
+            "normalized artifact projection conflicts with durable evidence",
+        )
+    processing.selected_audio_stream = media.selected_audio_stream
+    processing.normalized_storage_key = media.key
+    processing.normalized_sha256 = media.sha256
+    processing.normalized_byte_length = media.byte_length
+    processing.normalized_total_samples = media.total_samples
+
+
 async def _project_normalized(claim: MediaClaim, media: NormalizedMedia) -> None:
     async with get_sessionmaker()() as db, db.begin():
         processing = await db.scalar(
@@ -540,36 +571,71 @@ async def _project_normalized(claim: MediaClaim, media: NormalizedMedia) -> None
             or processing.claim_expires_at is None
             or processing.claim_expires_at <= current
         ):
-            raise MediaProcessingStale("media processing claim changed before normalized publish")
+            raise MediaProcessingStale("media processing claim changed before normalized projection")
         if processing.normalization_spec_id != NORMALIZATION_SPEC_ID:
             raise MediaPermanentError(
                 "processing_identity_drift",
                 "normalization specification identity drifted",
             )
-        existing = (
-            processing.selected_audio_stream,
-            processing.normalized_storage_key,
-            processing.normalized_sha256,
-            processing.normalized_byte_length,
-            processing.normalized_total_samples,
-        )
-        expected = (
-            media.selected_audio_stream,
-            media.key,
-            media.sha256,
-            media.byte_length,
-            media.total_samples,
-        )
-        if processing.normalized_storage_key is not None and existing != expected:
-            raise MediaPermanentError(
-                "normalized_identity_drift",
-                "normalized artifact projection conflicts with durable evidence",
+        _apply_normalized_projection(processing, media)
+
+
+async def _publish_prepared_normalized(
+    claim: MediaClaim,
+    storage: FilesystemNormalizedMediaStorage,
+    prepared: PreparedNormalizedMedia,
+) -> NormalizedMedia:
+    """Commit normalized evidence while the current PostgreSQL claim is exclusively fenced."""
+    identity = prepared.identity
+    settings = get_settings()
+    try:
+        async with get_sessionmaker()() as db, db.begin():
+            processing = await db.scalar(
+                select(UploadMediaProcessing)
+                .where(UploadMediaProcessing.session_id == claim.session_id)
+                .with_for_update()
             )
-        processing.selected_audio_stream = media.selected_audio_stream
-        processing.normalized_storage_key = media.key
-        processing.normalized_sha256 = media.sha256
-        processing.normalized_byte_length = media.byte_length
-        processing.normalized_total_samples = media.total_samples
+            current = await _database_now(db)
+            if (
+                processing is None
+                or processing.state != UploadProcessingState.CLAIMED.value
+                or processing.claim_token != claim.token
+                or processing.claim_expires_at is None
+                or processing.claim_expires_at <= current
+            ):
+                raise MediaProcessingStale(
+                    "media processing claim changed before normalized publication"
+                )
+            if processing.normalization_spec_id != NORMALIZATION_SPEC_ID:
+                raise MediaPermanentError(
+                    "processing_identity_drift",
+                    "normalization specification identity drifted before publication",
+                )
+
+            # The row lock prevents a reclaim while the bounded link/fsync commit point runs.
+            # Extending the lease is operational headroom, not the correctness boundary.
+            processing.claim_expires_at = current + timedelta(
+                seconds=float(settings.media_claim_lease_seconds)
+            )
+            media = await asyncio.to_thread(storage.install_prepared_first_wins, prepared)
+            _apply_normalized_projection(processing, media)
+
+        try:
+            return await asyncio.to_thread(
+                storage.verify_committed,
+                session_id=claim.session_id,
+                source_storage_key=identity.source_storage_key,
+                source_sha256=identity.source_sha256,
+                source_byte_length=identity.source_byte_length,
+                selected_audio_stream=identity.selected_audio_stream,
+            )
+        except (NormalizedMediaError, NormalizedMediaConflict) as exc:
+            raise MediaPermanentError(
+                "normalized_storage_integrity",
+                "committed normalized media failed verification after publication",
+            ) from exc
+    finally:
+        await asyncio.to_thread(storage.discard_prepared, prepared)
 
 
 async def _load_or_create_normalized(
@@ -694,10 +760,12 @@ async def _load_or_create_normalized(
                 "duration_limit",
                 "decoded uploaded media exceeds duration limit",
             )
-        # Fence/renew immediately before the first durable normalized evidence is published.
+
+        # Expensive digest/fsync remains private and outside any database row lock. The final
+        # no-replace install below reacquires and holds the current claim fence through commit.
         await _renew_claim(claim)
-        media = await asyncio.to_thread(
-            storage.publish_temp,
+        prepared = await asyncio.to_thread(
+            storage.prepare_temp,
             session_id=claim.session_id,
             source_storage_key=source.storage_key,
             source_sha256=source.sha256,
@@ -705,10 +773,10 @@ async def _load_or_create_normalized(
             selected_audio_stream=probe.audio_stream_index,
             temp_path=normalized_temp,
         )
+        media = await _publish_prepared_normalized(claim, storage, prepared)
     finally:
         with contextlib.suppress(OSError):
             normalized_temp.unlink(missing_ok=True)
-    await _project_normalized(claim, media)
     return media
 
 
@@ -735,6 +803,22 @@ def upload_utterance_producer_key(ordinal: int) -> str:
     return f"{SEGMENTATION_SPEC_ID}:{ordinal:08d}"
 
 
+def _sample_bounds_to_milliseconds(start_sample: int, end_sample: int) -> tuple[int, int]:
+    if start_sample < 0 or end_sample <= start_sample:
+        raise MediaPermanentError(
+            "segmentation_identity_drift",
+            "deterministic upload segment has invalid sample bounds",
+        )
+    start_ms = (start_sample * 1000) // UPLOAD_SAMPLE_RATE
+    end_ms = (end_sample * 1000 + UPLOAD_SAMPLE_RATE - 1) // UPLOAD_SAMPLE_RATE
+    if end_ms <= start_ms:
+        raise MediaPermanentError(
+            "segmentation_identity_drift",
+            "deterministic upload segment has invalid timeline bounds",
+        )
+    return start_ms, end_ms
+
+
 async def _commit_candidate(
     *,
     claim: MediaClaim,
@@ -744,13 +828,7 @@ async def _commit_candidate(
     pcm: bytes,
 ) -> None:
     await _renew_claim(claim)
-    start_ms = round(start_sample * 1000 / UPLOAD_SAMPLE_RATE)
-    end_ms = round(end_sample * 1000 / UPLOAD_SAMPLE_RATE)
-    if end_ms <= start_ms:
-        raise MediaPermanentError(
-            "segmentation_identity_drift",
-            "deterministic upload segment has invalid timeline bounds",
-        )
+    start_ms, end_ms = _sample_bounds_to_milliseconds(start_sample, end_sample)
     payload = encode_pcm_wav(pcm, sample_rate=UPLOAD_SAMPLE_RATE)
     try:
         async with get_sessionmaker()() as db:

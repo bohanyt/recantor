@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -50,6 +51,14 @@ class NormalizedMedia:
     total_samples: int
 
 
+@dataclass(frozen=True)
+class PreparedNormalizedMedia:
+    session_id: UUID
+    temp_path: Path
+    manifest_temp_path: Path
+    identity: NormalizedMediaIdentity
+
+
 def _digest_file(path: Path) -> tuple[str, int]:
     digest = hashlib.sha256()
     size = 0
@@ -74,13 +83,15 @@ def _fsync_directory(directory: Path) -> None:
 
 
 class FilesystemNormalizedMediaStorage:
-    """Crash-safe normalized evidence stored beside the canonical audio volume.
+    """Crash-safe, immutable first-wins normalized evidence.
 
-    The JSON manifest is the first durable identity evidence. A payload without a manifest is
-    only an orphaned candidate and may be replaced by a deterministic retry. Once the manifest
-    exists, its exact source/normalization identity is immutable and the WAV must continue to
-    verify against it; a missing or mutated committed WAV fails loudly rather than being healed
-    by silently replacing evidence.
+    Expensive candidate inspection/digest/fsync is done in ``prepare_temp`` while the WAV and
+    manifest are still private. Final publication uses no-replace hard links. The stable manifest
+    is the single authoritative commit marker and points to a content-addressed WAV object, so two
+    publishers can never replace a committed winner or create a manifest/WAV pair from different
+    candidates. Callers that need claim fencing must hold their durable claim fence while invoking
+    ``install_prepared_first_wins``; this method intentionally performs only the bounded final
+    filesystem install, not whole-file hashing.
     """
 
     def __init__(self, root: str | Path):
@@ -89,7 +100,22 @@ class FilesystemNormalizedMediaStorage:
     def directory_for(self, session_id: UUID) -> Path:
         return self.root / "sessions" / str(session_id) / "normalized"
 
+    def objects_directory_for(self, session_id: UUID) -> Path:
+        return self.directory_for(session_id) / "objects"
+
+    def object_path_for(self, session_id: UUID, normalized_sha256: str) -> Path:
+        return self.objects_directory_for(session_id) / f"{normalized_sha256}.wav"
+
     def final_path_for(self, session_id: UUID) -> Path:
+        """Return the committed object path, or the legacy orphan slot before commitment.
+
+        The pre-manifest fallback preserves the historical crash-test concept that an orphan WAV
+        without a manifest is non-authoritative. New publication never uses this mutable-looking
+        slot; committed evidence always lives in the content-addressed objects directory.
+        """
+        identity = self._load_identity(session_id)
+        if identity is not None:
+            return self.object_path_for(session_id, identity.normalized_sha256)
         return self.directory_for(session_id) / f"{NORMALIZATION_SPEC_ID}.wav"
 
     def manifest_path_for(self, session_id: UUID) -> Path:
@@ -99,6 +125,11 @@ class FilesystemNormalizedMediaStorage:
         directory = self.directory_for(session_id)
         directory.mkdir(parents=True, exist_ok=True)
         return directory / f".{NORMALIZATION_SPEC_ID}.{uuid4().hex}.tmp.wav"
+
+    def _private_manifest_path(self, session_id: UUID) -> Path:
+        directory = self.directory_for(session_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / f".{NORMALIZATION_SPEC_ID}.{uuid4().hex}.tmp.json"
 
     def _key_for(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
@@ -140,7 +171,11 @@ class FilesystemNormalizedMediaStorage:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
             raise NormalizedMediaError("normalized media manifest is unreadable") from exc
 
-    def _verify_identity(
+    @staticmethod
+    def _valid_sha256(value: str) -> bool:
+        return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+    def _validate_identity_metadata(
         self,
         *,
         session_id: UUID,
@@ -173,25 +208,50 @@ class FilesystemNormalizedMediaStorage:
             or identity.sample_width != UPLOAD_SAMPLE_WIDTH_BYTES
         ):
             raise NormalizedMediaConflict("normalized manifest PCM format identity drifted")
+        if not self._valid_sha256(identity.normalized_sha256):
+            raise NormalizedMediaError("normalized manifest hash identity is malformed")
+        if identity.normalized_byte_length <= 0 or identity.total_samples < 1:
+            raise NormalizedMediaError("normalized manifest payload identity is malformed")
 
-        final_path = self.final_path_for(session_id)
-        if not final_path.is_file() or final_path.is_symlink():
+        object_path = self.object_path_for(session_id, identity.normalized_sha256)
+        return NormalizedMedia(
+            key=self._key_for(object_path),
+            sha256=identity.normalized_sha256,
+            selected_audio_stream=identity.selected_audio_stream,
+            byte_length=identity.normalized_byte_length,
+            total_samples=identity.total_samples,
+        )
+
+    def _verify_identity(
+        self,
+        *,
+        session_id: UUID,
+        identity: NormalizedMediaIdentity,
+        source_storage_key: str,
+        source_sha256: str,
+        source_byte_length: int,
+        selected_audio_stream: int | None = None,
+    ) -> NormalizedMedia:
+        media = self._validate_identity_metadata(
+            session_id=session_id,
+            identity=identity,
+            source_storage_key=source_storage_key,
+            source_sha256=source_sha256,
+            source_byte_length=source_byte_length,
+            selected_audio_stream=selected_audio_stream,
+        )
+        object_path = self.object_path_for(session_id, identity.normalized_sha256)
+        if not object_path.is_file() or object_path.is_symlink():
             raise NormalizedMediaError("committed normalized WAV is missing")
-        actual_samples = self.inspect_wav(final_path)
-        actual_hash, actual_length = _digest_file(final_path)
+        actual_samples = self.inspect_wav(object_path)
+        actual_hash, actual_length = _digest_file(object_path)
         if (
             actual_hash != identity.normalized_sha256
             or actual_length != identity.normalized_byte_length
             or actual_samples != identity.total_samples
         ):
             raise NormalizedMediaError("committed normalized WAV failed durable verification")
-        return NormalizedMedia(
-            key=self._key_for(final_path),
-            sha256=actual_hash,
-            selected_audio_stream=identity.selected_audio_stream,
-            byte_length=actual_length,
-            total_samples=actual_samples,
-        )
+        return media
 
     def verify_committed(
         self,
@@ -214,7 +274,7 @@ class FilesystemNormalizedMediaStorage:
             selected_audio_stream=selected_audio_stream,
         )
 
-    def publish_temp(
+    def prepare_temp(
         self,
         *,
         session_id: UUID,
@@ -223,24 +283,12 @@ class FilesystemNormalizedMediaStorage:
         source_byte_length: int,
         selected_audio_stream: int,
         temp_path: Path,
-    ) -> NormalizedMedia:
+    ) -> PreparedNormalizedMedia:
+        """Digest and fsync a private candidate without creating authoritative evidence."""
         directory = self.directory_for(session_id)
-        final_path = self.final_path_for(session_id)
-        manifest_path = self.manifest_path_for(session_id)
         directory.mkdir(parents=True, exist_ok=True)
-
-        existing_identity = self._load_identity(session_id)
-        if existing_identity is not None:
-            with suppress(OSError):
-                temp_path.unlink(missing_ok=True)
-            return self._verify_identity(
-                session_id=session_id,
-                identity=existing_identity,
-                source_storage_key=source_storage_key,
-                source_sha256=source_sha256,
-                source_byte_length=source_byte_length,
-                selected_audio_stream=selected_audio_stream,
-            )
+        if not temp_path.is_file() or temp_path.is_symlink():
+            raise NormalizedMediaError("normalized candidate is not a regular file")
 
         total_samples = self.inspect_wav(temp_path)
         normalized_sha256, normalized_byte_length = _digest_file(temp_path)
@@ -258,35 +306,130 @@ class FilesystemNormalizedMediaStorage:
             channels=UPLOAD_CHANNELS,
             sample_width=UPLOAD_SAMPLE_WIDTH_BYTES,
         )
+        with temp_path.open("rb+") as handle:
+            handle.flush()
+            os.fsync(handle.fileno())
 
-        # A final WAV without a manifest is an orphan from an interrupted first publish. It is
-        # not authoritative and deterministic retry may replace it. Once the manifest exists,
-        # the early return above turns any later mismatch into an error instead.
+        manifest_temp = self._private_manifest_path(session_id)
         try:
-            with temp_path.open("rb+") as handle:
+            with manifest_temp.open("xb") as handle:
+                handle.write(self._identity_bytes(identity))
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, final_path)
-            _fsync_directory(directory)
-
-            manifest_temp = directory / f".{manifest_path.name}.{uuid4().hex}.tmp"
-            try:
-                with manifest_temp.open("xb") as handle:
-                    handle.write(self._identity_bytes(identity))
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(manifest_temp, manifest_path)
-                _fsync_directory(directory)
-            finally:
-                with suppress(OSError):
-                    manifest_temp.unlink(missing_ok=True)
-        finally:
+        except Exception:
             with suppress(OSError):
-                temp_path.unlink(missing_ok=True)
+                manifest_temp.unlink(missing_ok=True)
+            raise
+        return PreparedNormalizedMedia(
+            session_id=session_id,
+            temp_path=temp_path,
+            manifest_temp_path=manifest_temp,
+            identity=identity,
+        )
 
-        return self._verify_identity(
+    @staticmethod
+    def discard_prepared(prepared: PreparedNormalizedMedia) -> None:
+        with suppress(OSError):
+            prepared.temp_path.unlink(missing_ok=True)
+        with suppress(OSError):
+            prepared.manifest_temp_path.unlink(missing_ok=True)
+
+    def install_prepared_first_wins(
+        self,
+        prepared: PreparedNormalizedMedia,
+    ) -> NormalizedMedia:
+        """Atomically install the first immutable manifest/object pair without replacement.
+
+        Correct claim fencing belongs to the caller: the caller must keep its PostgreSQL claim row
+        locked and current for this bounded final operation. The stable manifest link is the commit
+        point. Because both destination paths are installed with ``link(2)`` and never replaced,
+        a loser can only observe and return the existing winner.
+        """
+        session_id = prepared.session_id
+        identity = prepared.identity
+        directory = self.directory_for(session_id)
+        objects_directory = self.objects_directory_for(session_id)
+        manifest_path = self.manifest_path_for(session_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        objects_directory.mkdir(parents=True, exist_ok=True)
+
+        self._validate_identity_metadata(
             session_id=session_id,
             identity=identity,
+            source_storage_key=identity.source_storage_key,
+            source_sha256=identity.source_sha256,
+            source_byte_length=identity.source_byte_length,
+            selected_audio_stream=identity.selected_audio_stream,
+        )
+
+        object_path = self.object_path_for(session_id, identity.normalized_sha256)
+        object_created = False
+        try:
+            try:
+                os.link(prepared.temp_path, object_path)
+                object_created = True
+                _fsync_directory(objects_directory)
+            except OSError as exc:
+                if exc.errno != errno.EEXIST:
+                    raise
+            if not object_path.is_file() or object_path.is_symlink():
+                raise NormalizedMediaConflict("normalized object destination is not a regular file")
+            if object_path.stat().st_size != identity.normalized_byte_length:
+                raise NormalizedMediaConflict("normalized object hash slot has conflicting length")
+
+            try:
+                os.link(prepared.manifest_temp_path, manifest_path)
+                _fsync_directory(directory)
+            except OSError as exc:
+                if exc.errno != errno.EEXIST:
+                    raise
+
+            winner = self._load_identity(session_id)
+            if winner is None:
+                raise NormalizedMediaError("normalized manifest publication did not commit")
+            media = self._validate_identity_metadata(
+                session_id=session_id,
+                identity=winner,
+                source_storage_key=identity.source_storage_key,
+                source_sha256=identity.source_sha256,
+                source_byte_length=identity.source_byte_length,
+                selected_audio_stream=identity.selected_audio_stream,
+            )
+            if object_created and winner.normalized_sha256 != identity.normalized_sha256:
+                with suppress(OSError):
+                    object_path.unlink(missing_ok=True)
+                _fsync_directory(objects_directory)
+            return media
+        finally:
+            self.discard_prepared(prepared)
+
+    def publish_temp(
+        self,
+        *,
+        session_id: UUID,
+        source_storage_key: str,
+        source_sha256: str,
+        source_byte_length: int,
+        selected_audio_stream: int,
+        temp_path: Path,
+    ) -> NormalizedMedia:
+        """Compatibility helper for non-claimed callers and storage-only tests.
+
+        Media processing uses ``prepare_temp`` followed by a PostgreSQL-fenced call to
+        ``install_prepared_first_wins``. This helper still has atomic filesystem first-wins
+        semantics, but it does not by itself provide a database claim fence.
+        """
+        prepared = self.prepare_temp(
+            session_id=session_id,
+            source_storage_key=source_storage_key,
+            source_sha256=source_sha256,
+            source_byte_length=source_byte_length,
+            selected_audio_stream=selected_audio_stream,
+            temp_path=temp_path,
+        )
+        self.install_prepared_first_wins(prepared)
+        return self.verify_committed(
+            session_id=session_id,
             source_storage_key=source_storage_key,
             source_sha256=source_sha256,
             source_byte_length=source_byte_length,
@@ -294,12 +437,18 @@ class FilesystemNormalizedMediaStorage:
         )
 
     def normalized_path(self, session_id: UUID, storage_key: str) -> Path:
-        candidate = (self.root / storage_key).resolve()
-        expected = self.final_path_for(session_id).resolve()
-        try:
-            candidate.relative_to(self.root)
-        except ValueError as exc:
-            raise NormalizedMediaError("normalized storage key escapes audio root") from exc
-        if candidate != expected:
-            raise NormalizedMediaError("normalized storage key does not match stable identity")
-        return candidate
+        raw = self.root / storage_key
+        if raw.is_symlink():
+            raise NormalizedMediaError("normalized storage key resolves through a symlink")
+        name = raw.name
+        if not name.endswith(".wav"):
+            raise NormalizedMediaError("normalized storage key is not a WAV object")
+        normalized_sha256 = name[:-4]
+        if not self._valid_sha256(normalized_sha256):
+            raise NormalizedMediaError("normalized storage key has malformed content identity")
+        expected = self.object_path_for(session_id, normalized_sha256)
+        if raw != expected:
+            raise NormalizedMediaError("normalized storage key does not match session identity")
+        if not expected.is_file() or expected.is_symlink():
+            raise NormalizedMediaError("normalized storage object is missing")
+        return expected
