@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34796046691
+snapshot_seq: 34796058276
 
-collected_at: 2026-09-14T01:28:57.041052Z
+collected_at: 2026-09-14T01:29:10.813979Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -664,11 +664,11 @@ lease_expires_at: 2026-09-12T07:15:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #45 state=open updated=2026-09-14T01:29:00Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T01:28:47Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #55 state=open updated=2026-09-12T07:06:06Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-12T07:05:53Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #41 state=open updated=2026-09-12T06:47:26Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #45 state=open updated=2026-09-12T06:46:34Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -685,4 +685,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34796046691 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34796058276 sections=6
