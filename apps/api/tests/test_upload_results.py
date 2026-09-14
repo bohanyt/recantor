@@ -55,9 +55,7 @@ class DeterministicUploadProvider:
 
 def _tone_wav(milliseconds: int = 400) -> bytes:
     samples = round(UPLOAD_SAMPLE_RATE * milliseconds / 1000)
-    pcm = b"".join(
-        struct.pack("<h", 9000 if index % 2 == 0 else -9000) for index in range(samples)
-    )
+    pcm = b"".join(struct.pack("<h", 9000 if index % 2 == 0 else -9000) for index in range(samples))
     return encode_pcm_wav(pcm, sample_rate=UPLOAD_SAMPLE_RATE)
 
 
@@ -483,7 +481,6 @@ def test_openapi_exposes_capability_protected_upload_result_contracts():
         headers = [
             parameter
             for parameter in operation["parameters"]
-            if parameter["in"] == "header"
-            and parameter["name"] == "X-Recantor-Upload-Token"
+            if parameter["in"] == "header" and parameter["name"] == "X-Recantor-Upload-Token"
         ]
         assert len(headers) == 1
