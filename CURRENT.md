@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34806820102
+snapshot_seq: 34807442653
 
-collected_at: 2026-09-14T04:38:52.700896Z
+collected_at: 2026-09-14T04:49:42.235500Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,12 +19,12 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: 799dfad5c6ac4984a5ef27b21b88ec77dda53afc
-canonical_commit_message: Match Prettier formatting in integration proof
+canonical_head: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+canonical_commit_message: Apply exact Prettier output and remove diagnostic hook
 
-Restore reviewed call-chain formatting and wrap only the new media-worker assertion as required by the repository formatter.
+Restore apps/web/package.json byte-for-byte to the pre-diagnostic manifest and apply the exact Prettier 3.9.6 output captured from CI to the bounded product-shell reconciliation proof.
 
-No behavior change.
+No behavior or product scope change.
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T04:38:42Z
+issue_updated_at: 2026-09-14T04:49:31Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,30 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5657779014 author=bohanyt
-SUCCESSOR_PRIMARY_CONTROL_TOWER_TAKEOVER_2026_09_14_V1
-
-Fresh takeover completed under GitHub authority.
-
-ACC orientation read first from `agent-context/CURRENT.md`:
-- repository: `bohanyt/recantor`
-- snapshot_seq: `34679500286`
-- canonical_branch: `integration/cloud-alpha-2026-09-11`
-- canonical_head: `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
-- sentinel: `END_OF_AGENT_CONTEXT kind=CURRENT seq=34679500286 sections=6`
-- treated strictly as `ORIENTATION_ONLY`.
-
-Fresh GitHub truth:
-- `main`: `59ff57502a9a1d84ad332cab106c46c256482d23`
-- integration `integration/cloud-alpha-2026-09-11`: `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
-- PR #53: OPEN / DRAFT / merged=false / head `ff7d8ac...` -> base `main`; checkpoint only, no main authorization
-- #42 and #44 remain the reviewed/integrated content on the integration branch
-- #43 / PR #54: OPEN / DRAFT, exact head `76714bd23bcd149914f01cbb80973edfda0dd474`; exact CI `34679358866` SUCCESS + Upload foundation CI `34679358862` SUCCESS; old Reviewer O result was against `fad9e057...`; corrected-head narrow result still absent
-- #45 / PR #55: OPEN / DRAFT, exact head `f20a53ec02e2d2af2d7bd9289adf99b581eac74f`; exact CI `34678824260` SUCCESS + Uplo
-...[COMMENT_5657779014_TRUNCATED chars=1501]
-
----
-
 comment_id=5658093045 author=bohanyt
 CONTROL_TOWER_SUCCESSOR_CYCLE_2026_09_14_V2
 
@@ -660,12 +636,35 @@ write_scope:
 lease_expires_at: 2026-09-14T05:08:00Z
 
 No feature widening, no #46 implementation, no #47 work, no Windows witness under this renewal.
+
+---
+
+comment_id=5659175305 author=bohanyt
+CONTROL_TOWER_INTEGRATION_GATE_2026_09_14_V3
+
+Successor Primary Control Tower exact-head integration gate is now GREEN.
+
+Accepted predecessor gates:
+- #43 / PR #54 exact accepted head `0dc2295e496da76ff8a9921140ed8be6e95877d5`; final independent result #43 comment `5658573757` = CLEAN.
+- #45 / PR #55 exact accepted head `18453eaabea11fac01f664f73c949c7b2ea7f32c`; final independent result #45 comment `5658593585` = CLEAN.
+
+Integration order and provenance:
+1. #55 backend/media truth integrated first as merge commit `386f5ea5ad70e4add56ef07be72f4e6f0ac4f6ba`, with exact accepted #55 head as second parent.
+2. #54 product shell integrated second as merge commit `738c8195b98a49e1438bcb6edaffac1f185dd736`, with exact accepted #54 head as second parent.
+3. bounded cross-candidate reconciliation updated only README/CURRENT/.env example + Upload product copy/tests so the integrated line truthfully says #45 backend processing exists while #46 result/export UX does not yet exist.
+4. integration-only formatter diagnosis was removed completely; final manifest is restored and no diagnostic hook remains.
+
+FINAL EXACT INTEGRATION HEAD:
+`22f6422ca5c6fe724940504fe9d2bf2880cdc1b8`
+
+Exact-head proof:
+...[COMMENT_5659175305_TRUNCATED chars=3333]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T04:38:42Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #53 state=open updated=2026-09-14T04:37:29Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #41 state=open updated=2026-09-14T04:49:31Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -676,9 +675,9 @@ ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: 
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-14T04:37:29Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34806820102 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34807442653 sections=6
