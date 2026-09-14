@@ -105,9 +105,7 @@ async def test_normalized_publication_is_claim_fenced_atomic_first_wins_under_re
     monkeypatch,
 ):
     del clean_recording_state
-    session_id, source_key, source_sha256, source_byte_length = (
-        await _create_claimable_processing()
-    )
+    session_id, source_key, source_sha256, source_byte_length = await _create_claimable_processing()
     storage = FilesystemNormalizedMediaStorage(get_settings().audio_storage_path)
 
     t0 = datetime.now(UTC)
@@ -150,9 +148,7 @@ async def test_normalized_publication_is_claim_fenced_atomic_first_wins_under_re
 
     # Reclaim while the old worker is still digesting/fsyncing private bytes. The new owner is
     # durable before the old candidate is allowed to reach the final publication primitive.
-    new_claim = await claim_next_upload_processing(
-        now=old_claim.expires_at + timedelta(seconds=1)
-    )
+    new_claim = await claim_next_upload_processing(now=old_claim.expires_at + timedelta(seconds=1))
     assert new_claim is not None
     assert new_claim.session_id == session_id
     assert new_claim.token != old_claim.token
