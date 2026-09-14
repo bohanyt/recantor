@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import struct
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -10,23 +13,52 @@ from sqlalchemy import select
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
+from recantor.media_processing import (
+    claim_next_upload_processing,
+    execute_upload_processing_claim,
+    reconcile_upload_processing,
+)
 from recantor.media_spec import (
     NORMALIZATION_SPEC_ID,
     SEGMENTATION_PARAMS_JSON,
     SEGMENTATION_SPEC_ID,
+    UPLOAD_SAMPLE_RATE,
 )
 from recantor.models import (
     RecordingSession,
     SessionState,
+    TranscriptionUtterance,
     TranscriptSegment,
     UploadMediaProcessing,
     UploadProcessingState,
     UploadRecord,
 )
+from recantor.realtime_audio import encode_pcm_wav
+from recantor.settings import get_settings
+from recantor.stt import STTRequest, STTResult
+from recantor.stt_jobs import STTExecutionStatus, execute_stt_job
 from recantor.uploads import create_upload_session
 
 TOKEN_A = "Q" * 43
 TOKEN_B = "R" * 43
+
+
+class DeterministicUploadProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def transcribe(self, request: STTRequest) -> STTResult:
+        assert request.audio
+        self.calls += 1
+        return STTResult(text=f"injected upload transcript {self.calls}", language="id")
+
+
+def _tone_wav(milliseconds: int = 400) -> bytes:
+    samples = round(UPLOAD_SAMPLE_RATE * milliseconds / 1000)
+    pcm = b"".join(
+        struct.pack("<h", 9000 if index % 2 == 0 else -9000) for index in range(samples)
+    )
+    return encode_pcm_wav(pcm, sample_rate=UPLOAD_SAMPLE_RATE)
 
 
 async def _completed_upload(
@@ -92,6 +124,48 @@ async def _completed_upload(
                     language="id",
                 )
             )
+        await db.commit()
+        return session.id
+
+
+async def _physical_completed_upload(payload: bytes) -> UUID:
+    now = datetime.now(UTC)
+    settings = get_settings()
+    async with get_sessionmaker()() as db:
+        session, record = await create_upload_session(
+            db,
+            client_request_id=uuid4(),
+            capability_token=TOKEN_A,
+            original_filename="provider-fixture.wav",
+            content_type="audio/wav",
+            byte_length=len(payload),
+            duration_ms=400,
+        )
+        root = Path(settings.audio_storage_path)
+        source_path = root / settings.upload_tus_storage_prefix / f"issue46-{session.id.hex}"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(payload)
+        digest = hashlib.sha256(payload).hexdigest()
+
+        session.state = SessionState.UPLOADED.value
+        record.received_bytes = len(payload)
+        record.storage_key = source_path.relative_to(root).as_posix()
+        record.sha256 = digest
+        record.byte_length = len(payload)
+        record.completed_at = now
+        db.add(
+            UploadMediaProcessing(
+                session_id=session.id,
+                source_storage_key=record.storage_key,
+                source_sha256=digest,
+                source_byte_length=len(payload),
+                source_completed_at=now,
+                state=UploadProcessingState.PENDING.value,
+                normalization_spec_id=NORMALIZATION_SPEC_ID,
+                segmentation_spec_id=SEGMENTATION_SPEC_ID,
+                segmentation_params_json=SEGMENTATION_PARAMS_JSON,
+            )
+        )
         await db.commit()
         return session.id
 
@@ -217,6 +291,54 @@ async def test_result_status_is_postgres_derived_and_failure_is_safe(clean_recor
             headers=_headers(),
         )
         assert blocked.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_uploaded_fixture_reaches_canonical_result_via_injected_provider(
+    clean_recording_state,
+):
+    del clean_recording_state
+    session_id = await _physical_completed_upload(_tone_wav())
+
+    claim = await claim_next_upload_processing()
+    assert claim is not None and claim.session_id == session_id
+    assert await execute_upload_processing_claim(claim) is True
+
+    async with get_sessionmaker()() as db:
+        utterances = list(
+            (
+                await db.scalars(
+                    select(TranscriptionUtterance)
+                    .where(TranscriptionUtterance.session_id == session_id)
+                    .order_by(TranscriptionUtterance.sequence.asc())
+                )
+            ).all()
+        )
+    assert len(utterances) == 1
+
+    provider = DeterministicUploadProvider()
+    execution = await execute_stt_job(utterance_id=utterances[0].id, provider=provider)
+    assert execution.status == STTExecutionStatus.SUCCEEDED
+    assert provider.calls == 1
+    reconciled = await reconcile_upload_processing()
+    assert reconciled.stt_succeeded == 1
+
+    async with _client() as client:
+        result = await client.get(
+            f"/api/v1/uploads/{session_id}/result",
+            headers=_headers(),
+        )
+        assert result.status_code == 200
+        assert result.json()["state"] == "complete"
+        assert result.json()["transcript_segment_count"] == 1
+
+        transcript = await client.get(
+            f"/api/v1/uploads/{session_id}/transcript",
+            headers=_headers(),
+        )
+        assert transcript.status_code == 200
+        segments = transcript.json()["segments"]
+        assert [segment["text"] for segment in segments] == ["injected upload transcript 1"]
 
 
 @pytest.mark.asyncio
