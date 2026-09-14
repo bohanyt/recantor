@@ -50,7 +50,8 @@ describe('App product shell', () => {
     expect(screen.getByTestId('workflow-upload')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTestId('workflow-upload-panel')).toBeVisible();
     expect(screen.getByTestId('workflow-live-panel')).not.toBeVisible();
-    expect(screen.getByText(/processing is not available in this alpha yet/i)).toBeVisible();
+    expect(screen.getByText(/server-side audio preparation and transcription/i)).toBeVisible();
+    expect(screen.getByText(/processing progress, transcript results, and exports/i)).toBeVisible();
   });
 
   it('keeps service internals inside collapsed read-only diagnostics', async () => {

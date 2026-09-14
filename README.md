@@ -5,7 +5,7 @@ Recantor is a self-hosted recording and transcription project built around one r
 The current cloud-alpha integration line has two web workflows:
 
 - **Live** — reliable browser archive recording plus an independent realtime speech lane, durable STT scheduling, canonical transcript recovery, and live transcript display.
-- **Upload recording** — resumable transfer of an existing WAV/MP3/M4A/OGG/WebM/MP4 file into durable upload storage. Uploaded-media normalization/transcription processing is not implemented yet.
+- **Upload recording** — resumable transfer of an existing WAV/MP3/M4A/OGG/WebM/MP4 file into durable upload storage, followed by server-side media validation/normalization, deterministic segmentation, upload-class STT scheduling, and canonical transcript production. Processing/result/export UI is still the next product slice (#46).
 
 ## Reliability principles
 
@@ -24,9 +24,11 @@ Desktop Chrome/Edge on an awake computer is the first browser reliability target
 - API: Python + FastAPI + Pydantic
 - Database: PostgreSQL + SQLAlchemy 2 + Alembic
 - Live STT scheduling: PostgreSQL-authoritative jobs with Celery + Redis delivery/reconciliation
+- Upload STT scheduling: the same durable STT model/retry/provider path with separate `stt-upload` worker capacity
 - STT provider: server-side Groq Whisper adapter (`whisper-large-v3-turbo` by default)
 - Transcript delivery: canonical HTTP cursor reads plus ephemeral WebSocket wake hints
 - Existing-recording upload: Uppy + tus/tusd with durable Recantor completion evidence
+- Uploaded-media processing: bounded ffprobe/FFmpeg normalization plus deterministic D3-A segmentation on a dedicated `media-upload` worker
 - Development orchestration: Docker Compose
 - Tooling: Node.js 24, pnpm 11.7, Python 3.13, uv 0.10
 
@@ -46,7 +48,7 @@ Open `.env` and set the server-side key:
 GROQ_API_KEY=your-groq-key-here
 ```
 
-A fake value such as `fake-local-config-check` is sufficient to verify that Compose passes the variable into the API and STT worker, but real live transcription requires a valid Groq key. Recantor does not need a browser-side provider key and does not implement provider/fallback selectors in normal setup.
+A fake value such as `fake-local-config-check` is sufficient to verify Compose wiring, but real live or uploaded-media transcription requires a valid Groq key. Recantor does not need a browser-side provider key and does not implement provider/fallback selectors in normal setup.
 
 Then start the stack, passing the repository environment file explicitly:
 
@@ -54,7 +56,7 @@ Then start the stack, passing the repository environment file explicitly:
 docker compose --env-file .env -f infra/compose.yaml up --build
 ```
 
-The explicit `--env-file .env` keeps setup truthful even though the Compose file lives under `infra/`. The current Compose file forwards `GROQ_API_KEY` to both `api` and `stt-worker`, while keeping it out of the web service.
+The explicit `--env-file .env` keeps setup truthful even though the Compose file lives under `infra/`. The current Compose file forwards `GROQ_API_KEY` to the API plus live/upload STT workers, while keeping it out of the web service. Media normalization runs in its own worker and does not need the Groq secret.
 
 Open:
 
@@ -86,21 +88,19 @@ The independent realtime lane uses the same microphone stream through Web Audio/
 
 Archive-audio safety and transcription state are intentionally separate. A delayed transcript never means archive audio is unsafe, and a safe archive does not imply transcription succeeded.
 
-### Existing-recording upload
+### Existing-recording upload and processing
 
-The #44 upload foundation is present on the integration line. Uppy/tus can pause, reload, resume the same durable upload, and verifies Recantor server completion before showing the transfer as durably uploaded.
+The #44 upload foundation is integrated. Uppy/tus can pause, reload, and resume the same durable upload, and Recantor verifies server completion before showing the transfer as durably uploaded.
 
-That is the current boundary. The following are **not** current upload capabilities:
+The reviewed #45 processing path is also integrated. After durable upload completion, PostgreSQL owns one immutable processing identity, a dedicated media worker runs bounded ffprobe/FFmpeg normalization to mono signed 16-bit PCM at 16 kHz, deterministic `upload-energy-vad-180s-v1` segmentation creates ordinary durable transcription utterances, and upload STT uses the same provider/canonical `TranscriptSegment` truth as Live. Valid blank provider results end as terminal `no_speech` without fabricating transcript rows. Live and upload STT have separate worker/queue capacity so upload backlog does not consume reserved Live headroom.
 
-- FFmpeg/ffprobe validation or normalization of uploaded media;
-- segmentation and upload-to-STT processing (#45);
-- uploaded-recording transcript/result/export UX (#46).
+The current **UI boundary** is narrower than the backend capability: the Upload screen proves resumable durable transfer, but it does not yet show processing progress, canonical transcript results, or TXT/JSON/VTT/SRT exports. Those product surfaces are Issue #46.
 
 ## Configuration truth
 
 `apps/api/src/recantor/settings.py` is the backend settings authority. Current STT configuration is direct Groq configuration: `GROQ_API_KEY` plus optional endpoint/model/timeout overrides. There is no implemented `STT_PRIMARY_PROVIDER`, `STT_FALLBACK_PROVIDER`, or `LOCAL_STT_BASE_URL` selector in current backend settings.
 
-`.env.example` documents implemented development inputs only. Keep real secrets in local environment configuration; never commit them.
+`.env.example` documents implemented development inputs and the current live/upload/media queue defaults. Normal setup should not need to tune those defaults. Keep real secrets in local environment configuration; never commit them.
 
 ## Development checks
 
@@ -124,7 +124,7 @@ pnpm --dir apps/web test
 pnpm --dir apps/web build
 ```
 
-GitHub Actions also exercises PostgreSQL migrations/readiness, Redis, Chromium web/API/PostgreSQL behavior, recorder recovery/fencing paths, durable live STT scheduling, resumable upload, and Docker Compose smoke coverage.
+GitHub Actions also exercises PostgreSQL migrations/readiness, Redis, Chromium web/API/PostgreSQL behavior, recorder recovery/fencing paths, durable live STT scheduling, resumable upload, uploaded-media processing/queue isolation, and Docker Compose smoke coverage.
 
 ## Production exposure boundary
 

@@ -88,7 +88,7 @@ async function waitForDurableCompletion(
 }
 
 const durableUploadMessage =
-  'Durably uploaded. The file is stored safely; uploaded-media processing is not available in this alpha yet.';
+  'Durably uploaded. Server-side audio preparation and transcription can continue; transcript results and exports are not shown here yet.';
 
 export function UploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -255,8 +255,9 @@ export function UploadPanel() {
             as complete after Recantor confirms durable server state.
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            Uploaded-media processing is not available in this alpha yet. FFmpeg normalization,
-            transcription processing, and export results are not implemented in this workflow.
+            After durable upload, server-side audio preparation and transcription can continue
+            automatically. Processing progress, transcript results, and exports are not shown in
+            this workflow yet.
           </p>
         </div>
         <div className="min-w-28 shrink-0 rounded-2xl border border-[var(--border)] px-4 py-3 text-left sm:text-right">

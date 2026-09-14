@@ -1,6 +1,6 @@
 # Current
 
-Last updated: 2026-09-12
+Last updated: 2026-09-14
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
@@ -10,20 +10,25 @@ Canonical cloud-alpha integration branch:
 
 `integration/cloud-alpha-2026-09-11`
 
-Issue #43 was dispatched from exact integration SHA:
+The integration line now contains the independently reviewed candidates for:
 
-`ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`
+- #42 realtime transcript delivery + Live transcript UI;
+- #44 resumable existing-recording upload foundation;
+- #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
+- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`.
 
-That baseline is the Control Tower accepted integration of the #44 resumable upload foundation after #42. At dispatch, ordinary CI run `34659603660` was green across backend, frontend, Chromium E2E, and Compose smoke, and upload-foundation CI run `34659603680` was green.
+The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed, with a bounded integration-only reconciliation so normal UI and documentation do not incorrectly claim that processing is absent.
 
-The #43 implementation branch `agent-m/issue-43-product-shell` is a presentation/productization candidate on top of that baseline. It must not be treated as integrated until Control Tower accepts and integrates its DRAFT PR.
+No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
 
-## Product truth on the integration baseline
+## Product truth on the integration line
 
 Recantor currently has two bounded web workflows:
 
-1. **Live** — reliable browser archive recording, an independent realtime speech lane, durable live STT scheduling, canonical transcript recovery, and the integrated #42 live transcript surface.
-2. **Upload recording** — the integrated #44 Uppy+tus/tusd resumable upload foundation with durable completion evidence. This stops at durable uploaded-source evidence; uploaded-media processing is not implemented on the integration baseline.
+1. **Live** — reliable browser archive recording, an independent realtime speech lane, PostgreSQL-authoritative live STT scheduling, canonical transcript recovery, and the #42 reconnect-safe Live transcript surface.
+2. **Upload recording** — Uppy+tus/tusd resumable transfer with durable completion evidence, followed by PostgreSQL-authoritative media processing, bounded ffprobe/FFmpeg normalization, deterministic D3-A segmentation, upload-class STT scheduling, and canonical `TranscriptSegment` production.
+
+The Upload **backend path** now reaches canonical transcript truth. The current Upload **product UI** still stops after durable-transfer confirmation: processing progress, uploaded-recording transcript/result presentation, and TXT/JSON/VTT/SRT export controls belong to #46.
 
 Desktop Chrome/Edge on an **awake** computer is the first browser recording reliability target. Recantor does not claim continuous browser capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile background suspension.
 
@@ -77,27 +82,25 @@ same microphone MediaStream
 
 Realtime failure is downstream degradation. It never participates in archive ACK/finalization semantics.
 
-The Groq STT provider boundary consumes committed durable utterance work, verifies storage evidence before provider execution, and commits canonical transcript evidence with deterministic producer identity. Blank/malformed/provider failure does not fabricate transcript rows and does not weaken archive capture.
+The Groq STT provider boundary consumes committed durable utterance work, verifies storage evidence before provider execution, and commits canonical transcript evidence with deterministic producer identity.
 
-## #38 durable live STT scheduler — integrated on cloud-alpha
+## Durable STT scheduling — integrated
 
-Issue #38 is no longer merely a draft dependency on this integration line. The PostgreSQL-authoritative live STT scheduler is present in `integration/cloud-alpha-2026-09-11`.
+PostgreSQL owns durable `STTJob` identity/state, retry budget, delivery reservations, claims, and canonical convergence. Redis/Celery carry generic wake signals only.
 
 Current scheduler properties include:
 
-- durable PostgreSQL `STTJob` identity/state;
 - claim leases and fencing for worker death/duplicate delivery;
-- PostgreSQL-backed global/per-session admission and fairness;
-- Celery/Redis used for wake/delivery coordination rather than durable backlog truth;
+- PostgreSQL-backed admission and per-session fairness;
 - bounded retry handling using provider error categories;
-- reconciliation that can rediscover unfinished durable utterance work;
-- canonical transcript evidence remains authoritative for success.
+- reconciliation that rediscovers unfinished durable utterance work;
+- canonical transcript evidence remains authoritative for success;
+- terminal `no_speech` for valid blank provider results, without creating blank transcript rows;
+- separate workload classes and worker/queue capacity for Live (`stt-live`) and Upload (`stt-upload`).
 
-Ordinary CI does not require a real Groq secret or provider network call.
+Upload backlog therefore does not consume the reserved Live STT frontier. Ordinary CI does not require a real Groq secret or provider network call; focused proof exercises the real `GroqSTTProvider` against a deterministic local compatible endpoint.
 
-## #42 canonical live transcript UI — integrated
-
-Issue #42 is integrated on the cloud-alpha line.
+## #42 canonical Live transcript UI — integrated
 
 The web transcript surface preserves these semantics:
 
@@ -107,13 +110,9 @@ The web transcript surface preserves these semantics:
 - reconnect/degraded delivery can catch up without changing archive recording safety;
 - transcript presentation does not own recorder lifecycle or archive durability.
 
-Issue #43 may reposition/mount this panel but does **not** change files under `apps/web/src/transcript/**` or its truth/reconnect logic.
-
 ## #44 resumable existing-recording upload foundation — integrated
 
-Issue #44 is integrated on the cloud-alpha line at dispatch baseline `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`.
-
-Current upload foundation:
+The durable transfer path is:
 
 ```text
 Browser file
@@ -124,52 +123,104 @@ Browser file
   -> PostgreSQL upload completion evidence
 ```
 
-Current boundary:
+Current transfer properties:
 
 - WAV/MP3/M4A/OGG/WebM/MP4 source admission;
 - pause/retry/reload/reselection resumes the same tus upload when recovery evidence matches;
 - capability-token protected upload-session reads/hooks;
-- durable completion records internal storage identity, exact byte length, and streaming SHA-256;
+- durable completion records internal storage identity, exact byte length, and SHA-256;
+- whole-file completion hashing runs outside the asyncio event loop and outside a long upload-row lock, then revalidates authoritative binding before publish;
 - UI may claim **durably uploaded** only after Recantor confirms durable completion.
 
-It does **not** yet mean the uploaded source has been normalized, segmented, transcribed, or exported.
+## #45 uploaded-media processing — integrated
 
-## #43 product shell candidate — this branch only
+After immutable #44 completion, the backend path is:
 
-The #43 candidate is limited to product presentation and setup truth:
+```text
+durable completed upload
+  -> PostgreSQL UploadMediaProcessing
+  -> bounded ffprobe
+  -> bounded FFmpeg normalize to mono signed 16-bit PCM / 16 kHz
+  -> claim-fenced atomic first-wins normalized evidence
+  -> deterministic upload-energy-vad-180s-v1 segmentation
+  -> existing commit_utterance_work
+  -> existing STTJob / STTProvider
+  -> canonical TranscriptSegment
+```
+
+Important properties:
+
+- one PostgreSQL processing identity per immutable completed upload;
+- PostgreSQL remains durable authority; media Redis/Celery messages are wake mechanisms only;
+- dedicated `media-upload` worker has RW audio access, while live/upload STT workers keep audio storage RO;
+- normalized publication does heavy digest/fsync work while private, then performs the bounded final first-wins install under the current PostgreSQL claim fence;
+- stale/reclaimed workers cannot publish authoritative normalized identity;
+- deterministic D3-A retry starts from normalized sample 0 and reproduces utterance/timeline identity or fails loudly;
+- partial EOF timing preserves coverage with floor(start)/ceil(end);
+- long silence creates no fake utterance work;
+- valid blank provider text becomes terminal `no_speech`, not failure and not a blank `TranscriptSegment`;
+- migration 0009 backfills completed #44 uploads exactly once and has a behavioral downgrade/re-upgrade proof.
+
+Residual alpha boundaries remain documented: the atomic first-wins filesystem proof targets the Linux/local-filesystem Compose deployment shape; a crash before manifest commit can leave a non-authoritative orphan content object; out-of-band storage mutation is detected rather than repaired automatically.
+
+## #43 product shell — integrated
+
+The desktop productization pass provides:
 
 - obvious `Live` / `Upload recording` top-level workflow shell;
+- active microphone `requesting` or `recording` capture cannot be hidden behind Upload navigation;
 - Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery/loss controls, then canonical transcript;
 - archive-audio and transcription state are visually/semantically separate;
 - fenced ownership, missing-audio loss, spool failure, recovery, and sync controls remain reachable outside Diagnostics;
 - `Advanced / Diagnostics` is collapsed by default and read-only;
-- #42 transcript logic remains untouched;
-- #44 upload logic remains the underlying upload foundation;
+- #42 transcript logic remains canonical/reconnect truth;
 - normal setup truth is centered on server-side `GROQ_API_KEY`;
-- stale provider/fallback selectors are removed from `.env.example` because backend `Settings` does not implement them;
-- laptop layout/accessibility/focus behavior receives dedicated web tests.
+- laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression coverage.
 
-No #45 backend/media implementation is part of #43.
+The Upload screen is intentionally not pretending #46 exists: it can confirm durable transfer and truthfully state that server-side preparation/transcription may continue, but it does not yet expose processing/result/export UI.
 
 ## Configuration truth
 
-Backend `Settings` currently implements direct Groq configuration:
+Backend `Settings` currently implements direct Groq configuration plus durable scheduler/media defaults.
 
-- `GROQ_API_KEY`;
-- `GROQ_STT_ENDPOINT`;
-- `GROQ_STT_MODEL`;
-- `GROQ_STT_TIMEOUT_SECONDS`.
+Normal setup centers on:
+
+- `GROQ_API_KEY`.
+
+Implemented advanced defaults include:
+
+- Live STT queue `stt-live`;
+- Upload STT queue `stt-upload`;
+- media queue `media-upload`;
+- bounded STT/media claim, retry, reconciliation, probe, normalize, and subprocess-output settings.
 
 `STT_PRIMARY_PROVIDER`, `STT_FALLBACK_PROVIDER`, and `LOCAL_STT_BASE_URL` are **not** implemented settings and must not appear as normal setup selectors.
 
-Docker Compose forwards `GROQ_API_KEY` to `api` and `stt-worker`. The web service never needs the Groq secret. `.env.example` is the repository template; real credentials remain local and uncommitted.
+Docker Compose forwards `GROQ_API_KEY` to `api`, `stt-worker`, and `stt-upload-worker`. The web and media-worker services do not need the Groq secret. Real credentials remain local and uncommitted.
+
+## Next product dependency — #46
+
+Issue #46 is the next implementation lane after exact integrated-head cloud checks and an explicit D1/D2 authorization decision based on the actual integrated upload capability contract.
+
+#46 owns only:
+
+- human processing-state/result reads for Upload;
+- canonical uploaded-recording transcript presentation;
+- TXT / JSON or JSONL / VTT / SRT derivation from canonical `TranscriptSegment` rows;
+- focused product tests/E2E and truthful docs.
+
+There must be no second transcript truth, diarization, summaries, production auth platform, or #47 dependency.
+
+Before dispatching #46, Control Tower must freeze:
+
+- **D1** — the smallest result/export authorization boundary using the actual integrated #44 capability-token semantics;
+- **D2** — result availability after capability expiry, separating server-side retention, bearer-token validity, and browser reload/resume UX.
 
 ## Not implemented yet
 
 The following must not be described as working current capabilities:
 
-- **#45 uploaded-media processing**: FFmpeg/ffprobe validation, normalization, segmentation/timeline mapping, and durable upload-to-STT/canonical-transcript processing;
-- **#46 upload result/export UX**: uploaded recording transcript/result views and TXT/JSON/VTT/SRT exports;
+- **#46 upload result/export UX**: uploaded-recording processing-state/result views and TXT/JSON/VTT/SRT exports;
 - local faster-whisper fallback/provider selection;
 - diarization/speaker labels;
 - rolling/final summaries;
@@ -178,7 +229,7 @@ The following must not be described as working current capabilities:
 - production reverse-proxy/deployment hardening;
 - native Android/iOS recorder clients.
 
-A concurrent #45 implementation lane may exist, but until its accepted work is integrated, this file and the #43 UI must not claim those processing/results capabilities.
+Optional Issue #47 / PR #50 remains parked and is not required for the first installable alpha.
 
 ## Production exposure boundary
 
@@ -186,7 +237,10 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-- #43 owns only its bounded frontend presentation/setup/docs surfaces.
-- #45 owns uploaded-media processing/backend work and must not require #43 to edit backend Python or `infra/compose.yaml`.
-- #46 remains downstream of #45 for uploaded-recording result/export behavior.
-- No local Windows acceptance is part of #43; ordinary CI/cloud Chromium evidence is the gate before handoff.
+1. Complete exact integrated-head CI/Compose/E2E/migration checks for the current integration branch.
+2. If green, freeze D1/D2 from the integrated #44/#45 contracts.
+3. Dispatch exactly one bounded #46 implementation owner.
+4. Independently review/integrate #46.
+5. Run #48 cloud/fresh-install gate.
+6. Only after cloud failures are exhausted, run one bounded Windows Chrome/Edge acceptance campaign.
+7. Do not merge PR #53 / integration to `main` without explicit Bohan authorization.

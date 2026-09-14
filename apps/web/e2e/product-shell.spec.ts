@@ -64,7 +64,8 @@ test('workflow navigation, diagnostics, and focus treatment are keyboard reachab
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('workflow-upload')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('upload-dropzone')).toBeVisible();
-  await expect(page.getByText(/uploaded-media processing is not available/i)).toBeVisible();
+  await expect(page.getByText(/server-side audio preparation and transcription/i)).toBeVisible();
+  await expect(page.getByText(/processing progress, transcript results, and exports/i)).toBeVisible();
 
   await page.getByTestId('workflow-live').click();
   const diagnostics = page.getByTestId('diagnostics');
@@ -207,6 +208,10 @@ test('README quick-start GROQ key reaches only server-side Compose services', ()
     expect(config.services['stt-worker']?.environment?.GROQ_API_KEY).toBe(
       'fake-local-config-check',
     );
+    expect(config.services['stt-upload-worker']?.environment?.GROQ_API_KEY).toBe(
+      'fake-local-config-check',
+    );
+    expect(config.services['media-worker']?.environment?.GROQ_API_KEY).toBeUndefined();
     expect(config.services.web?.environment?.GROQ_API_KEY).toBeUndefined();
   } finally {
     rmSync(envPath, { force: true });
