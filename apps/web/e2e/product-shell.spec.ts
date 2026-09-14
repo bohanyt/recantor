@@ -64,8 +64,12 @@ test('workflow navigation, diagnostics, and focus treatment are keyboard reachab
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('workflow-upload')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('upload-dropzone')).toBeVisible();
-  await expect(page.getByText(/server-side audio preparation and transcription/i)).toBeVisible();
-  await expect(page.getByText(/processing progress, transcript results, and exports/i)).toBeVisible();
+  await expect(
+    page.getByText(/server-side audio preparation and transcription/i),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/processing progress, transcript results, and exports/i),
+  ).toBeVisible();
 
   await page.getByTestId('workflow-live').click();
   const diagnostics = page.getByTestId('diagnostics');
