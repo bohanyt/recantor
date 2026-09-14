@@ -50,9 +50,12 @@ function normalizeRecovery(candidate: UploadRecovery | undefined): UploadRecover
 }
 
 export function fileFingerprint(file: File): string {
-  return [file.name, file.size, file.lastModified, file.type || 'application/octet-stream'].join(
-    ':',
-  );
+  return [
+    file.name,
+    file.size,
+    file.lastModified,
+    file.type || 'application/octet-stream',
+  ].join(':');
 }
 
 export function loadUploadRecovery(file: File): UploadRecovery | null {
@@ -63,10 +66,15 @@ export function loadUploadRecovery(file: File): UploadRecovery | null {
 }
 
 export function loadLatestUploadRecovery(): UploadRecovery | null {
-  return Object.values(readMap())
-    .map((candidate) => normalizeRecovery(candidate))
-    .filter((candidate): candidate is UploadRecovery => candidate !== null && candidate.sessionId !== null)
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null;
+  return (
+    Object.values(readMap())
+      .map((candidate) => normalizeRecovery(candidate))
+      .filter(
+        (candidate): candidate is UploadRecovery =>
+          candidate !== null && candidate.sessionId !== null,
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null
+  );
 }
 
 export function createUploadRecovery(file: File): UploadRecovery {
