@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34802351278
+snapshot_seq: 34802362594
 
-collected_at: 2026-09-14T03:21:58.844765Z
+collected_at: 2026-09-14T03:22:12.535019Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T02:48:12Z
+issue_updated_at: 2026-09-14T03:22:01Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,22 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5644228061 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: fbe8a3d510ce3532a7d2cbc3d0d3e08d3eb999d5
-write_scope:
-  - infra/compose.yaml media-worker/media-reconciler queue wiring only
-  - apps/api/src/recantor/settings.py media queue setting name only
-  - apps/api/src/recantor/media_tasks.py media queue setting reference only
-  - focused queue-contract test adjustment only if required; do not weaken/delete the existing Media processing CI assertion
-lease_expires_at: 2026-09-12T06:57:00Z
-
----
-
 comment_id=5644256637 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: N
@@ -641,13 +625,31 @@ exclusions:
   - no merge or mark-ready
 reason: exact-head CI correction loop and #45 implementation handoff for bounded successor correction
 lease_expires_at: 2026-09-14T03:13:00Z
+
+---
+
+comment_id=5658529189 author=bohanyt
+CONTROL_TOWER_SUCCESSOR_STATUS_AND_DRIFT_GUARD_2026_09_14_V3
+
+Fresh campaign reconstruction after Agent M/N bounded corrections.
+
+CURRENT CORE LINE
+- `main` remains unchanged at `59ff57502a9a1d84ad332cab106c46c256482d23`.
+- `integration/cloud-alpha-2026-09-11` remains unchanged at `ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b`, containing reviewed/integrated #42 realtime transcript UI/delivery and #44 resumable upload foundation.
+- checkpoint PR #53 remains OPEN / DRAFT / unmerged against main.
+- no integration write is authorized yet.
+
+CURRENT TWO GATES
+- #43 / PR #54: Agent M corrected the final `requesting`-edge shell race. Exact current head `0dc2295e496da76ff8a9921140ed8be6e95877d5`; CI `34799768412` SUCCESS; Upload foundation CI `34799768377` SUCCESS. Final SOL-R1 delta re-review dispatched in #43 comment `5658526461`.
+- #45 / PR #55: Agent N corrected normalized-publication fencing/atomic first-wins plus the bounded migration/timeline proofs. Exact current head `18453eaabea11fac01f664f73c949c7b2ea7f32c`; CI `34800418027` SUCCESS; Upload foundation CI `34800418012` SUCCESS; Media processing CI `34800418013` SUCCESS. Final P-SOL delta re-review dispatched in #45 comment `565852778
+...[COMMENT_5658529189_TRUNCATED chars=1864]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-14T03:22:01Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-14T03:21:48Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:21:35Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
-ISSUE #41 state=open updated=2026-09-14T02:48:12Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #55 state=open updated=2026-09-14T02:48:01Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-14T02:36:15Z title=Issue #43: first-alpha product shell and truthful setup
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -666,4 +668,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34802351278 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34802362594 sections=6
