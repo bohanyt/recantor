@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34811803539
+snapshot_seq: 34823320550
 
-collected_at: 2026-09-14T06:02:35.366952Z
+collected_at: 2026-09-14T08:33:33.124666Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T06:02:22Z
+issue_updated_at: 2026-09-14T08:33:20Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,25 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5658960938 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: successor-ct-integration-2026-09-14
-issue: #48
-mode: integration
-branch: integration/cloud-alpha-2026-09-11
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - integration branch only
-  - integrate exact accepted #55 head 18453eaabea11fac01f664f73c949c7b2ea7f32c
-  - integrate exact accepted #54 head 0dc2295e496da76ff8a9921140ed8be6e95877d5
-  - bounded integration-only README/docs/CURRENT/.env.example/product-copy reconciliation required solely by cross-candidate truth
-  - no main write
-lease_expires_at: 2026-09-14T04:48:00Z
-
-No feature widening, no #46 implementation, no #47 work, no Windows witness under this lease.
-
----
-
 comment_id=5659097956 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: successor-ct-integration-2026-09-14
@@ -644,12 +625,28 @@ write_scope:
   - generated client artifacts only if repository generation requires committed outputs
   - docs/CURRENT.md truthful #46 reconciliation
 lease_expires_at: 2026-09-14T06:31:00Z
+
+---
+
+comment_id=5661228748 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: Q
+issue: #46
+mode: implementation
+branch: agent-q/issue-46-upload-results
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+write_scope:
+  - apps/api/src/recantor/routes/uploads.py plus bounded upload-result contracts/helpers and focused tests; no persistence redesign
+  - apps/web/src/UploadPanel.tsx; apps/web/src/upload/{api.ts,recovery.ts}; transcript presentation reuse; focused unit/E2E proof
+  - generated client artifacts only if repository generation requires committed outputs
+  - docs/CURRENT.md truthful #46 reconciliation
+lease_expires_at: 2026-09-14T08:50:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T06:02:22Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #56 state=open updated=2026-09-14T06:01:11Z title=Phase 3C: upload results and canonical transcript exports
+ISSUE #41 state=open updated=2026-09-14T08:33:20Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #56 state=open updated=2026-09-14T06:14:46Z title=Phase 3C: upload results and canonical transcript exports
 ISSUE #46 state=open updated=2026-09-14T04:50:19Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -661,10 +658,10 @@ PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
-PR #56 draft=True updated=2026-09-14T06:01:11Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
+PR #56 draft=True updated=2026-09-14T06:14:46Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
 PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34811803539 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34823320550 sections=6
