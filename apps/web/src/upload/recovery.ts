@@ -50,12 +50,9 @@ function normalizeRecovery(candidate: UploadRecovery | undefined): UploadRecover
 }
 
 export function fileFingerprint(file: File): string {
-  return [
-    file.name,
-    file.size,
-    file.lastModified,
-    file.type || 'application/octet-stream',
-  ].join(':');
+  return [file.name, file.size, file.lastModified, file.type || 'application/octet-stream'].join(
+    ':',
+  );
 }
 
 export function loadUploadRecovery(file: File): UploadRecovery | null {
