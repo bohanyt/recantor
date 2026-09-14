@@ -4,7 +4,9 @@ import {
   clearUploadRecovery,
   createUploadRecovery,
   fileFingerprint,
+  loadLatestUploadRecovery,
   loadUploadRecovery,
+  markUploadDurablyComplete,
   saveUploadRecovery,
 } from './recovery';
 
@@ -27,21 +29,39 @@ describe('upload recovery capability', () => {
     expect(loadUploadRecovery(selected)).toEqual(recovery);
   });
 
-  it('keys recovery to the same file identity and clears after durable ACK', () => {
+  it('keeps the capability after durable completion so reload can resume result tracking', () => {
     const selected = file();
     const recovery = createUploadRecovery(selected);
     const bound = {
       ...recovery,
       sessionId: crypto.randomUUID(),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      updatedAt: new Date(Date.now() + 1_000).toISOString(),
+    };
+    saveUploadRecovery(bound);
+    const completedAt = new Date().toISOString();
+    const completed = markUploadDurablyComplete(bound, completedAt, bound.expiresAt!);
+
+    expect(loadUploadRecovery(selected)).toEqual(completed);
+    expect(loadLatestUploadRecovery()).toEqual(completed);
+    expect(completed.durableCompletedAt).toBe(completedAt);
+    expect(fileFingerprint(selected)).toBe(recovery.fingerprint);
+  });
+
+  it('isolates file identities and clears a capability only when explicitly invalidated', () => {
+    const selected = file();
+    const recovery = createUploadRecovery(selected);
+    const bound = {
+      ...recovery,
+      sessionId: crypto.randomUUID(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     saveUploadRecovery(bound);
 
-    expect(loadUploadRecovery(selected)).toEqual(bound);
     expect(loadUploadRecovery(file(selected.lastModified + 1))).toBeNull();
-    expect(fileFingerprint(selected)).toBe(recovery.fingerprint);
-
     clearUploadRecovery(bound);
     expect(loadUploadRecovery(selected)).toBeNull();
+    expect(loadLatestUploadRecovery()).toBeNull();
   });
 });
