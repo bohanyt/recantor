@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34796615894
+snapshot_seq: 34796682729
 
-collected_at: 2026-09-14T01:39:20.833886Z
+collected_at: 2026-09-14T01:40:41.089823Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -658,9 +658,9 @@ Fresh GitHub truth:
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #45 state=open updated=2026-09-14T01:40:24Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T01:39:10Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #41 state=open updated=2026-09-14T01:29:12Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #45 state=open updated=2026-09-14T01:29:00Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 PR #55 state=open updated=2026-09-12T07:06:06Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-12T07:05:53Z title=Issue #43: first-alpha product shell and truthful setup
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -679,4 +679,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34796615894 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34796682729 sections=6
