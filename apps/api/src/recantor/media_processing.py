@@ -571,7 +571,9 @@ async def _project_normalized(claim: MediaClaim, media: NormalizedMedia) -> None
             or processing.claim_expires_at is None
             or processing.claim_expires_at <= current
         ):
-            raise MediaProcessingStale("media processing claim changed before normalized projection")
+            raise MediaProcessingStale(
+                "media processing claim changed before normalized projection"
+            )
         if processing.normalization_spec_id != NORMALIZATION_SPEC_ID:
             raise MediaPermanentError(
                 "processing_identity_drift",
