@@ -65,10 +65,7 @@ export type UploadTranscriptPage = {
 export type UploadExportFormat = 'txt' | 'json' | 'vtt' | 'srt';
 
 export class UploadApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
+  constructor(message: string, readonly status: number) {
     super(message);
     this.name = 'UploadApiError';
   }
@@ -83,10 +80,7 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
-async function authorizedGet(
-  path: string,
-  capabilityToken: string,
-): Promise<Response> {
+async function authorizedGet(path: string, capabilityToken: string): Promise<Response> {
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     headers: { 'X-Recantor-Upload-Token': capabilityToken },
   });
