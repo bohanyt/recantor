@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34807442653
+snapshot_seq: 34807489536
 
-collected_at: 2026-09-14T04:49:42.235500Z
+collected_at: 2026-09-14T04:50:31.344498Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -663,6 +663,7 @@ Exact-head proof:
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #46 state=open updated=2026-09-14T04:50:19Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #41 state=open updated=2026-09-14T04:49:31Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -672,7 +673,6 @@ ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live S
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
 PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
@@ -680,4 +680,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34807442653 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34807489536 sections=6
