@@ -114,7 +114,9 @@ test(
     stage = 2;
     await expect(page.getByTestId('upload-phase')).toHaveText('Complete', { timeout: 5_000 });
     await expect(page.getByText('canonical upload transcript')).toBeVisible();
-    await expect(page.getByTestId('upload-result')).toContainText('1 canonical transcript segment');
+    await expect(page.getByTestId('upload-result')).toContainText(
+      '1 canonical transcript segment',
+    );
 
     const exportRequest = page.waitForRequest((request) =>
       request.url().endsWith(`/api/v1/uploads/${sessionId}/exports/json`),
@@ -158,31 +160,30 @@ test(
   },
 );
 
-test(
-  'temporary result fetch failure reconnects without changing the saved session',
-  async ({ page }) => {
-    await seedRecovery(page);
-    let attempts = 0;
-    await page.route(`**/api/v1/uploads/${sessionId}/result`, async (route) => {
-      attempts += 1;
-      assertCapability(route);
-      if (attempts === 1) {
-        await route.abort('failed');
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(resultBody('no_speech')),
-      });
+test('temporary result fetch failure reconnects without changing the saved session', async ({
+  page,
+}) => {
+  await seedRecovery(page);
+  let attempts = 0;
+  await page.route(`**/api/v1/uploads/${sessionId}/result`, async (route) => {
+    attempts += 1;
+    assertCapability(route);
+    if (attempts === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(resultBody('no_speech')),
     });
+  });
 
-    await openUpload(page);
-    await expect(page.getByTestId('upload-phase')).toHaveText('Reconnecting');
-    await expect(page.getByTestId('upload-phase')).toHaveText('No speech detected', {
-      timeout: 5_000,
-    });
-    await expect(page.getByTestId('upload-no-speech')).toContainText('No speech was detected');
-    expect(attempts).toBe(2);
-  },
-);
+  await openUpload(page);
+  await expect(page.getByTestId('upload-phase')).toHaveText('Reconnecting');
+  await expect(page.getByTestId('upload-phase')).toHaveText('No speech detected', {
+    timeout: 5_000,
+  });
+  await expect(page.getByTestId('upload-no-speech')).toContainText('No speech was detected');
+  expect(attempts).toBe(2);
+});
