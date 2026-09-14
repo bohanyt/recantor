@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34831515805
+snapshot_seq: 34849549269
 
-collected_at: 2026-09-14T10:07:11.352337Z
+collected_at: 2026-09-14T13:29:31.922476Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -629,9 +629,9 @@ lease_expires_at: 2026-09-14T10:35:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #46 state=open updated=2026-09-14T13:29:19Z title=Phase 3C: upload processing UX and canonical transcript exports
+PR #56 state=open updated=2026-09-14T10:13:56Z title=Phase 3C: upload results and canonical transcript exports
 ISSUE #41 state=open updated=2026-09-14T10:07:00Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #46 state=open updated=2026-09-14T09:19:12Z title=Phase 3C: upload processing UX and canonical transcript exports
-PR #56 state=open updated=2026-09-14T08:42:22Z title=Phase 3C: upload results and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -642,10 +642,10 @@ PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
-PR #56 draft=True updated=2026-09-14T08:42:22Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
+PR #56 draft=True updated=2026-09-14T10:13:56Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
 PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34831515805 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34849549269 sections=6
