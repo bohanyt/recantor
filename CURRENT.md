@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34798645892
+snapshot_seq: 34798659608
 
-collected_at: 2026-09-14T02:16:15.142979Z
+collected_at: 2026-09-14T02:16:32.061320Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T01:29:12Z
+issue_updated_at: 2026-09-14T02:16:29Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,41 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5643007920 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - continue/reconcile existing DRAFT PR #55 only
-  - apps/api/src/recantor/media_* and upload_processing* backend modules
-  - apps/api/src/recantor/models.py
-  - apps/api/src/recantor/utterance.py only if required by #45
-  - apps/api/src/recantor/stt.py
-  - apps/api/src/recantor/stt_jobs.py
-  - apps/api/src/recantor/stt_tasks.py
-  - apps/api/src/recantor/stt_reconciler.py
-  - apps/api/src/recantor/uploads.py
-  - apps/api/src/recantor/upload_storage.py
-  - apps/api/src/recantor/settings.py
-  - apps/api/alembic/versions/* #45 migration(s)
-  - apps/api/Dockerfile and infra/compose.yaml media/STT worker wiring
-  - focused apps/api/tests media/upload/STT fixtures
-  - CI-only fake Groq support/workflow only if required for the #45 adapter proof
-exclusions:
-  - apps/web/**
-  - README.md
-  - .env.example
-  - docs/CURRENT.md
-  - #43-owned product/UX files
-  - #46 export/result UI
-  - #47 Codex
-lease_expires_at: 2026-09-12T03:25:00Z
-
----
-
 comment_id=5643014105 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: M
@@ -654,13 +619,30 @@ Fresh GitHub truth:
 - #43 / PR #54: OPEN / DRAFT, exact head `76714bd23bcd149914f01cbb80973edfda0dd474`; exact CI `34679358866` SUCCESS + Upload foundation CI `34679358862` SUCCESS; old Reviewer O result was against `fad9e057...`; corrected-head narrow result still absent
 - #45 / PR #55: OPEN / DRAFT, exact head `f20a53ec02e2d2af2d7bd9289adf99b581eac74f`; exact CI `34678824260` SUCCESS + Uplo
 ...[COMMENT_5657779014_TRUNCATED chars=1501]
+
+---
+
+comment_id=5658093045 author=bohanyt
+CONTROL_TOWER_SUCCESSOR_CYCLE_2026_09_14_V2
+
+Fresh reviewer results are now authoritative for the two pending gates:
+
+- #43 / PR #54 head `76714bd23bcd149914f01cbb80973edfda0dd474`: SOL-R1 result `5657867325` = `NEEDS_FIX`. One remaining requester-edge shell interlock blocker; stable recording guard/viewport/accessibility portions passed. Bounded correction dispatched to original Agent M lane in #43 comment `5658090058`.
+- #45 / PR #55 head `f20a53ec02e2d2af2d7bd9289adf99b581eac74f`: P-SOL result `5657893583` = `NEEDS_FIX`. One normalized-media atomic first-wins/fencing blocker; bounded migration/timeline proof gaps also identified. Bounded correction dispatched to original Agent N lane in #45 comment `5658092016`.
+
+Integration remains BLOCKED. No integration lease is acquired. #46 remains NOT_STARTED. PR #53 remains a DRAFT checkpoint and is not authorized for main merge.
+
+Exact next actionable dependency:
+1. M fixes #54 on the same branch/PR under a fresh #41 implementation lease, obtains exact-head green CI, then SOL-R1/equivalent performs one narrow delta re-review.
+2. N fixes #55 on the same branch/PR under a fresh #41 implementation lease, obtains all three exact-head CI fami
+...[COMMENT_5658093045_TRUNCATED chars=261]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #45 state=open updated=2026-09-14T01:46:54Z title=Phase 3B: uploaded-media normalization and durable queued transcription
+ISSUE #45 state=open updated=2026-09-14T02:16:21Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T02:16:05Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
-ISSUE #41 state=open updated=2026-09-14T01:29:12Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-14T02:16:29Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #55 state=open updated=2026-09-12T07:06:06Z title=Issue #45: durable uploaded-media processing
 PR #54 state=open updated=2026-09-12T07:05:53Z title=Issue #43: first-alpha product shell and truthful setup
 PR #53 state=open updated=2026-09-12T03:23:39Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -679,4 +661,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34798645892 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34798659608 sections=6
