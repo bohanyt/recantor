@@ -115,10 +115,16 @@ export function RecorderPanel({ serviceDiagnostics, onCaptureActivityChange }: R
   const ux = deriveRecorderUx(snapshot);
 
   const runAction = (action: RecorderActionId): void => {
-    if (action === 'start') void controller.start();
+    if (action === 'start') {
+      onCaptureActivityChange?.(true);
+      void controller.start();
+    }
     if (action === 'stop') void controller.stop();
     if (action === 'defer-finalization') controller.deferFinalization();
-    if (action === 'resume') void controller.resume();
+    if (action === 'resume') {
+      onCaptureActivityChange?.(true);
+      void controller.resume();
+    }
     if (action === 'finish-recovered') void controller.finishRecovered();
     if (action === 'declare-missing-gaps') void controller.declareMissingSequencesAsGaps();
     if (action === 'sync') void controller.syncNow();
