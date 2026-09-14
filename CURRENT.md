@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34805722857
+snapshot_seq: 34806820102
 
-collected_at: 2026-09-14T04:21:21.300594Z
+collected_at: 2026-09-14T04:38:52.700896Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,12 +19,12 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-canonical_commit_message: Integrate Phase 3A resumable upload foundation (#51)
+canonical_head: 799dfad5c6ac4984a5ef27b21b88ec77dda53afc
+canonical_commit_message: Match Prettier formatting in integration proof
 
-Control Tower integration of cloud-review accepted Issue #44 candidate into integration/cloud-alpha-2026-09-11 after #42.
+Restore reviewed call-chain formatting and wrap only the new media-worker assertion as required by the repository formatter.
 
-No main merge.
+No behavior change.
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -186,24 +186,45 @@ SECTION trusted_operational_current
 source: docs/CURRENT.md
 # Current
 
-Last updated: 2026-09-11
+Last updated: 2026-09-14
 
-This file is the short operational source of truth for Recantor. Inspect GitHub fresh before acting; repository, PR, issue, branch, and CI state outrank this summary if the repository has moved.
+This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
-## Product truth
+## Active integration line
 
-Recantor is a public, self-hosted recording and meeting-intelligence project with two intended web workflows:
+Canonical cloud-alpha integration branch:
 
-1. **Live Intelligence** — authenticated live recording, transcript, speaker processing, and rolling meeting intelligence.
-2. **Transcribe Recording** — upload an existing recording or use a simple browser recorder, then process/export it. A bounded guest path may operate without login.
+`integration/cloud-alpha-2026-09-11`
 
-Desktop Chrome/Edge on an **awake** computer is the first recording reliability target. Mobile web may work while actively executing, but Recantor does not promise continuous browser capture through screen lock, OS suspension, sleep, or shutdown.
+The integration line now contains the independently reviewed candidates for:
+
+- #42 realtime transcript delivery + Live transcript UI;
+- #44 resumable existing-recording upload foundation;
+- #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
+- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`.
+
+The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed, with a bounded integration-only reconciliation so normal UI and documentation do not incorrectly claim that processing is absent.
+
+No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
+
+## Product truth on the integration line
+
+Recantor currently has two bounded web workflows:
+
+1. **Live** — reliable browser archive recording, an independent realtime speech lane, PostgreSQL-authoritative live STT scheduling, canonical transcript recovery, and the #42 reconnect-safe Live transcript surface.
+2. **Upload recording** — Uppy+tus/tusd resumable transfer with durable completion evidence, followed by PostgreSQL-authoritative media processing, bounded ffprobe/FFmpeg normalization, deterministic D3-A segmentation, upload-class STT scheduling, and canonical `TranscriptSegment` production.
+
+The Upload **backend path** now reaches canonical transcript truth. The current Upload **product UI** still stops after durable-transfer confirmation: processing progress, uploaded-recording transcript/result presentation, and TXT/JSON/VTT/SRT export controls belong to #46.
+
+Desktop Chrome/Edge on an **awake** computer is the first browser recording reliability target. Recantor does not claim continuous browser capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile background suspension.
 
 > Capture is infrastructure. Intelligence is downstream.
 
-The archive recording path must remain independent from STT, diarization, realtime delivery, and LLM availability.
+Archive recording safety is independent from STT, transcript delivery, diarization, and LLM availability.
 
-## Durable archive architecture — MERGED / Phase 1 CLOSED
+## Durable archive recording — merged foundation
+
+The archive path remains:
 
 ```text
 MediaRecorder
@@ -214,54 +235,23 @@ MediaRecorder
   -> local fragment deletion
 ```
 
-Important invariants:
+Required invariants:
 
 - IndexedDB is a recovery spool, not final durability;
-- an ACK requires durable audio plus durable acceptance metadata;
 - one live session has one active capture generation fenced by writer identity + epoch;
-- raw MediaRecorder chunks are ordered media fragments and are not assumed independently decodable;
-- Stop/finalize declares a final sequence boundary;
-- every expected sequence through that boundary must be durable or explicitly represented as loss before completion;
+- Stop/finalize declares an explicit final sequence boundary;
+- every expected sequence through that boundary is durable or explicitly represented as loss before completion;
 - liveness interruption is not automatically audio loss;
-- PostgreSQL/audio storage are durable truth; Redis/WebSocket are not.
+- raw MediaRecorder fragments are ordered source media, not assumed independently decodable;
+- PostgreSQL/audio storage are durable truth; Redis and WebSocket delivery are not.
 
-Phase 1 Issue #5 is closed. Its bounded real-platform witness ran on Windows 11 25H2 build `26200.9168`, Microsoft Edge `152.0.4191.66` / Chromium `152.0.7977.83`, built-in laptop microphone, local Compose, and an awake desktop. The whole Edge window was minimized for about five minutes; final state was `COMPLETE`, ACK sequence `179`, pending local audio `0`, explicit gaps `0`.
+Phase 1 reliable archive capture and terminal `audio_completeness` (`full` / `partial` / `empty`) are merged foundations. The bounded real Edge/Windows witness remains evidence for an awake desktop only, not for sleep/shutdown/mobile suspension.
 
-Do not generalize this to sleep, shutdown, execution-suspending lock behavior, or mobile browser suspension.
+## Canonical transcript and realtime utterance foundation — merged
 
-## Terminal audio completeness — MERGED
+Canonical transcript truth is immutable PostgreSQL `TranscriptSegment` evidence with stable session/segment identity, per-session transcript sequence, producer identity, explicit timing, text, and optional language. HTTP cursor reads recover canonical state after reconnect.
 
-Issue #15 / PR #29 was squash-merged as `ba5c91145d70334335f06e8447f9310d8dac165b`; post-merge CI `34437634299` succeeded.
-
-Persisted `audio_completeness` separates lifecycle completion from downstream audio eligibility:
-
-- `full` — non-zero final boundary and every expected sequence is durably present;
-- `partial` — non-zero final boundary with one or more explicit sequence-loss gaps;
-- `empty` — final boundary zero and no audio sequence captured.
-
-Retrying an already-complete finalize preserves the persisted classification.
-
-## Canonical transcript foundation — MERGED
-
-Issue #30 / PR #31 was squash-merged as `1aba22e22b859e84dfb016bc2bd211e067467e9c`; post-merge CI `34439502585` succeeded.
-
-Canonical transcript truth is PostgreSQL-backed immutable `TranscriptSegment` evidence with stable segment/session identity, per-session monotonically increasing transcript sequence, opaque producer key, explicit `start_ms` / `end_ms`, text plus optional language, uniqueness on `(session_id, sequence)` and `(session_id, producer_key)`, and reconnect-safe HTTP reads.
-
-Transcript sequence is independent from recording-chunk and utterance-work sequence.
-
-## Durable transcription utterance work — MERGED
-
-Issue #32 / PR #33 was squash-merged as `9ea3ee7ac9c8e9e1093ee78477ae1dc7f0d09939`.
-
-A committed `TranscriptionUtterance` has deterministic work identity, per-session sequence, explicit timing, normalized media metadata, independently decodable durable media, a durable identity manifest, and deterministic canonical transcript producer key `utterance:<work-uuid>`.
-
-Archive fragments and transcription utterances are distinct evidence namespaces. Archive ingest/ACK does not call the utterance path.
-
-## Realtime PCM/VAD utterance producer — MERGED / Phase 2C CLOSED
-
-Issue #34 / PR #35 was squash-merged to `main` as `7e0b2601ca17148db28df4b422d93c48273780cc`. Post-merge CI run `34450139207` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
-
-Merged realtime architecture:
+The realtime audio lane reuses the microphone stream independently from archive capture:
 
 ```text
 same microphone MediaStream
@@ -270,100 +260,120 @@ same microphone MediaStream
         |  MediaRecorder -> IndexedDB -> HTTP -> durable ACK
         |
         +--------------- realtime lane ----------------+
-           AudioWorklet -> ~20 ms sample-clock PCM
+           AudioWorklet -> sample-clock PCM
                          -> bounded WebSocket transport
-                         -> server energy VAD / endpointing
-                         -> mono PCM WAV
-                         -> durable TranscriptionUtterance
+                         -> server VAD / endpointing
+                         -> durable TranscriptionUtterance WAV
 ```
 
-The realtime lane reuses the acquired microphone, carries sample-clock offsets, may degrade independently under backpressure/discontinuity, is fenced by active writer/capture epoch, emits independently decodable WAV utterances, and never participates in archive ACK semantics.
+Realtime failure is downstream degradation. It never participates in archive ACK/finalization semantics.
 
-### Real Windows Edge witness — PASS
+The Groq STT provider boundary consumes committed durable utterance work, verifies storage evidence before provider execution, and commits canonical transcript evidence with deterministic producer identity.
 
-The Phase 2C witness used session `181b5dd8-41c8-49d8-86ea-f2e00ec74ae1` on Windows 11 / Edge with the real built-in microphone. After a bounded whole-window background/minimize interval and normal Stop, archive state was `COMPLETE` / `full`, final sequence `211`, pending `0`, explicit gaps `0`, and 71 durable utterance rows/files were present. Sample utterance media decoded as mono 16-bit PCM WAV at 48 kHz.
+## Durable STT scheduling — integrated
 
-Current VAD thresholds are tuning defaults, not product-quality guarantees.
+PostgreSQL owns durable `STTJob` identity/state, retry budget, delivery reservations, claims, and canonical convergence. Redis/Celery carry generic wake signals only.
 
-## STT provider boundary — MERGED / Phase 2D CLOSED
+Current scheduler properties include:
 
-Issue #36 / PR #37 was squash-merged to `main` as:
+- claim leases and fencing for worker death/duplicate delivery;
+- PostgreSQL-backed admission and per-session fairness;
+- bounded retry handling using provider error categories;
+- reconciliation that rediscovers unfinished durable utterance work;
+- canonical transcript evidence remains authoritative for success;
+- terminal `no_speech` for valid blank provider results, without creating blank transcript rows;
+- separate workload classes and worker/queue capacity for Live (`stt-live`) and Upload (`stt-upload`).
 
-`f0a0f2e068cb1003619010595928c0273912e61c`
+Upload backlog therefore does not consume the reserved Live STT frontier. Ordinary CI does not require a real Groq secret or provider network call; focused proof exercises the real `GroqSTTProvider` against a deterministic local compatible endpoint.
 
-Post-merge CI run `34456347492` succeeded across backend, frontend, Chromium E2E, and Compose smoke.
+## #42 canonical Live transcript UI — integrated
 
-Merged causal path:
+The web transcript surface preserves these semantics:
+
+- canonical HTTP cursor reads are truth;
+- WebSocket delivery is an ephemeral wake hint, not persistence;
+- duplicate/out-of-order wake hints converge through canonical reads;
+- reconnect/degraded delivery can catch up without changing archive recording safety;
+- transcript presentation does not own recorder lifecycle or archive durability.
+
+## #44 resumable existing-recording upload foundation — integrated
+
+The durable transfer path is:
 
 ```text
-durable TranscriptionUtterance
-        -> verified storage read
-        -> owned STTProvider
-        -> Groq whisper-large-v3-turbo
-        -> normalized result
-        -> canonical TranscriptSegment
-           producer_key = utterance:<work-uuid>
+Browser file
+  -> Uppy + tus
+  -> tusd
+  -> shared durable audio storage
+  -> Recantor tusd completion hook
+  -> PostgreSQL upload completion evidence
 ```
 
-Merged rules:
+Current transfer properties:
 
-- STT consumes only committed durable utterance work, never arbitrary raw MediaRecorder chunks;
-- durable manifest/path/hash/length evidence is verified before provider execution;
-- provider execution stays fully downstream from archive capture/ACK/finalization;
-- canonical timing is copied from the utterance work item;
-- retry identity is the existing `utterance:<work-uuid>` producer key;
-- already-committed canonical work short-circuits provider execution on sequential retry;
-- blank/malformed/provider failure creates no fake transcript evidence and leaves durable utterance work intact;
-- Groq API key is server-side only and Compose forwards local environment configuration without committing secrets;
-- Groq transport sends an explicit non-browser API `User-Agent` because the default Python `urllib` signature was rejected by Groq's Cloudflare edge with Error 1010.
+- WAV/MP3/M4A/OGG/WebM/MP4 source admission;
+- pause/retry/reload/reselection resumes the same tus upload when recovery evidence matches;
+- capability-token protected upload-session reads/hooks;
+- durable completion records internal storage identity, exact byte length, and SHA-256;
+- whole-file completion hashing runs outside the asyncio event loop and outside a long upload-row lock, then revalidates authoritative binding before publish;
+- UI may claim **durably uploaded** only after Recantor confirms durable completion.
 
-### Real Groq provider witness — PASS
+## #45 uploaded-media processing — integrated
 
-The provider boundary was exercised twice against the previously validated real-microphone session.
-
-First work item:
-
-- utterance `87aec8c6-f11a-50b5-84d8-160d448eec1c`, sequence 29;
-- timing `152321..155621 ms`, duration 3300 ms, 316844 bytes, `audio/wav`;
-- initial request with default `urllib` signature reached `api.groq.com` but Cloudflare returned HTTP 403 Error 1010 `browser_signature_banned`;
-- the same durable work succeeded with an explicit non-browser API `User-Agent`;
-- Groq `whisper-large-v3-turbo` returned non-empty Indonesian text;
-- Recantor committed canonical segment `845ce524-0b1d-4b66-b700-45ff2d2221ed`, transcript sequence 1, preserving `152321..155621 ms`, `language=id`, `idempotent=False`.
-
-PR #37 then made that `User-Agent` behavior permanent and added a regression assertion.
-
-Second work item, using the permanent adapter with no runtime monkeypatch:
-
-- utterance `ad71e495-cdd6-5ae0-814b-758a5133f85`, sequence 39;
-- timing `225261..228101 ms`, duration 2840 ms, 272684 bytes, `audio/wav`;
-- Groq call succeeded directly from the rebuilt API container;
-- canonical segment `6117f3e8-fae4-4c49-a3e5-9f78d91a7357`, transcript sequence 2, preserved `225261..228101 ms`, `language=id`, `idempotent=False`;
-- PostgreSQL contained exactly the two expected canonical `utterance:<work-uuid>` rows from these witnesses.
-
-The API key remained local/server-side and was not committed or posted. This proves provider-path mechanics, not transcript accuracy: the sampled utterances did not have recorded ground-truth text, so accuracy remains a later benchmark concern.
-
-## Current Phase 2 slice — Issue #38 / Phase 2E
-
-Issue #38 is the active bounded dependency: **durable live STT queue, reconciliation, retry, and fairness**. DRAFT PR #40 is the active implementation candidate on branch `agent-a/issue-38-phase2e-live-stt`; it is not merged or merge-ready, and the required Windows/Edge real-microphone witness has intentionally not been performed pending Control Tower assignment.
-
-The DRAFT candidate implements automatic scheduling as:
+After immutable #44 completion, the backend path is:
 
 ```text
-durable TranscriptionUtterance
-        -> PostgreSQL eligibility/capacity/reservation
-        -> coalesced generic Celery/Redis wake
-        -> PostgreSQL-selected fenced claim
-        -> STT worker / merged Phase 2D executor/provider
-        -> canonical TranscriptSegment
+durable completed upload
+  -> PostgreSQL UploadMediaProcessing
+  -> bounded ffprobe
+  -> bounded FFmpeg normalize to mono signed 16-bit PCM / 16 kHz
+  -> claim-fenced atomic first-wins normalized evidence
+  -> deterministic upload-energy-vad-180s-v1 segmentation
+  -> existing commit_utterance_work
+  -> existing STTJob / STTProvider
+  -> canonical TranscriptSegment
 ```
 
-DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/backfill, claim leases with token fencing, PostgreSQL-serialized global/per-session admission, expiring delivery reservations, bounded-turn session rotation, coalesced generic Celery/Redis wakes, bounded provider r
-...[CURRENT_TRUNCATED chars=8461]
+Important properties:
+
+- one PostgreSQL processing identity per immutable completed upload;
+- PostgreSQL remains durable authority; media Redis/Celery messages are wake mechanisms only;
+- dedicated `media-upload` worker has RW audio access, while live/upload STT workers keep audio storage RO;
+- normalized publication does heavy digest/fsync work while private, then performs the bounded final first-wins install under the current PostgreSQL claim fence;
+- stale/reclaimed workers cannot publish authoritative normalized identity;
+- deterministic D3-A retry starts from normalized sample 0 and reproduces utterance/timeline identity or fails loudly;
+- partial EOF timing preserves coverage with floor(start)/ceil(end);
+- long silence creates no fake utterance work;
+- valid blank provider text becomes terminal `no_speech`, not failure and not a blank `TranscriptSegment`;
+- migration 0009 backfills completed #44 uploads exactly once and has a behavioral downgrade/re-upgrade proof.
+
+Residual alpha boundaries remain documented: the atomic first-wins filesystem proof targets the Linux/local-filesystem Compose deployment shape; a crash before manifest commit can leave a non-authoritative orphan content object; out-of-band storage mutation is detected rather than repaired automatically.
+
+## #43 product shell — integrated
+
+The desktop productization pass provides:
+
+- obvious `Live` / `Upload recording` top-level workflow shell;
+- active microphone `requesting` or `recording` capture cannot be hidden behind Upload navigation;
+- Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery/loss controls, then canonical transcript;
+- archive-audio and transcription state are visually/semantically separate;
+- fenced ownership, missing-audio loss, spool failure, recovery, and sync controls remain reachable outside Diagnostics;
+- `Advanced / Diagnostics` is collapsed by default and read-only;
+- #42 transcript logic remains canonical/reconnect truth;
+- normal setup truth is centered on server-side `GROQ_API_KEY`;
+- laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression coverage.
+
+The Upload screen is intentionally not pretending #46 exists: it can confirm durable transfer and truthfully state that server-side preparation/transcription may continue, but it does not yet expose processing/result/export UI.
+
+## Configuration truth
+
+Backend `Settings` currently impl
+...[CURRENT_TRUNCATED chars=3006]
 
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T04:21:09Z
+issue_updated_at: 2026-09-14T04:38:42Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,20 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5644282797 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: M
-issue: #43
-mode: implementation
-branch: agent-m/issue-43-product-shell
-current_head: 12f114b74bd053b3299e95d86fd0b6cb5bf74490
-write_scope:
-  - format-only correction in apps/web/src/RecorderPanel.tsx and apps/web/e2e/safety-layout.spec.ts
-  - no behavior/scope expansion; all prior #43 exclusions remain
-lease_expires_at: 2026-09-12T07:15:00Z
-
----
-
 comment_id=5657779014 author=bohanyt
 SUCCESSOR_PRIMARY_CONTROL_TOWER_TAKEOVER_2026_09_14_V1
 
@@ -644,16 +640,34 @@ write_scope:
 lease_expires_at: 2026-09-14T04:48:00Z
 
 No feature widening, no #46 implementation, no #47 work, no Windows witness under this lease.
+
+---
+
+comment_id=5659097956 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: successor-ct-integration-2026-09-14
+issue: #48
+mode: integration
+branch: integration/cloud-alpha-2026-09-11
+base_sha: 799dfad5c6ac4984a5ef27b21b88ec77dda53afc
+write_scope:
+  - integration branch only
+  - bounded CI formatting diagnosis for apps/web/e2e/product-shell.spec.ts
+  - restore original package.json immediately after exact Prettier output is captured
+  - apply exact formatter output only
+  - continue exact integrated-head verification
+  - no main write
+lease_expires_at: 2026-09-14T05:08:00Z
+
+No feature widening, no #46 implementation, no #47 work, no Windows witness under this renewal.
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T04:21:09Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #53 state=open updated=2026-09-14T04:21:00Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #41 state=open updated=2026-09-14T04:38:42Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #53 state=open updated=2026-09-14T04:37:29Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
-PR #55 state=open updated=2026-09-14T02:48:01Z title=Issue #45: durable uploaded-media processing
-PR #54 state=open updated=2026-09-14T02:36:15Z title=Issue #43: first-alpha product shell and truthful setup
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
@@ -662,11 +676,9 @@ ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: 
 ISSUE #46 state=open updated=2026-09-11T06:35:10Z title=Phase 3C: upload processing UX and canonical transcript exports
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-14T04:21:00Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
-PR #55 draft=True updated=2026-09-14T02:48:01Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-45-upload-processing title=Issue #45: durable uploaded-media processing
-PR #54 draft=True updated=2026-09-14T02:36:15Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-43-product-shell title=Issue #43: first-alpha product shell and truthful setup
+PR #53 draft=True updated=2026-09-14T04:37:29Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34805722857 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34806820102 sections=6
