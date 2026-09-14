@@ -3,6 +3,9 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 const sessionId = '11111111-2222-4333-8444-555555555555';
 const token = 'Q'.repeat(43);
 const storeKey = 'recantor:upload-recovery:v1';
+const processingStates = ['preparing', 'transcribing', 'complete'] as const;
+
+type ResultState = 'preparing' | 'transcribing' | 'complete' | 'no_speech' | 'failed';
 
 function recoveryEntry() {
   const now = new Date().toISOString();
@@ -29,7 +32,7 @@ function assertCapability(route: Route): void {
   expect(route.request().headers()['x-recantor-upload-token']).toBe(token);
 }
 
-function resultBody(state: 'preparing' | 'transcribing' | 'complete' | 'no_speech' | 'failed') {
+function resultBody(state: ResultState) {
   return {
     session_id: sessionId,
     state,
@@ -58,8 +61,7 @@ test(
     await page.route(`**/api/v1/uploads/${sessionId}/result`, async (route) => {
       seenTokens.push(route.request().headers()['x-recantor-upload-token'] ?? '');
       assertCapability(route);
-      const state =
-        stage === 0 ? 'preparing' : stage === 1 ? 'transcribing' : 'complete';
+      const state = processingStates[stage];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
