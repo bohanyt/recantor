@@ -102,9 +102,7 @@ test(
     await expect(page.getByTestId('upload-phase')).toHaveText('Preparing audio');
 
     stage = 1;
-    await expect(page.getByTestId('upload-phase')).toHaveText('Transcribing', {
-      timeout: 5_000,
-    });
+    await expect(page.getByTestId('upload-phase')).toHaveText('Transcribing', { timeout: 5_000 });
 
     await page.reload();
     await page.getByTestId('workflow-upload').click();
@@ -113,9 +111,7 @@ test(
     stage = 2;
     await expect(page.getByTestId('upload-phase')).toHaveText('Complete', { timeout: 5_000 });
     await expect(page.getByText('canonical upload transcript')).toBeVisible();
-    await expect(page.getByTestId('upload-result')).toContainText(
-      '1 canonical transcript segment',
-    );
+    await expect(page.getByTestId('upload-result')).toContainText('1 canonical transcript segment');
 
     const exportRequest = page.waitForRequest((request) =>
       request.url().endsWith(`/api/v1/uploads/${sessionId}/exports/json`),
