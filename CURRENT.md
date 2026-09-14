@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34895837790
+snapshot_seq: 34905241338
 
-collected_at: 2026-09-14T20:56:01.899056Z
+collected_at: 2026-09-14T22:40:21.651273Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -632,9 +632,9 @@ lease_expires_at: 2026-09-14T21:20:00Z
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #46 state=open updated=2026-09-14T22:40:07Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #41 state=open updated=2026-09-14T20:55:48Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #56 state=open updated=2026-09-14T20:54:35Z title=Phase 3C: upload results and canonical transcript exports
-ISSUE #46 state=open updated=2026-09-14T14:13:33Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -651,4 +651,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34895837790 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34905241338 sections=6
