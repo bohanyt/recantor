@@ -83,7 +83,10 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
-async function authorizedGet(path: string, capabilityToken: string): Promise<Response> {
+async function authorizedGet(
+  path: string,
+  capabilityToken: string,
+): Promise<Response> {
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     headers: { 'X-Recantor-Upload-Token': capabilityToken },
   });
