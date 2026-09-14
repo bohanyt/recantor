@@ -10,7 +10,7 @@ from redis import Redis
 
 from recantor.settings import get_settings
 from recantor.stt import GroqSTTProvider
-from recantor.stt_jobs import execute_next_reserved_stt_job
+from recantor.stt_jobs import STTWorkloadClass, execute_next_reserved_stt_job
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -40,11 +40,14 @@ def _run_async(coro):
     return _worker_loop.run_until_complete(coro)
 
 
-def _execute_generic_wake() -> None:
+def _execute_generic_wake(workload_class: STTWorkloadClass) -> None:
     provider = GroqSTTProvider.from_settings()
-    result = _run_async(execute_next_reserved_stt_job(provider=provider))
+    result = _run_async(
+        execute_next_reserved_stt_job(provider=provider, workload_class=workload_class)
+    )
     logger.info(
-        "STT scheduler wake finished with status=%s state=%s attempts=%s",
+        "STT %s scheduler wake finished with status=%s state=%s attempts=%s",
+        workload_class.value,
         result.status.value,
         None if result.state is None else result.state.value,
         result.attempt_count,
@@ -53,39 +56,43 @@ def _execute_generic_wake() -> None:
 
 @celery_app.task(name="recantor.process_stt_wake")
 def process_stt_wake() -> None:
-    _execute_generic_wake()
+    # Historical task name is the live-class wake. Old broker messages remain safe.
+    _execute_generic_wake(STTWorkloadClass.LIVE)
+
+
+@celery_app.task(name="recantor.process_upload_stt_wake")
+def process_upload_stt_wake() -> None:
+    _execute_generic_wake(STTWorkloadClass.UPLOAD)
 
 
 @celery_app.task(name="recantor.process_stt_utterance")
 def process_stt_utterance(utterance_id: str) -> None:
-    # Compatibility fence for any per-work messages published by an older process during
-    # a rolling development restart. The old payload is deliberately *not* authoritative:
-    # PostgreSQL selects the currently reserved/fair job exactly as a generic wake does.
     try:
         UUID(utterance_id)
     except ValueError:
         logger.warning("Discarding malformed legacy STT wake payload")
         return
-    logger.info("Treating legacy per-work STT message as a generic scheduler wake")
-    _execute_generic_wake()
+    logger.info("Treating legacy per-work STT message as a live scheduler wake")
+    _execute_generic_wake(STTWorkloadClass.LIVE)
 
 
-def ensure_stt_wake_capacity(target: int) -> int:
-    """Coalesce broker wakes to current PostgreSQL reservation demand.
+def _queue_and_task(workload_class: STTWorkloadClass) -> tuple[str, str]:
+    current_settings = get_settings()
+    if workload_class == STTWorkloadClass.UPLOAD:
+        return current_settings.stt_upload_queue_name, "recantor.process_upload_stt_wake"
+    return current_settings.stt_queue_name, "recantor.process_stt_wake"
 
-    Redis is allowed to forget everything. Each reconciliation pass calls this helper with
-    the current durable reservation count, so a flush/lost publish is replenished. Conversely,
-    a stopped consumer cannot accumulate one per-work FIFO prefix per cooldown window: queued
-    messages are generic and this helper only tops the queue up to the current target.
-    """
 
+def ensure_stt_wake_capacity(
+    target: int,
+    workload_class: STTWorkloadClass = STTWorkloadClass.LIVE,
+) -> int:
     if target < 0:
         raise ValueError("STT wake target must be non-negative")
     if target == 0:
         return 0
-
     current_settings = get_settings()
-    queue_name = current_settings.stt_queue_name
+    queue_name, task_name = _queue_and_task(workload_class)
     redis_client = Redis.from_url(current_settings.redis_url)
     lock = redis_client.lock(
         f"recantor:stt:wake-coalesce:{queue_name}",
@@ -101,10 +108,7 @@ def ensure_stt_wake_capacity(target: int) -> int:
         queued = int(redis_client.llen(queue_name))
         missing = max(0, target - queued)
         for _ in range(missing):
-            celery_app.send_task(
-                "recantor.process_stt_wake",
-                queue=queue_name,
-            )
+            celery_app.send_task(task_name, queue=queue_name)
             published += 1
         return published
     finally:
@@ -113,8 +117,14 @@ def ensure_stt_wake_capacity(target: int) -> int:
         redis_client.close()
 
 
+def ensure_live_stt_wake_capacity(target: int) -> int:
+    return ensure_stt_wake_capacity(target, STTWorkloadClass.LIVE)
+
+
+def ensure_upload_stt_wake_capacity(target: int) -> int:
+    return ensure_stt_wake_capacity(target, STTWorkloadClass.UPLOAD)
+
+
 def enqueue_stt_utterance(utterance_id: UUID) -> None:
-    # Kept as a compatibility/operator helper. It emits a generic wake, never a durable
-    # per-work service-order message. Normal reconciliation uses ensure_stt_wake_capacity().
     del utterance_id
-    ensure_stt_wake_capacity(1)
+    ensure_live_stt_wake_capacity(1)

@@ -31,6 +31,10 @@ class STTSourceError(STTError):
     pass
 
 
+class STTNoSpeech(STTError):
+    """Valid provider response with no transcriptable speech."""
+
+
 class STTErrorCategory(StrEnum):
     CONFIGURATION = "configuration"
     RATE_LIMIT = "rate_limit"
@@ -106,9 +110,7 @@ def _multipart_body(
     chunks.extend(
         [
             f"--{boundary}\r\n".encode(),
-            (
-                f'Content-Disposition: form-data; name="file"; filename="{safe_filename}"\r\n'
-            ).encode(),
+            f'Content-Disposition: form-data; name="file"; filename="{safe_filename}"\r\n'.encode(),
             f"Content-Type: {content_type}\r\n\r\n".encode(),
             audio,
             b"\r\n",
@@ -119,14 +121,7 @@ def _multipart_body(
 
 
 class GroqSTTProvider:
-    def __init__(
-        self,
-        *,
-        api_key: str | None,
-        endpoint: str,
-        model: str,
-        timeout_seconds: float,
-    ):
+    def __init__(self, *, api_key: str | None, endpoint: str, model: str, timeout_seconds: float):
         self.api_key = (api_key or "").strip()
         self.endpoint = endpoint.strip()
         self.model = model.strip()
@@ -145,32 +140,24 @@ class GroqSTTProvider:
     def _validate_configuration(self) -> None:
         if not self.api_key:
             raise STTProviderError(
-                STTErrorCategory.CONFIGURATION,
-                "Groq STT API key is not configured",
+                STTErrorCategory.CONFIGURATION, "Groq STT API key is not configured"
             )
         if not self.endpoint.startswith(("https://", "http://")):
             raise STTProviderError(
-                STTErrorCategory.CONFIGURATION,
-                "Groq STT endpoint must be an HTTP(S) URL",
+                STTErrorCategory.CONFIGURATION, "Groq STT endpoint must be an HTTP(S) URL"
             )
         if not self.model:
             raise STTProviderError(
-                STTErrorCategory.CONFIGURATION,
-                "Groq STT model is not configured",
+                STTErrorCategory.CONFIGURATION, "Groq STT model is not configured"
             )
         if self.timeout_seconds <= 0:
             raise STTProviderError(
-                STTErrorCategory.CONFIGURATION,
-                "Groq STT timeout must be positive",
+                STTErrorCategory.CONFIGURATION, "Groq STT timeout must be positive"
             )
 
     def _request_sync(self, request: STTRequest) -> bytes:
         boundary = f"recantor-{uuid4().hex}"
-        fields = [
-            ("model", self.model),
-            ("response_format", "json"),
-            ("temperature", "0"),
-        ]
+        fields = [("model", self.model), ("response_format", "json"), ("temperature", "0")]
         if request.language and request.language.strip():
             fields.append(("language", request.language.strip().lower()))
         if request.prompt and request.prompt.strip():
@@ -209,18 +196,17 @@ class GroqSTTProvider:
         except TimeoutError as exc:
             raise STTProviderError(STTErrorCategory.TIMEOUT, "Groq STT request timed out") from exc
         except urllib.error.URLError as exc:
-            if isinstance(exc.reason, TimeoutError):
-                category = STTErrorCategory.TIMEOUT
-            else:
-                category = STTErrorCategory.TRANSIENT
+            category = (
+                STTErrorCategory.TIMEOUT
+                if isinstance(exc.reason, TimeoutError)
+                else STTErrorCategory.TRANSIENT
+            )
             raise STTProviderError(category, "Groq STT network request failed") from exc
         except OSError as exc:
             raise STTProviderError(STTErrorCategory.TRANSIENT, "Groq STT transport failed") from exc
-
         if len(payload) > _MAX_PROVIDER_RESPONSE_BYTES:
             raise STTProviderError(
-                STTErrorCategory.MALFORMED_RESPONSE,
-                "Groq STT response exceeded size limit",
+                STTErrorCategory.MALFORMED_RESPONSE, "Groq STT response exceeded size limit"
             )
         return payload
 
@@ -228,28 +214,21 @@ class GroqSTTProvider:
         self._validate_configuration()
         if not request.audio:
             raise STTProviderError(
-                STTErrorCategory.PERMANENT,
-                "STT request audio must not be empty",
+                STTErrorCategory.PERMANENT, "STT request audio must not be empty"
             )
         payload = await asyncio.to_thread(self._request_sync, request)
         try:
             parsed = json.loads(payload)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise STTProviderError(
-                STTErrorCategory.MALFORMED_RESPONSE,
-                "Groq STT returned invalid JSON",
+                STTErrorCategory.MALFORMED_RESPONSE, "Groq STT returned invalid JSON"
             ) from exc
         if not isinstance(parsed, dict) or not isinstance(parsed.get("text"), str):
             raise STTProviderError(
-                STTErrorCategory.MALFORMED_RESPONSE,
-                "Groq STT response did not contain text",
+                STTErrorCategory.MALFORMED_RESPONSE, "Groq STT response did not contain text"
             )
+        # Blank text is a valid provider outcome. The scheduler persists it as terminal no_speech.
         text = parsed["text"].strip()
-        if not text:
-            raise STTProviderError(
-                STTErrorCategory.MALFORMED_RESPONSE,
-                "Groq STT returned blank transcript text",
-            )
         response_language = parsed.get("language")
         language = (
             response_language.strip().lower()
@@ -271,7 +250,6 @@ async def transcribe_utterance(
     commit_guard: TranscriptCommitGuard | None = None,
 ) -> tuple[TranscriptSegment, bool]:
     transcript_key = transcript_producer_key_for_utterance(work_id)
-
     async with get_sessionmaker()() as db:
         work = await db.scalar(
             select(TranscriptionUtterance).where(
@@ -285,7 +263,6 @@ async def transcribe_utterance(
                 TranscriptSegment.producer_key == transcript_key,
             )
         )
-
     if work is None:
         raise STTSourceNotFound("transcription utterance not found")
     if existing is not None:
@@ -320,14 +297,10 @@ async def transcribe_utterance(
     )
     text = result.text.strip()
     if not text:
-        raise STTProviderError(
-            STTErrorCategory.MALFORMED_RESPONSE,
-            "STT provider returned blank transcript text",
-        )
+        raise STTNoSpeech("STT provider returned a valid blank transcript")
     canonical_language = (
         result.language.strip().lower() if result.language and result.language.strip() else None
     )
-
     async with get_sessionmaker()() as db:
         return await commit_transcript_segment(
             db,

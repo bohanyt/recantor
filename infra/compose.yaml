@@ -143,7 +143,7 @@ services:
         "--prefetch-multiplier=1",
         "--loglevel=INFO",
       ]
-    environment:
+    environment: &stt-worker-environment
       RECANTOR_ENV: development
       DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
       REDIS_URL: redis://redis:6379/0
@@ -153,12 +153,40 @@ services:
       GROQ_STT_MODEL: "${GROQ_STT_MODEL:-whisper-large-v3-turbo}"
       GROQ_STT_TIMEOUT_SECONDS: "${GROQ_STT_TIMEOUT_SECONDS:-30}"
       STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
+      STT_UPLOAD_QUEUE_NAME: "${STT_UPLOAD_QUEUE_NAME:-stt-upload}"
       STT_CLAIM_LEASE_SECONDS: "${STT_CLAIM_LEASE_SECONDS:-60}"
       STT_MAX_ATTEMPTS: "${STT_MAX_ATTEMPTS:-5}"
       STT_RETRY_BASE_SECONDS: "${STT_RETRY_BASE_SECONDS:-2}"
       STT_RETRY_MAX_SECONDS: "${STT_RETRY_MAX_SECONDS:-60}"
       STT_CONFIGURATION_RETRY_SECONDS: "${STT_CONFIGURATION_RETRY_SECONDS:-300}"
       STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
+    volumes:
+      - recantor-audio:/data/audio:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  stt-upload-worker:
+    build:
+      context: ../apps/api
+    command:
+      [
+        "celery",
+        "-A",
+        "recantor.stt_tasks:celery_app",
+        "worker",
+        "-Q",
+        "${STT_UPLOAD_QUEUE_NAME:-stt-upload}",
+        "--concurrency=1",
+        "--prefetch-multiplier=1",
+        "--loglevel=INFO",
+      ]
+    environment:
+      <<: *stt-worker-environment
+      STT_QUEUE_NAME: "${STT_UPLOAD_QUEUE_NAME:-stt-upload}"
     volumes:
       - recantor-audio:/data/audio:ro
     depends_on:
@@ -177,10 +205,70 @@ services:
       DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
       REDIS_URL: redis://redis:6379/0
       STT_QUEUE_NAME: "${STT_QUEUE_NAME:-stt-live}"
+      STT_UPLOAD_QUEUE_NAME: "${STT_UPLOAD_QUEUE_NAME:-stt-upload}"
       STT_RECONCILE_INTERVAL_SECONDS: "${STT_RECONCILE_INTERVAL_SECONDS:-1}"
       STT_RECONCILE_BATCH_SIZE: "${STT_RECONCILE_BATCH_SIZE:-100}"
+      STT_UPLOAD_RECONCILE_BATCH_SIZE: "${STT_UPLOAD_RECONCILE_BATCH_SIZE:-32}"
       STT_RECONCILE_PER_SESSION_LIMIT: "${STT_RECONCILE_PER_SESSION_LIMIT:-2}"
+      STT_UPLOAD_RECONCILE_PER_SESSION_LIMIT: "${STT_UPLOAD_RECONCILE_PER_SESSION_LIMIT:-2}"
       STT_DISPATCH_REENQUEUE_SECONDS: "${STT_DISPATCH_REENQUEUE_SECONDS:-15}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  media-worker:
+    build:
+      context: ../apps/api
+    command:
+      [
+        "celery",
+        "-A",
+        "recantor.media_tasks:celery_app",
+        "worker",
+        "-Q",
+        "${MEDIA_QUEUE_NAME:-media-upload}",
+        "--concurrency=1",
+        "--prefetch-multiplier=1",
+        "--loglevel=INFO",
+      ]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      AUDIO_STORAGE_PATH: /data/audio
+      UPLOAD_TUS_STORAGE_PREFIX: uploads/tus
+      UPLOAD_MAX_DURATION_SECONDS: "${UPLOAD_MAX_DURATION_SECONDS:-43200}"
+      MEDIA_QUEUE_NAME: "${MEDIA_QUEUE_NAME:-media-upload}"
+      MEDIA_CLAIM_LEASE_SECONDS: "${MEDIA_CLAIM_LEASE_SECONDS:-1200}"
+      MEDIA_MAX_ATTEMPTS: "${MEDIA_MAX_ATTEMPTS:-3}"
+      MEDIA_RETRY_BASE_SECONDS: "${MEDIA_RETRY_BASE_SECONDS:-5}"
+      MEDIA_PROBE_TIMEOUT_SECONDS: "${MEDIA_PROBE_TIMEOUT_SECONDS:-20}"
+      MEDIA_NORMALIZE_TIMEOUT_SECONDS: "${MEDIA_NORMALIZE_TIMEOUT_SECONDS:-900}"
+      MEDIA_SUBPROCESS_OUTPUT_LIMIT_BYTES: "${MEDIA_SUBPROCESS_OUTPUT_LIMIT_BYTES:-262144}"
+    volumes:
+      - recantor-audio:/data/audio
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      upload-storage-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  media-reconciler:
+    build:
+      context: ../apps/api
+    command: ["python", "-m", "recantor.media_reconciler"]
+    environment:
+      RECANTOR_ENV: development
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_QUEUE_NAME: "${MEDIA_QUEUE_NAME:-media-upload}"
+      MEDIA_RECONCILE_INTERVAL_SECONDS: "${MEDIA_RECONCILE_INTERVAL_SECONDS:-1}"
     depends_on:
       migrate:
         condition: service_completed_successfully
