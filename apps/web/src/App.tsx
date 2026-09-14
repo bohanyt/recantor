@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { fetchHealth, fetchReadiness } from './api';
 import { env } from './env';
@@ -41,6 +41,7 @@ function ServiceStatus({ title, value, detail, state, testId }: ServiceStatusPro
 export default function App() {
   const [workflow, setWorkflow] = useState<Workflow>('live');
   const [liveCaptureActive, setLiveCaptureActive] = useState(false);
+  const liveCaptureInterlockRef = useRef(false);
   const health = useQuery({
     queryKey: ['healthz'],
     queryFn: fetchHealth,
@@ -65,8 +66,13 @@ export default function App() {
       ? 'online'
       : 'unavailable';
 
+  const setLiveCaptureInterlock = useCallback((active: boolean): void => {
+    liveCaptureInterlockRef.current = active;
+    setLiveCaptureActive(active);
+  }, []);
+
   const selectWorkflow = (nextWorkflow: Workflow): void => {
-    if (nextWorkflow === 'upload' && liveCaptureActive) return;
+    if (nextWorkflow === 'upload' && liveCaptureInterlockRef.current) return;
     setWorkflow(nextWorkflow);
   };
 
@@ -170,7 +176,7 @@ export default function App() {
       <div hidden={workflow !== 'live'} data-testid="workflow-live-panel">
         <RecorderPanel
           serviceDiagnostics={serviceDiagnostics}
-          onCaptureActivityChange={setLiveCaptureActive}
+          onCaptureActivityChange={setLiveCaptureInterlock}
         />
       </div>
 
