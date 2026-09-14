@@ -106,6 +106,75 @@ test('active recording cannot be hidden by switching to Upload and keeps the sam
   });
 });
 
+test('requesting microphone cannot be hidden behind Upload and reaches Stop on the same recorder', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const mediaDevices = navigator.mediaDevices;
+    const originalGetUserMedia = mediaDevices.getUserMedia.bind(mediaDevices);
+    let releaseMicrophone!: () => void;
+    const microphoneGate = new Promise<void>((resolve) => {
+      releaseMicrophone = resolve;
+    });
+
+    Object.defineProperty(mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async (constraints: MediaStreamConstraints) => {
+        await microphoneGate;
+        return originalGetUserMedia(constraints);
+      },
+    });
+
+    (
+      globalThis as typeof globalThis & {
+        __releaseRecantorMicrophone?: () => void;
+      }
+    ).__releaseRecantorMicrophone = releaseMicrophone;
+  });
+
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    const start = document.querySelector<HTMLButtonElement>('[data-testid="start-recording"]');
+    const upload = document.querySelector<HTMLButtonElement>('[data-testid="workflow-upload"]');
+    if (!start || !upload) throw new Error('recording workflow controls are unavailable');
+    start.click();
+    upload.click();
+  });
+
+  await expect(page.getByTestId('recording-lifecycle-status')).toContainText(
+    'Starting microphone',
+  );
+  await expect(page.getByTestId('workflow-upload')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('active-recording-workflow-guard')).toBeVisible();
+  await expect(page.getByTestId('workflow-live')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('workflow-live-panel')).toBeVisible();
+  await expect(page.getByTestId('workflow-upload-panel')).not.toBeVisible();
+
+  await page.evaluate(() => {
+    const release = (
+      globalThis as typeof globalThis & {
+        __releaseRecantorMicrophone?: () => void;
+      }
+    ).__releaseRecantorMicrophone;
+    if (!release) throw new Error('microphone request gate is unavailable');
+    release();
+  });
+
+  await expect(page.getByTestId('recording-lifecycle-status')).toContainText('recording');
+  await expect(page.getByTestId('stop-recording')).toBeVisible();
+  const sessionAfterRequest = await page.getByTestId('session-id').textContent();
+  expect(sessionAfterRequest).toBeTruthy();
+  expect(sessionAfterRequest).not.toBe('none');
+
+  await page.waitForTimeout(2_200);
+  await page.getByTestId('stop-recording').click();
+  await expect(page.getByTestId('session-id')).toHaveText(sessionAfterRequest!);
+  await expect(page.getByTestId('recorder-message')).toContainText('finalized', {
+    timeout: 20_000,
+  });
+});
+
 test('normal UI omits stale phase/developer setup copy', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).not.toContainText('Phase 1 reliable capture');
