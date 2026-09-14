@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34798667788
+snapshot_seq: 34799429397
 
-collected_at: 2026-09-14T02:16:46.930376Z
+collected_at: 2026-09-14T02:31:01.662183Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -363,7 +363,7 @@ DRAFT PR #40 adds PostgreSQL-authoritative `STTJob` scheduling state, migration/
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T02:16:29Z
+issue_updated_at: 2026-09-14T02:30:23Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -493,46 +493,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5643014105 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: M
-issue: #43
-mode: implementation
-branch: agent-m/issue-43-product-shell
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-branch_head: 6bea3888989ca06737fddf3759d6182c60bb6c43
-previous_lease_comment_id: 5643230436
-write_scope: unchanged from AGENT_WORK_LEASE_V1 comment 5643230436
-reason: resolve ordinary CI presentation/format/config-proof failures without widening scope
-lease_expires_at: 2026-09-12T03:30:00Z
-
----
-
-comment_id=5643177351 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: N
-issue: #45
-mode: implementation
-branch: agent-n/issue-45-upload-processing
-base_sha: ff7d8ac46d726f0b8b6646bab33aa4d8c9412e4b
-write_scope:
-  - apps/api/src/recantor/media_* and upload_processing* only as needed for PR #55 NEEDS_FIX
-  - apps/api/src/recantor/models.py, stt.py, stt_jobs.py, stt_tasks.py, stt_reconciler.py, uploads.py, upload_storage.py, settings.py only if the concrete failing #45 proof requires it
-  - apps/api/alembic/versions/0009_upload_processing.py only if required by the concrete failing proof
-  - apps/api/tests/test_media_processing.py and focused #45 backend proof fixtures/tests
-  - apps/api/Dockerfile
-  - infra/compose.yaml
-  - .github/workflows/media-processing-ci.yml and CI-only #45 proof support
-exclusions:
-  - apps/web/**
-  - README.md, .env.example, docs/CURRENT.md
-  - #46 export/result UI, #47 Codex, auth/diarization/summaries
-  - second transcript model/store or second production STT provider
-  - integration/cloud-alpha-2026-09-11 direct writes
-lease_expires_at: 2026-09-12T04:00:00Z
-
----
-
 comment_id=5644221867 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: M
@@ -636,11 +596,49 @@ Exact next actionable dependency:
 1. M fixes #54 on the same branch/PR under a fresh #41 implementation lease, obtains exact-head green CI, then SOL-R1/equivalent performs one narrow delta re-review.
 2. N fixes #55 on the same branch/PR under a fresh #41 implementation lease, obtains all three exact-head CI fami
 ...[COMMENT_5658093045_TRUNCATED chars=261]
+
+---
+
+comment_id=5658183472 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+issue: #43
+mode: implementation
+branch: agent-m/issue-43-product-shell
+base_sha: 76714bd23bcd149914f01cbb80973edfda0dd474
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/RecorderPanel.tsx
+  - apps/web/e2e/product-shell.spec.ts
+lease_expires_at: 2026-09-14T02:55:00Z
+
+---
+
+comment_id=5658184465 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: N
+issue: #45
+mode: implementation
+branch: agent-n/issue-45-upload-processing
+base_sha: f20a53ec02e2d2af2d7bd9289adf99b581eac74f
+write_scope:
+  - apps/api/src/recantor/media_storage.py
+  - apps/api/src/recantor/media_processing.py
+  - apps/api/alembic/versions/0009_upload_processing.py (only if correction is required by behavioral proof)
+  - apps/api/tests/test_media_processing.py
+  - narrowly scoped migration test file under apps/api/tests if needed
+exclusions:
+  - no apps/web or product-shell docs
+  - no #46/#47
+  - no integration branch
+  - no Windows witness
+  - no merge or mark-ready
+lease_expires_at: 2026-09-14T02:58:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T02:16:29Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-14T02:30:23Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #45 state=open updated=2026-09-14T02:16:21Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T02:16:05Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 PR #55 state=open updated=2026-09-12T07:06:06Z title=Issue #45: durable uploaded-media processing
@@ -661,4 +659,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34798667788 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34799429397 sections=6
