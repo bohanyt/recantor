@@ -58,7 +58,8 @@ test(
     await page.route(`**/api/v1/uploads/${sessionId}/result`, async (route) => {
       seenTokens.push(route.request().headers()['x-recantor-upload-token'] ?? '');
       assertCapability(route);
-      const state = stage === 0 ? 'preparing' : stage === 1 ? 'transcribing' : 'complete';
+      const state =
+        stage === 0 ? 'preparing' : stage === 1 ? 'transcribing' : 'complete';
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -111,7 +112,9 @@ test(
     stage = 2;
     await expect(page.getByTestId('upload-phase')).toHaveText('Complete', { timeout: 5_000 });
     await expect(page.getByText('canonical upload transcript')).toBeVisible();
-    await expect(page.getByTestId('upload-result')).toContainText('1 canonical transcript segment');
+    await expect(page.getByTestId('upload-result')).toContainText(
+      '1 canonical transcript segment',
+    );
 
     const exportRequest = page.waitForRequest((request) =>
       request.url().endsWith(`/api/v1/uploads/${sessionId}/exports/json`),
