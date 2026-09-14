@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34807489536
+snapshot_seq: 34807635054
 
-collected_at: 2026-09-14T04:50:31.344498Z
+collected_at: 2026-09-14T04:53:06.184333Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T04:49:31Z
+issue_updated_at: 2026-09-14T04:52:55Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,23 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5658093045 author=bohanyt
-CONTROL_TOWER_SUCCESSOR_CYCLE_2026_09_14_V2
-
-Fresh reviewer results are now authoritative for the two pending gates:
-
-- #43 / PR #54 head `76714bd23bcd149914f01cbb80973edfda0dd474`: SOL-R1 result `5657867325` = `NEEDS_FIX`. One remaining requester-edge shell interlock blocker; stable recording guard/viewport/accessibility portions passed. Bounded correction dispatched to original Agent M lane in #43 comment `5658090058`.
-- #45 / PR #55 head `f20a53ec02e2d2af2d7bd9289adf99b581eac74f`: P-SOL result `5657893583` = `NEEDS_FIX`. One normalized-media atomic first-wins/fencing blocker; bounded migration/timeline proof gaps also identified. Bounded correction dispatched to original Agent N lane in #45 comment `5658092016`.
-
-Integration remains BLOCKED. No integration lease is acquired. #46 remains NOT_STARTED. PR #53 remains a DRAFT checkpoint and is not authorized for main merge.
-
-Exact next actionable dependency:
-1. M fixes #54 on the same branch/PR under a fresh #41 implementation lease, obtains exact-head green CI, then SOL-R1/equivalent performs one narrow delta re-review.
-2. N fixes #55 on the same branch/PR under a fresh #41 implementation lease, obtains all three exact-head CI fami
-...[COMMENT_5658093045_TRUNCATED chars=261]
-
----
-
 comment_id=5658183472 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: M
@@ -659,12 +642,29 @@ FINAL EXACT INTEGRATION HEAD:
 
 Exact-head proof:
 ...[COMMENT_5659175305_TRUNCATED chars=3333]
+
+---
+
+comment_id=5659198079 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: Q
+issue: #46
+mode: implementation
+branch: agent-q/issue-46-upload-results
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+write_scope:
+  - apps/api/src/recantor/routes/uploads.py; apps/api/src/recantor/uploads.py; apps/api/src/recantor/schemas.py; minimal apps/api/src/recantor/transcript.py reuse only if needed for bounded canonical pagination/export queries
+  - apps/api/tests upload-result/export coverage plus existing upload/transcript/OpenAPI tests only where contract coherence requires updates
+  - apps/web/src/UploadPanel.tsx; apps/web/src/upload/{api.ts,recovery.ts}; bounded upload result/recovery tests; shared apps/web/src/transcript presentation primitive changes only if required for Upload reuse without changing Live fetch/auth semantics
+  - apps/web/e2e upload-result/reload coverage and generated OpenAPI/client artifacts only if contract generation requires them
+  - docs/CURRENT.md truthful #46 reconciliation
+lease_expires_at: 2026-09-14T05:18:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-14T04:52:55Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-14T04:50:19Z title=Phase 3C: upload processing UX and canonical transcript exports
-ISSUE #41 state=open updated=2026-09-14T04:49:31Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -680,4 +680,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34807489536 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34807635054 sections=6
