@@ -7,7 +7,14 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-UploadResultState = Literal["uploading", "preparing", "transcribing", "complete", "no_speech", "failed"]
+UploadResultState = Literal[
+    "uploading",
+    "preparing",
+    "transcribing",
+    "complete",
+    "no_speech",
+    "failed",
+]
 UploadExportFormat = Literal["txt", "json", "vtt", "srt"]
 
 

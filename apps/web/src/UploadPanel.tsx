@@ -137,14 +137,22 @@ async function waitForDurableCompletion(
 }
 
 function resultMessage(result: UploadResultStatus): string {
-  if (result.state === 'preparing') return 'Upload complete. Preparing audio for transcription…';
-  if (result.state === 'transcribing') return 'Audio is ready. Transcribing the recording…';
-  if (result.state === 'complete') return 'Transcript complete. Review it below or export a copy.';
+  if (result.state === 'preparing') {
+    return 'Durably uploaded. Preparing audio for transcription…';
+  }
+  if (result.state === 'transcribing') {
+    return 'Durably uploaded. Audio is ready. Transcribing the recording…';
+  }
+  if (result.state === 'complete') {
+    return 'Durably uploaded. Transcript complete. Review it below or export a copy.';
+  }
   if (result.state === 'no_speech') {
-    return 'Processing complete. No speech was detected, so there is no transcript text to show.';
+    return 'Durably uploaded. Processing complete. No speech was detected, so there is no transcript text to show.';
   }
   if (result.state === 'failed') {
-    return result.failure_message || 'Transcription could not be completed.';
+    return result.failure_message
+      ? `Durably uploaded. ${result.failure_message}`
+      : 'Durably uploaded, but transcription could not be completed.';
   }
   return 'Upload transfer is not durably complete yet. Reselect the same file to resume it.';
 }
@@ -272,7 +280,7 @@ export function UploadPanel() {
     setTrackedRecovery(recovery);
     setProgress(100);
     setPhase('upload_complete');
-    setMessage('Upload complete. Checking server processing state…');
+    setMessage('Durably uploaded. Checking server processing state…');
     void pollResult(recovery);
   }
 
@@ -314,8 +322,11 @@ export function UploadPanel() {
 
   useEffect(() => {
     const saved = loadLatestUploadRecovery();
-    if (saved?.sessionId) void restoreSavedUpload(saved);
+    const restoreTimer = saved?.sessionId
+      ? window.setTimeout(() => void restoreSavedUpload(saved), 0)
+      : null;
     return () => {
+      if (restoreTimer !== null) window.clearTimeout(restoreTimer);
       uppyRef.current?.destroy();
       uppyRef.current = null;
       stopResultPolling();
@@ -664,7 +675,10 @@ export function UploadPanel() {
             </p>
           ) : transcriptPage ? (
             <>
-              <TranscriptLog segments={transcriptPage.segments} ariaLabel="Uploaded recording transcript" />
+              <TranscriptLog
+                segments={transcriptPage.segments}
+                ariaLabel="Uploaded recording transcript"
+              />
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                 <span className="text-[var(--muted)]">
                   Showing up to {TRANSCRIPT_PAGE_SIZE} segments at a time.

@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recantor.db import get_sessionmaker
 from recantor.models import TranscriptSegment, UploadMediaProcessing, UploadProcessingState
 from recantor.transcript import read_transcript_segments
-from recantor.upload_result_contracts import UploadExportFormat, UploadResultState, UploadResultStatusResponse
+from recantor.upload_result_contracts import (
+    UploadExportFormat,
+    UploadResultState,
+    UploadResultStatusResponse,
+)
 from recantor.uploads import get_upload_session
 
 
@@ -49,7 +53,9 @@ def _safe_failure_message() -> str:
 async def _segment_count(db: AsyncSession, session_id: UUID) -> int:
     return int(
         await db.scalar(
-            select(func.count(TranscriptSegment.id)).where(TranscriptSegment.session_id == session_id)
+            select(func.count(TranscriptSegment.id)).where(
+                TranscriptSegment.session_id == session_id
+            )
         )
         or 0
     )
@@ -141,7 +147,7 @@ async def iter_upload_export(
         yield b"WEBVTT\n\n"
     elif export_format == "json":
         prefix = json.dumps({"session_id": str(session_id)}, separators=(",", ":"))[:-1]
-        yield f'{prefix},"segments":['.encode("utf-8")
+        yield f'{prefix},"segments":['.encode()
 
     after_sequence = 0
     cue_number = 0
@@ -157,7 +163,7 @@ async def iter_upload_export(
             for segment in segments:
                 text = _normalized_text(segment.text)
                 if export_format == "txt":
-                    yield f"{text}\n".encode("utf-8")
+                    yield f"{text}\n".encode()
                 elif export_format == "json":
                     payload = {
                         "sequence": segment.sequence,
@@ -166,9 +172,11 @@ async def iter_upload_export(
                         "text": text,
                         "language": segment.language,
                     }
-                    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
-                        "utf-8"
-                    )
+                    encoded = json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode()
                     if not json_first:
                         yield b","
                     yield encoded
@@ -176,12 +184,12 @@ async def iter_upload_export(
                 elif export_format == "vtt":
                     start = _timestamp(segment.start_ms, separator=".")
                     end = _timestamp(segment.end_ms, separator=".")
-                    yield f"{start} --> {end}\n{text}\n\n".encode("utf-8")
+                    yield f"{start} --> {end}\n{text}\n\n".encode()
                 else:
                     cue_number += 1
                     start = _timestamp(segment.start_ms, separator=",")
                     end = _timestamp(segment.end_ms, separator=",")
-                    yield f"{cue_number}\n{start} --> {end}\n{text}\n\n".encode("utf-8")
+                    yield f"{cue_number}\n{start} --> {end}\n{text}\n\n".encode()
             if not segments or not has_more:
                 break
             after_sequence = segments[-1].sequence
