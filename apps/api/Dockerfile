@@ -3,7 +3,12 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir uv==0.10.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && ffmpeg -version >/dev/null \
+    && ffprobe -version >/dev/null \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv==0.10.0
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
