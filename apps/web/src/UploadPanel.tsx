@@ -268,7 +268,9 @@ export function UploadPanel() {
         return;
       }
       setPhase('reconnecting');
-      setMessage('Result tracking is temporarily disconnected. Reconnecting without re-uploading…');
+      setMessage(
+        'Result tracking is temporarily disconnected. Reconnecting without re-uploading…',
+      );
       scheduleResultPoll(recovery, RESULT_RETRY_MS);
     }
   }
@@ -315,7 +317,9 @@ export function UploadPanel() {
         handleInvalidRecovery(recovery);
       } else {
         setPhase('reconnecting');
-        setMessage('Saved upload state is temporarily unavailable. Reload to retry recovery.');
+        setMessage(
+          'Saved upload state is temporarily unavailable. Reload to retry recovery.',
+        );
       }
     }
   }
@@ -532,11 +536,15 @@ export function UploadPanel() {
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             WAV, MP3, M4A, OGG, WebM, or MP4. Recantor keeps resumable transfer progress, then
-            prepares audio and transcribes the same durable recording.
+            uses server-side audio preparation and transcription. Processing progress, transcript
+            results, and exports stay attached to the same durable upload access.
           </p>
         </div>
         <div className="min-w-36 shrink-0 rounded-2xl border border-[var(--border)] px-4 py-3 text-left sm:text-right">
-          <p className="font-mono text-2xl font-semibold tabular-nums" data-testid="upload-progress">
+          <p
+            className="font-mono text-2xl font-semibold tabular-nums"
+            data-testid="upload-progress"
+          >
             {progress}%
           </p>
           <p
