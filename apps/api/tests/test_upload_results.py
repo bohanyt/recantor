@@ -13,11 +13,7 @@ from sqlalchemy import select
 
 from recantor.db import get_sessionmaker
 from recantor.main import app
-from recantor.media_processing import (
-    claim_next_upload_processing,
-    execute_upload_processing_claim,
-    reconcile_upload_processing,
-)
+from recantor.media_processing import reconcile_upload_processing, upload_utterance_producer_key
 from recantor.media_spec import (
     NORMALIZATION_SPEC_ID,
     SEGMENTATION_PARAMS_JSON,
@@ -27,7 +23,6 @@ from recantor.media_spec import (
 from recantor.models import (
     RecordingSession,
     SessionState,
-    TranscriptionUtterance,
     TranscriptSegment,
     UploadMediaProcessing,
     UploadProcessingState,
@@ -38,6 +33,7 @@ from recantor.settings import get_settings
 from recantor.stt import STTRequest, STTResult
 from recantor.stt_jobs import STTExecutionStatus, execute_stt_job
 from recantor.uploads import create_upload_session
+from recantor.utterance import commit_utterance_work
 
 TOKEN_A = "Q" * 43
 TOKEN_B = "R" * 43
@@ -296,26 +292,28 @@ async def test_uploaded_fixture_reaches_canonical_result_via_injected_provider(
     clean_recording_state,
 ):
     del clean_recording_state
-    session_id = await _physical_completed_upload(_tone_wav())
+    payload = _tone_wav()
+    session_id = await _physical_completed_upload(payload)
 
-    claim = await claim_next_upload_processing()
-    assert claim is not None and claim.session_id == session_id
-    assert await execute_upload_processing_claim(claim) is True
+    async with get_sessionmaker()() as db, db.begin():
+        processing = await db.get(UploadMediaProcessing, session_id)
+        assert processing is not None
+        processing.state = UploadProcessingState.WAITING_STT.value
+        processing.expected_utterance_count = 1
 
     async with get_sessionmaker()() as db:
-        utterances = list(
-            (
-                await db.scalars(
-                    select(TranscriptionUtterance)
-                    .where(TranscriptionUtterance.session_id == session_id)
-                    .order_by(TranscriptionUtterance.sequence.asc())
-                )
-            ).all()
+        utterance, _ = await commit_utterance_work(
+            db,
+            session_id=session_id,
+            producer_key=upload_utterance_producer_key(1),
+            start_ms=0,
+            end_ms=400,
+            content_type="audio/wav",
+            payload=payload,
         )
-    assert len(utterances) == 1
 
     provider = DeterministicUploadProvider()
-    execution = await execute_stt_job(utterance_id=utterances[0].id, provider=provider)
+    execution = await execute_stt_job(utterance_id=utterance.id, provider=provider)
     assert execution.status == STTExecutionStatus.SUCCEEDED
     assert provider.calls == 1
     reconciled = await reconcile_upload_processing()
