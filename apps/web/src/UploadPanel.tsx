@@ -268,9 +268,7 @@ export function UploadPanel() {
         return;
       }
       setPhase('reconnecting');
-      setMessage(
-        'Result tracking is temporarily disconnected. Reconnecting without re-uploading…',
-      );
+      setMessage('Result tracking is temporarily disconnected. Reconnecting without re-uploading…');
       scheduleResultPoll(recovery, RESULT_RETRY_MS);
     }
   }
@@ -317,9 +315,7 @@ export function UploadPanel() {
         handleInvalidRecovery(recovery);
       } else {
         setPhase('reconnecting');
-        setMessage(
-          'Saved upload state is temporarily unavailable. Reload to retry recovery.',
-        );
+        setMessage('Saved upload state is temporarily unavailable. Reload to retry recovery.');
       }
     }
   }
@@ -535,8 +531,8 @@ export function UploadPanel() {
             Resume the upload, then follow the transcript to completion.
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            WAV, MP3, M4A, OGG, WebM, or MP4. Recantor keeps resumable transfer progress, then
-            uses server-side audio preparation and transcription. Processing progress, transcript
+            WAV, MP3, M4A, OGG, WebM, or MP4. Recantor keeps resumable transfer progress, then uses
+            server-side audio preparation and transcription. Processing progress, transcript
             results, and exports stay attached to the same durable upload access.
           </p>
         </div>
