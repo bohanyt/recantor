@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 34807635054
+snapshot_seq: 34807832051
 
-collected_at: 2026-09-14T04:53:06.184333Z
+collected_at: 2026-09-14T04:56:33.102831Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-14T04:52:55Z
+issue_updated_at: 2026-09-14T04:56:21Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,21 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5658183472 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: M
-issue: #43
-mode: implementation
-branch: agent-m/issue-43-product-shell
-base_sha: 76714bd23bcd149914f01cbb80973edfda0dd474
-write_scope:
-  - apps/web/src/App.tsx
-  - apps/web/src/RecorderPanel.tsx
-  - apps/web/e2e/product-shell.spec.ts
-lease_expires_at: 2026-09-14T02:55:00Z
-
----
-
 comment_id=5658184465 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: N
@@ -659,11 +644,28 @@ write_scope:
   - apps/web/e2e upload-result/reload coverage and generated OpenAPI/client artifacts only if contract generation requires them
   - docs/CURRENT.md truthful #46 reconciliation
 lease_expires_at: 2026-09-14T05:18:00Z
+
+---
+
+comment_id=5659220691 author=bohanyt
+AGENT_WORK_LEASE_RENEW_V1
+agent: Q
+issue: #46
+mode: implementation
+branch: agent-q/issue-46-upload-results
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+write_scope:
+  - apps/api/src/recantor/routes/uploads.py plus new bounded upload-result contract/domain helpers under apps/api/src/recantor/; reuse existing uploads.py/transcript.py read contracts without changing persistence semantics
+  - apps/api/tests focused upload result/capability/export/OpenAPI proof; no migration or new transcript store
+  - apps/web/src/UploadPanel.tsx; apps/web/src/upload/{api.ts,recovery.ts}; bounded upload-result/recovery tests; apps/web/src/transcript/TranscriptLog.tsx only for presentation reuse without changing Live fetch/auth semantics
+  - apps/web/e2e/upload.spec.ts or one new #46-specific Chromium spec; generated client artifacts only if repository contract generation requires committed outputs
+  - docs/CURRENT.md truthful #46 reconciliation
+lease_expires_at: 2026-09-14T05:25:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-14T04:52:55Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-14T04:56:21Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-14T04:50:19Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -680,4 +682,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=34807635054 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=34807832051 sections=6
