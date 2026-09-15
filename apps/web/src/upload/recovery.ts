@@ -6,6 +6,8 @@ export type UploadRecovery = {
   capabilityToken: string;
   sessionId: string | null;
   expiresAt: string | null;
+  updatedAt: string;
+  durableCompletedAt: string | null;
 };
 
 type RecoveryMap = Record<string, UploadRecovery>;
@@ -26,6 +28,27 @@ function writeMap(value: RecoveryMap): void {
   window.localStorage.setItem(STORE_KEY, JSON.stringify(value));
 }
 
+function normalizeRecovery(candidate: UploadRecovery | undefined): UploadRecovery | null {
+  if (!candidate || typeof candidate.fingerprint !== 'string') return null;
+  if (
+    typeof candidate.clientRequestId !== 'string' ||
+    typeof candidate.capabilityToken !== 'string' ||
+    (candidate.sessionId !== null && typeof candidate.sessionId !== 'string')
+  ) {
+    return null;
+  }
+  return {
+    ...candidate,
+    expiresAt: typeof candidate.expiresAt === 'string' ? candidate.expiresAt : null,
+    updatedAt:
+      typeof candidate.updatedAt === 'string'
+        ? candidate.updatedAt
+        : candidate.expiresAt || new Date(0).toISOString(),
+    durableCompletedAt:
+      typeof candidate.durableCompletedAt === 'string' ? candidate.durableCompletedAt : null,
+  };
+}
+
 export function fileFingerprint(file: File): string {
   return [file.name, file.size, file.lastModified, file.type || 'application/octet-stream'].join(
     ':',
@@ -34,16 +57,21 @@ export function fileFingerprint(file: File): string {
 
 export function loadUploadRecovery(file: File): UploadRecovery | null {
   const fingerprint = fileFingerprint(file);
-  const candidate = readMap()[fingerprint];
+  const candidate = normalizeRecovery(readMap()[fingerprint]);
   if (!candidate || candidate.fingerprint !== fingerprint) return null;
-  if (
-    typeof candidate.clientRequestId !== 'string' ||
-    typeof candidate.capabilityToken !== 'string' ||
-    (candidate.sessionId !== null && typeof candidate.sessionId !== 'string')
-  ) {
-    return null;
-  }
   return candidate;
+}
+
+export function loadLatestUploadRecovery(): UploadRecovery | null {
+  return (
+    Object.values(readMap())
+      .map((candidate) => normalizeRecovery(candidate))
+      .filter(
+        (candidate): candidate is UploadRecovery =>
+          candidate !== null && candidate.sessionId !== null,
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null
+  );
 }
 
 export function createUploadRecovery(file: File): UploadRecovery {
@@ -61,6 +89,8 @@ export function createUploadRecovery(file: File): UploadRecovery {
     capabilityToken,
     sessionId: null,
     expiresAt: null,
+    updatedAt: new Date().toISOString(),
+    durableCompletedAt: null,
   };
   saveUploadRecovery(recovery);
   return recovery;
@@ -70,6 +100,21 @@ export function saveUploadRecovery(recovery: UploadRecovery): void {
   const map = readMap();
   map[recovery.fingerprint] = recovery;
   writeMap(map);
+}
+
+export function markUploadDurablyComplete(
+  recovery: UploadRecovery,
+  completedAt: string,
+  expiresAt: string,
+): UploadRecovery {
+  const completed = {
+    ...recovery,
+    expiresAt,
+    updatedAt: new Date().toISOString(),
+    durableCompletedAt: completedAt,
+  };
+  saveUploadRecovery(completed);
+  return completed;
 }
 
 export function clearUploadRecovery(recovery: UploadRecovery): void {

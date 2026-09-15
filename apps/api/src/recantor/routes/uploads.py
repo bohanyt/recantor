@@ -3,15 +3,25 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.db import get_db_session
+from recantor.schemas import TranscriptPageResponse, TranscriptSegmentResponse
+from recantor.transcript import TranscriptConflict, TranscriptNotFound, read_transcript_segments
 from recantor.upload_contracts import (
     CreateUploadSessionRequest,
     TusHookRequest,
     UploadSessionResponse,
+)
+from recantor.upload_result_contracts import UploadExportFormat, UploadResultStatusResponse
+from recantor.upload_results import (
+    UploadResultNotReady,
+    ensure_upload_export_ready,
+    export_spec,
+    iter_upload_export,
+    read_upload_result_status,
 )
 from recantor.upload_storage import UploadStorageError
 from recantor.uploads import (
@@ -108,3 +118,90 @@ async def read_upload(
     except UPLOAD_ERRORS as exc:
         raise _http_error(exc) from exc
     return upload_session_response(session, record)
+
+
+@router.get(
+    "/{session_id}/result",
+    response_model=UploadResultStatusResponse,
+    operation_id="getUploadResultStatus",
+)
+async def get_upload_result(
+    session_id: UUID,
+    capability_token: CapabilityHeader,
+    db: DbSession,
+) -> UploadResultStatusResponse:
+    try:
+        return await read_upload_result_status(
+            db,
+            session_id=session_id,
+            capability_token=capability_token,
+        )
+    except UPLOAD_ERRORS as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get(
+    "/{session_id}/transcript",
+    response_model=TranscriptPageResponse,
+    operation_id="getUploadTranscript",
+)
+async def get_upload_transcript(
+    session_id: UUID,
+    capability_token: CapabilityHeader,
+    db: DbSession,
+    after_sequence: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> TranscriptPageResponse:
+    try:
+        await get_upload_session(db, session_id=session_id, capability_token=capability_token)
+        segments, has_more = await read_transcript_segments(
+            db,
+            session_id=session_id,
+            after_sequence=after_sequence,
+            limit=limit,
+        )
+    except UPLOAD_ERRORS as exc:
+        raise _http_error(exc) from exc
+    except TranscriptNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except TranscriptConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    next_after_sequence = segments[-1].sequence if segments else after_sequence
+    return TranscriptPageResponse(
+        session_id=session_id,
+        after_sequence=after_sequence,
+        next_after_sequence=next_after_sequence,
+        has_more=has_more,
+        segments=[TranscriptSegmentResponse.model_validate(segment) for segment in segments],
+    )
+
+
+@router.get(
+    "/{session_id}/exports/{export_format}",
+    operation_id="downloadUploadTranscriptExport",
+)
+async def download_upload_export(
+    session_id: UUID,
+    export_format: UploadExportFormat,
+    capability_token: CapabilityHeader,
+    db: DbSession,
+) -> StreamingResponse:
+    try:
+        await ensure_upload_export_ready(
+            db,
+            session_id=session_id,
+            capability_token=capability_token,
+        )
+    except UPLOAD_ERRORS as exc:
+        raise _http_error(exc) from exc
+    except UploadResultNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    spec = export_spec(export_format)
+    filename = f"recantor-{session_id}.{spec.extension}"
+    return StreamingResponse(
+        iter_upload_export(session_id=session_id, export_format=export_format),
+        media_type=spec.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
