@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.models import RecordingSession, TranscriptSegment
+
+TranscriptCommitGuard = Callable[[AsyncSession], Awaitable[bool]]
 
 
 class TranscriptError(RuntimeError):
@@ -17,6 +20,10 @@ class TranscriptNotFound(TranscriptError):
 
 
 class TranscriptConflict(TranscriptError):
+    pass
+
+
+class TranscriptCommitRejected(TranscriptError):
     pass
 
 
@@ -66,6 +73,7 @@ async def commit_transcript_segment(
     end_ms: int,
     text: str,
     language: str | None = None,
+    commit_guard: TranscriptCommitGuard | None = None,
 ) -> tuple[TranscriptSegment, bool]:
     key, start, end, canonical_text, canonical_language = _canonical_payload(
         producer_key=producer_key,
@@ -81,6 +89,9 @@ async def commit_transcript_segment(
         )
         if session is None:
             raise TranscriptNotFound("recording session not found")
+
+        if commit_guard is not None and not await commit_guard(db):
+            raise TranscriptCommitRejected("canonical transcript commit guard rejected mutation")
 
         existing = await db.scalar(
             select(TranscriptSegment).where(

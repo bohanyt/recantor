@@ -15,7 +15,7 @@ from recantor.db import get_sessionmaker
 from recantor.models import TranscriptionUtterance, TranscriptSegment
 from recantor.settings import get_settings
 from recantor.storage import AudioStorageError, FilesystemAudioStorage
-from recantor.transcript import commit_transcript_segment
+from recantor.transcript import TranscriptCommitGuard, commit_transcript_segment
 from recantor.utterance import transcript_producer_key_for_utterance
 
 
@@ -268,6 +268,7 @@ async def transcribe_utterance(
     provider: STTProvider,
     language: str | None = None,
     prompt: str | None = None,
+    commit_guard: TranscriptCommitGuard | None = None,
 ) -> tuple[TranscriptSegment, bool]:
     transcript_key = transcript_producer_key_for_utterance(work_id)
 
@@ -336,4 +337,5 @@ async def transcribe_utterance(
             end_ms=work.end_ms,
             text=text,
             language=canonical_language,
+            commit_guard=commit_guard,
         )
