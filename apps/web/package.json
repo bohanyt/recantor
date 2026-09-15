@@ -11,7 +11,7 @@
     "generate:api": "openapi-ts",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write e2e/upload-results.spec.ts && git diff -- e2e/upload-results.spec.ts && exit 1",
     "typecheck": "pnpm prepare:uppy && tsc -b --pretty false",
     "test": "pnpm prepare:uppy && vitest run",
     "build": "pnpm prepare:uppy && tsc -b && vite build",
