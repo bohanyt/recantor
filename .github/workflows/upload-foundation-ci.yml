@@ -84,7 +84,11 @@ jobs:
         run: |
           docker run --rm --entrypoint sh tusproject/tusd:v2.10.0 \
             -c 'test "$(id -u)" = 1000 && test "$(id -g)" = 1000'
+          sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0775 /tmp/recantor-upload-audio
+          sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0775 /tmp/recantor-upload-audio/sessions
           sudo install -d -o 1000 -g 1000 -m 0775 /tmp/recantor-upload-audio/uploads/tus
+          test "$(stat -c '%u:%g %a' /tmp/recantor-upload-audio)" = "$(id -u):$(id -g) 775"
+          test "$(stat -c '%u:%g %a' /tmp/recantor-upload-audio/sessions)" = "$(id -u):$(id -g) 775"
           test "$(stat -c '%u:%g %a' /tmp/recantor-upload-audio/uploads/tus)" = "1000:1000 775"
           uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head
       - name: Start API
@@ -208,6 +212,17 @@ jobs:
           done
           cat /tmp/recantor-upload-web.log
           exit 1
+      - name: Produce formatter evidence in CI workspace
+        run: |
+          pnpm --dir apps/web exec prettier --write src/UploadPanel.tsx e2e/upload-corrections.spec.ts
+      - name: Upload formatter evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: q46-prettier-${{ github.sha }}
+          path: |
+            apps/web/src/UploadPanel.tsx
+            apps/web/e2e/upload-corrections.spec.ts
+          if-no-files-found: error
       - name: Browser resumability and fixture-to-visible-result proof
         run: |
           python - <<'PY'
