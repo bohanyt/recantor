@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35049906921
+snapshot_seq: 35050665809
 
-collected_at: 2026-09-16T02:56:46.443434Z
+collected_at: 2026-09-16T03:08:35.807895Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-16T02:56:32Z
+issue_updated_at: 2026-09-16T03:08:25Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,25 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5677827256 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: Q
-issue: #46
-mode: implementation
-branch: agent-q/issue-46-upload-results
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-current_head_at_renewal: 7c111dd3168b7c0832a21c870bfa933203423ad4
-write_scope:
-  - temporary apps/web/package.json format:check diagnostic exactly per CT 5677683651
-  - GitHub Actions frontend formatter-oracle log extraction only
-  - restore apps/web/package.json to canonical format:check
-  - apply only oracle-emitted Prettier delta to apps/web/e2e/upload-results.spec.ts
-  - exact-final-head CI verification and Issue #46 implementation handoff if all gates are green
-  - no dependency/version/lockfile/other-script/behavior/backend/contract/workflow/D1/D2/integration/main/product-scope changes
-lease_expires_at: 2026-09-15T09:50:00Z
-
----
-
 comment_id=5677852818 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: Q
@@ -705,12 +686,42 @@ exclusions:
   - no Live transcript cursor/contract rewrite
   - no integration/main write, merge, mark-ready, self-review, Windows witnes
 ...[COMMENT_5691360792_TRUNCATED chars=73]
+
+---
+
+comment_id=5691449659 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: Q
+continuity: SAME logical Agent Q
+issue: #46
+mode: implementation
+packet_key: RECANTOR-Q46-C1-B1-B3-20260916
+branch: agent-q/issue-46-upload-results
+pr: #56
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+current_head: 17ac3781550e16cd8fa58e7b2471ed9753cf615c
+supersedes_lease: latest Q lease ending 2026-09-16T03:26:00Z
+write_scope:
+  - apps/api/src/recantor/upload_result_contracts.py
+  - apps/api/src/recantor/upload_results.py
+  - apps/api/src/recantor/routes/uploads.py
+  - apps/web/src/upload/api.ts
+  - apps/web/src/UploadPanel.tsx
+  - apps/api/tests/test_upload_result_corrections.py
+  - apps/web/e2e/upload-corrections.spec.ts
+  - .github/workflows/upload-foundation-ci.yml
+bounded_goal:
+  - B1 real decodable tus -> media/FFmpeg/segmentation -> deterministic provider -> canonical visible Chromium result proof
+  - B2 fresh browser capability/client-request/session/upload identity after terminal processing failure
+  - B3 bounded Upload-only recording-timeline transcript pagination and TXT/JSON/VTT/SRT ordering across retry/out-of-order STT completion
+note: temporary same-workflow formatter artifact is diagnostic only; it does not write repository source
+...[COMMENT_5691449659_TRUNCATED chars=246]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-16T02:56:32Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #56 state=open updated=2026-09-16T02:47:42Z title=Phase 3C: upload results and canonical transcript exports
+ISSUE #41 state=open updated=2026-09-16T03:08:25Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #56 state=open updated=2026-09-16T03:08:14Z title=Phase 3C: upload results and canonical transcript exports
 ISSUE #46 state=open updated=2026-09-16T02:25:36Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -722,10 +733,10 @@ PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
-PR #56 draft=True updated=2026-09-16T02:47:42Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
+PR #56 draft=True updated=2026-09-16T03:08:14Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
 PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35049906921 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35050665809 sections=6
