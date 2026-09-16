@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35047958807
+snapshot_seq: 35048497622
 
-collected_at: 2026-09-16T02:26:09.715252Z
+collected_at: 2026-09-16T02:34:23.099783Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-16T02:25:57Z
+issue_updated_at: 2026-09-16T02:34:14Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,22 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5673269644 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: Q
-issue: #46
-mode: implementation
-branch: agent-q/issue-46-upload-results
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-current_head_at_renewal: 7c111dd3168b7c0832a21c870bfa933203423ad4
-write_scope:
-  - apps/web/e2e/upload-results.spec.ts formatter correction only
-  - exact-head CI verification
-  - no behavior, test-semantic, backend, contract, dependency, manifest, lockfile, workflow, D1/D2, integration, main, or product-scope changes
-lease_expires_at: 2026-09-15T01:50:00Z
-
----
-
 comment_id=5673401804 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: Q
@@ -657,11 +641,43 @@ Normal GitHub was read for the FULL result and its original claim, actual PR #56
 - SAME Q / #46 / `agent-q/issue-46-upload-results` / PR #56 OPEN+DRAFT+unmerged.
 - Actual Q head remains `b82d11674687a42e0e008047656a841fac14db40`, exactly the indepen
 ...[COMMENT_5691087682_TRUNCATED chars=3284]
+
+---
+
+comment_id=5691161659 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: Q
+continuity: SAME logical Agent Q
+issue: #46
+mode: implementation
+packet_key: RECANTOR-Q46-C1-B1-B3-20260916
+branch: agent-q/issue-46-upload-results
+pr: #56
+base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+start_head: b82d11674687a42e0e008047656a841fac14db40
+write_scope:
+  - apps/api/src/recantor/upload_result_contracts.py
+  - apps/api/src/recantor/upload_results.py
+  - apps/api/src/recantor/routes/uploads.py
+  - apps/api/tests/test_upload_results.py
+  - apps/web/src/upload/api.ts
+  - apps/web/src/UploadPanel.tsx
+  - apps/web/e2e/upload-results.spec.ts
+  - apps/web/e2e/upload.spec.ts
+  - .github/workflows/upload-foundation-ci.yml
+bounded_goal:
+  - B1 real decodable tus -> media/FFmpeg/segmentation -> deterministic provider -> canonical visible Chromium result proof
+  - B2 fresh browser capability/client-request/session/upload identity after terminal processing failure
+  - B3 bounded Upload-only recording-timeline transcript pagination and TXT/JSON/VTT/SRT ordering across retry/out-of-order STT completion
+exclusions:
+  - no Live transcript cursor/contract rewrite
+  - no integration/main write, merge, mark-ready, self-review, Windows witness, new branch/
+...[COMMENT_5691161659_TRUNCATED chars=59]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-16T02:25:57Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-16T02:34:14Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-16T02:25:36Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #56 state=open updated=2026-09-15T09:26:06Z title=Phase 3C: upload results and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -680,4 +696,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35047958807 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35048497622 sections=6
