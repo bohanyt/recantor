@@ -115,7 +115,9 @@ test('terminal processing failure starts a genuinely fresh upload identity witho
     };
   });
   expect(selected.size).toBe(fixtureStat.size);
-  const fingerprint = [selected.name, selected.size, selected.lastModified, selected.type].join(':');
+  const fingerprint = [selected.name, selected.size, selected.lastModified, selected.type].join(
+    ':',
+  );
   const failedRecovery: RecoveryEntry = {
     fingerprint,
     clientRequestId: '12345678-1234-4234-8234-123456789abc',
@@ -222,7 +224,8 @@ test('terminal processing failure starts a genuinely fresh upload identity witho
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST,OPTIONS',
-          'Access-Control-Allow-Headers': 'Tus-Resumable,Upload-Length,Upload-Metadata,X-Recantor-Upload-Token',
+          'Access-Control-Allow-Headers':
+            'Tus-Resumable,Upload-Length,Upload-Metadata,X-Recantor-Upload-Token',
         },
       });
       return;
@@ -242,7 +245,10 @@ test('terminal processing failure starts a genuinely fresh upload identity witho
   expect(createBody!.capability_token).toMatch(/^[A-Za-z0-9_-]{43}$/);
   await expect.poll(() => tusToken).toBe(createBody!.capability_token);
 
-  const persisted = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? '{}'), storeKey);
+  const persisted = await page.evaluate(
+    (key) => JSON.parse(window.localStorage.getItem(key) ?? '{}'),
+    storeKey,
+  );
   expect(Object.keys(persisted)).toHaveLength(2);
   expect(persisted[fingerprint].sessionId).toBe(freshSessionId);
   expect(persisted[fingerprint].clientRequestId).toBe(createBody!.client_request_id);
