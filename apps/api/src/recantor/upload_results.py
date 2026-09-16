@@ -5,12 +5,12 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.db import get_sessionmaker
 from recantor.models import TranscriptSegment, UploadMediaProcessing, UploadProcessingState
-from recantor.transcript import read_transcript_segments
+from recantor.transcript import TranscriptNotFound
 from recantor.upload_result_contracts import (
     UploadExportFormat,
     UploadResultState,
@@ -127,6 +127,58 @@ async def read_upload_result_status(
     )
 
 
+async def read_upload_transcript_segments(
+    db: AsyncSession,
+    *,
+    session_id: UUID,
+    after_sequence: int = 0,
+    limit: int = 200,
+) -> tuple[list[TranscriptSegment], bool]:
+    """Read one bounded Upload transcript page in recording-timeline order.
+
+    ``TranscriptSegment.sequence`` remains the canonical publication/reconnect cursor for Live.
+    Upload uses that immutable per-session identifier only as an opaque anchor: when a caller
+    supplies ``after_sequence``, the corresponding segment's timeline tuple is resolved first and
+    the next page is selected by ``(start_ms, end_ms, sequence)``. This keeps Upload presentation
+    and exports chronological even when STT retries commit an earlier utterance after a later one.
+    """
+
+    anchor: TranscriptSegment | None = None
+    if after_sequence > 0:
+        anchor = await db.scalar(
+            select(TranscriptSegment).where(
+                TranscriptSegment.session_id == session_id,
+                TranscriptSegment.sequence == after_sequence,
+            )
+        )
+        if anchor is None:
+            raise TranscriptNotFound("upload transcript cursor segment not found")
+
+    statement = select(TranscriptSegment).where(TranscriptSegment.session_id == session_id)
+    if anchor is not None:
+        statement = statement.where(
+            or_(
+                TranscriptSegment.start_ms > anchor.start_ms,
+                and_(
+                    TranscriptSegment.start_ms == anchor.start_ms,
+                    TranscriptSegment.end_ms > anchor.end_ms,
+                ),
+                and_(
+                    TranscriptSegment.start_ms == anchor.start_ms,
+                    TranscriptSegment.end_ms == anchor.end_ms,
+                    TranscriptSegment.sequence > anchor.sequence,
+                ),
+            )
+        )
+    statement = statement.order_by(
+        TranscriptSegment.start_ms,
+        TranscriptSegment.end_ms,
+        TranscriptSegment.sequence,
+    ).limit(limit + 1)
+    rows = list((await db.scalars(statement)).all())
+    return rows[:limit], len(rows) > limit
+
+
 def _timestamp(milliseconds: int, *, separator: str) -> str:
     hours, remainder = divmod(milliseconds, 3_600_000)
     minutes, remainder = divmod(remainder, 60_000)
@@ -154,7 +206,7 @@ async def iter_upload_export(
     json_first = True
     async with get_sessionmaker()() as db:
         while True:
-            segments, has_more = await read_transcript_segments(
+            segments, has_more = await read_upload_transcript_segments(
                 db,
                 session_id=session_id,
                 after_sequence=after_sequence,

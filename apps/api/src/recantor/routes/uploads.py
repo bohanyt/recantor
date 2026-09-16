@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.db import get_db_session
 from recantor.schemas import TranscriptPageResponse, TranscriptSegmentResponse
-from recantor.transcript import TranscriptConflict, TranscriptNotFound, read_transcript_segments
+from recantor.transcript import TranscriptConflict, TranscriptNotFound
 from recantor.upload_contracts import (
     CreateUploadSessionRequest,
     TusHookRequest,
@@ -22,6 +22,7 @@ from recantor.upload_results import (
     export_spec,
     iter_upload_export,
     read_upload_result_status,
+    read_upload_transcript_segments,
 )
 from recantor.upload_storage import UploadStorageError
 from recantor.uploads import (
@@ -149,12 +150,26 @@ async def get_upload_transcript(
     session_id: UUID,
     capability_token: CapabilityHeader,
     db: DbSession,
-    after_sequence: Annotated[int, Query(ge=0)] = 0,
+    after_sequence: Annotated[
+        int,
+        Query(
+            ge=0,
+            description=(
+                "Upload-only timeline page anchor. Values returned as next_after_sequence are "
+                "resolved to that segment's recording-timeline tuple; Live transcript cursor "
+                "semantics are unchanged."
+            ),
+        ),
+    ] = 0,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> TranscriptPageResponse:
     try:
-        await get_upload_session(db, session_id=session_id, capability_token=capability_token)
-        segments, has_more = await read_transcript_segments(
+        await ensure_upload_export_ready(
+            db,
+            session_id=session_id,
+            capability_token=capability_token,
+        )
+        segments, has_more = await read_upload_transcript_segments(
             db,
             session_id=session_id,
             after_sequence=after_sequence,
@@ -162,6 +177,8 @@ async def get_upload_transcript(
         )
     except UPLOAD_ERRORS as exc:
         raise _http_error(exc) from exc
+    except UploadResultNotReady as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except TranscriptNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except TranscriptConflict as exc:

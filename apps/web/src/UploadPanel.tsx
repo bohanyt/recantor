@@ -168,6 +168,8 @@ export function UploadPanel() {
   const [message, setMessage] = useState('Choose an existing recording to upload.');
   const [dragging, setDragging] = useState(false);
   const [trackedRecovery, setTrackedRecovery] = useState<UploadRecovery | null>(null);
+  const [processingFailureRecovery, setProcessingFailureRecovery] =
+    useState<UploadRecovery | null>(null);
   const [result, setResult] = useState<UploadResultStatus | null>(null);
   const [transcriptPage, setTranscriptPage] = useState<UploadTranscriptPage | null>(null);
   const [downloading, setDownloading] = useState<UploadExportFormat | null>(null);
@@ -182,6 +184,7 @@ export function UploadPanel() {
 
   function handleExpired(recovery: UploadRecovery): void {
     stopResultPolling();
+    setProcessingFailureRecovery(null);
     clearUploadRecovery(recovery);
     setTrackedRecovery(null);
     setResult(null);
@@ -194,6 +197,7 @@ export function UploadPanel() {
 
   function handleInvalidRecovery(recovery: UploadRecovery): void {
     stopResultPolling();
+    setProcessingFailureRecovery(null);
     clearUploadRecovery(recovery);
     setTrackedRecovery(null);
     setResult(null);
@@ -251,6 +255,7 @@ export function UploadPanel() {
         setPhase('no_speech');
         setTranscriptPage(null);
       } else if (next.state === 'failed') {
+        setProcessingFailureRecovery(recovery);
         setPhase('failed');
         setTranscriptPage(null);
       } else {
@@ -276,6 +281,7 @@ export function UploadPanel() {
   function trackResult(recovery: UploadRecovery): void {
     if (!recovery.sessionId) return;
     stopResultPolling();
+    setProcessingFailureRecovery(null);
     activeResultSessionRef.current = recovery.sessionId;
     setTrackedRecovery(recovery);
     setProgress(100);
@@ -342,13 +348,26 @@ export function UploadPanel() {
   }
 
   function selectFile(nextFile: File | null): void {
+    const failedRecovery = processingFailureRecovery;
+    const selectedRecovery = nextFile ? loadUploadRecovery(nextFile) : null;
+    const reselectedFailedUpload =
+      failedRecovery !== null &&
+      selectedRecovery?.sessionId === failedRecovery.sessionId &&
+      selectedRecovery.capabilityToken === failedRecovery.capabilityToken;
+    if (!reselectedFailedUpload) setProcessingFailureRecovery(null);
+
     stopResultPolling();
     resetTransfer();
     setTrackedRecovery(null);
     setResult(null);
     setTranscriptPage(null);
     setFile(nextFile);
-    if (nextFile) {
+    if (nextFile && reselectedFailedUpload) {
+      setPhase('failed');
+      setMessage(
+        'This upload finished transferring but processing failed. Start a fresh upload to try again.',
+      );
+    } else if (nextFile) {
       setPhase('ready');
       setMessage('Ready to start or resume this recording upload.');
     } else {
@@ -365,6 +384,33 @@ export function UploadPanel() {
     event.preventDefault();
     setDragging(false);
     selectFile(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  async function startFreshAfterProcessingFailure(): Promise<void> {
+    if (!file) return;
+    const failedRecovery = processingFailureRecovery;
+    const selectedRecovery = loadUploadRecovery(file);
+    if (
+      !failedRecovery ||
+      selectedRecovery?.sessionId !== failedRecovery.sessionId ||
+      selectedRecovery.capabilityToken !== failedRecovery.capabilityToken
+    ) {
+      setProcessingFailureRecovery(null);
+      await start();
+      return;
+    }
+
+    stopResultPolling();
+    resetTransfer();
+    clearUploadRecovery(failedRecovery);
+    setProcessingFailureRecovery(null);
+    setTrackedRecovery(null);
+    setResult(null);
+    setTranscriptPage(null);
+    setProgress(0);
+    setPhase('ready');
+    setMessage('Starting a fresh upload with new access…');
+    await start();
   }
 
   async function start(): Promise<void> {
@@ -516,6 +562,10 @@ export function UploadPanel() {
 
   const busy = ['preparing', 'uploading', 'paused', 'verifying'].includes(phase);
   const resultReady = result?.state === 'complete' || result?.state === 'no_speech';
+  const terminalProcessingFailure = processingFailureRecovery !== null;
+  let startLabel = 'Start / resume';
+  if (terminalProcessingFailure) startLabel = 'Start fresh upload';
+  else if (phase === 'error' || phase === 'expired') startLabel = 'Start fresh / resume';
 
   return (
     <section
@@ -616,13 +666,13 @@ export function UploadPanel() {
         <button
           type="button"
           className="min-h-11 rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-50"
-          onClick={() => void start()}
+          onClick={() =>
+            terminalProcessingFailure ? void startFreshAfterProcessingFailure() : void start()
+          }
           disabled={!file || busy || resultReady}
           data-testid="upload-start"
         >
-          {phase === 'error' || phase === 'expired' || phase === 'failed'
-            ? 'Start fresh / resume'
-            : 'Start / resume'}
+          {startLabel}
         </button>
         <button
           type="button"
