@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35040863056
+snapshot_seq: 35041417972
 
-collected_at: 2026-09-16T00:38:54.727214Z
+collected_at: 2026-09-16T00:47:02.078124Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-16T00:38:27Z
+issue_updated_at: 2026-09-16T00:46:52Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,22 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5670145009 author=bohanyt
-AGENT_WORK_LEASE_RENEW_V1
-agent: Q
-issue: #46
-mode: implementation
-branch: agent-q/issue-46-upload-results
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-current_head_at_renewal: 177db4f164b9efdc0ec550fbb0ec912cefa564b9
-write_scope:
-  - apps/web/e2e/upload-results.spec.ts formatting-only correction using repository-pinned Prettier
-  - apps/web/src/upload/api.ts formatter verification only; modify only if repository-pinned Prettier changes it
-  - no behavior, contract, test-semantics, dependency, manifest, lockfile, workflow, backend, D1/D2, integration, main, or product-scope changes
-lease_expires_at: 2026-09-14T20:39:00Z
-
----
-
 comment_id=5670687079 author=bohanyt
 AGENT_WORK_LEASE_RENEW_V1
 agent: Q
@@ -637,12 +621,38 @@ Deliver Recantor's first coherent, installable, cloud-verified alpha under #41: 
 
 Capture safety is independent of STT/transcript delivery/LLMs. PostgreSQL and durable audio storage are authoritative; Redis/Celery/WebSocket delivery are not durable truth. There must be no second transcript store, fabricated no-speech transcript, or hidden act
 ...[COMMENT_5690261490_TRUNCATED chars=15739]
+
+---
+
+comment_id=5690325072 author=bohanyt
+## CONTROL_TOWER_TAKEOVER_V1 — replacement Primary CT / first #46 review
+
+takeover_key: `RECANTOR-CT-20260916-R46`
+agent: `CT-RECANTOR-20260916-R46`
+role: ONE replacement PRIMARY_CONTROL_TOWER
+mode: coordination only
+owner_authority: Bohan's explicit current request to REPLACE the outgoing continuing Primary CT
+replaces: outgoing Primary CT relinquishment in #41 comment `5690261490`
+
+This is not Agent Q, a second implementation owner, an independent reviewer, or the laptop operator. Existing issue/branch/PR ownership is preserved.
+
+### Handoff and authority reconciliation
+
+FIRST repository read was the successor handoff #41 comment `5690261490`. Read through all ten sections and the exact marker:
+
+`END_OF_CONTROL_TOWER_HANDOFF key=RECANTOR-CT-20260916-Q-GREEN sections=10`
+
+Fresh normal-GitHub reads completed for:
+- canonical `AGENTS.md` (blob `473465392afc864a4c9ad979819a22657e4ff936`) and `docs/CURRENT.md` (blob `33f6aef6c03ce85c3035ad0a8fea7f1c491f7809`);
+- #41 body, recent authority/lease comments, and full frozen D1/D2 decision `5659175305`;
+- #46 body, original dispatch `5659180829`, full completed Q implementation handoff `5677942094`, and latest comments including pointer `5
+...[COMMENT_5690325072_TRUNCATED chars=3408]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-16T00:46:52Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-16T00:38:43Z title=Phase 3C: upload processing UX and canonical transcript exports
-ISSUE #41 state=open updated=2026-09-16T00:38:27Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #56 state=open updated=2026-09-15T09:26:06Z title=Phase 3C: upload results and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -660,4 +670,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35040863056 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35041417972 sections=6
