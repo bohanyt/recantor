@@ -168,8 +168,9 @@ export function UploadPanel() {
   const [message, setMessage] = useState('Choose an existing recording to upload.');
   const [dragging, setDragging] = useState(false);
   const [trackedRecovery, setTrackedRecovery] = useState<UploadRecovery | null>(null);
-  const [processingFailureRecovery, setProcessingFailureRecovery] =
-    useState<UploadRecovery | null>(null);
+  const [processingFailureRecovery, setProcessingFailureRecovery] = useState<UploadRecovery | null>(
+    null,
+  );
   const [result, setResult] = useState<UploadResultStatus | null>(null);
   const [transcriptPage, setTranscriptPage] = useState<UploadTranscriptPage | null>(null);
   const [downloading, setDownloading] = useState<UploadExportFormat | null>(null);
