@@ -233,9 +233,7 @@ async def test_upload_timeline_page_and_exports_survive_retry_out_of_order_compl
         (1000, 1400),
     ]
     vtt = exports["vtt"].decode()
-    assert vtt.index("00:00:00.100 --> 00:00:00.500") < vtt.index(
-        "00:00:01.000 --> 00:00:01.400"
-    )
+    assert vtt.index("00:00:00.100 --> 00:00:00.500") < vtt.index("00:00:01.000 --> 00:00:01.400")
     srt = exports["srt"].decode()
     assert srt.startswith("1\n00:00:00,100 --> 00:00:00,500\nearlier A")
     assert "2\n00:00:01,000 --> 00:00:01,400\nlater B" in srt
