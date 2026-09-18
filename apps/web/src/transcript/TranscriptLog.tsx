@@ -8,12 +8,18 @@ function timestampLabel(milliseconds: number): string {
   return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
-export function TranscriptLog({ segments }: { segments: readonly TranscriptSegmentResponse[] }) {
+export function TranscriptLog({
+  segments,
+  ariaLabel = 'Live transcript updates',
+}: {
+  segments: readonly TranscriptSegmentResponse[];
+  ariaLabel?: string;
+}) {
   return (
     <div
       className="mt-4 space-y-3"
       role="log"
-      aria-label="Live transcript updates"
+      aria-label={ariaLabel}
       aria-relevant="additions"
       aria-atomic="false"
       data-testid="transcript-segments"

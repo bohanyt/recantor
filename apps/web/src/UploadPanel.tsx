@@ -1,16 +1,25 @@
 import { Tus, Uppy } from './vendor/uppy.min.mjs';
 import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react';
 
+import { TranscriptLog } from './transcript/TranscriptLog';
 import {
   createUploadSession,
+  downloadUploadExport,
+  getUploadResultStatus,
   getUploadSession,
+  getUploadTranscript,
   UploadApiError,
+  type UploadExportFormat,
+  type UploadResultStatus,
   type UploadSession,
+  type UploadTranscriptPage,
 } from './upload/api';
 import {
   clearUploadRecovery,
   createUploadRecovery,
+  loadLatestUploadRecovery,
   loadUploadRecovery,
+  markUploadDurablyComplete,
   saveUploadRecovery,
   type UploadRecovery,
 } from './upload/recovery';
@@ -18,9 +27,44 @@ import {
 const ACCEPT = '.wav,.mp3,.m4a,.ogg,.webm,.mp4';
 const VERIFY_ATTEMPTS = 20;
 const VERIFY_DELAY_MS = 250;
+const RESULT_POLL_MS = 1_000;
+const RESULT_RETRY_MS = 1_500;
+const TRANSCRIPT_PAGE_SIZE = 200;
 
 type UploadPhase =
-  'idle' | 'ready' | 'preparing' | 'uploading' | 'paused' | 'verifying' | 'complete' | 'error';
+  | 'idle'
+  | 'ready'
+  | 'preparing'
+  | 'uploading'
+  | 'paused'
+  | 'verifying'
+  | 'upload_complete'
+  | 'preparing_audio'
+  | 'transcribing'
+  | 'reconnecting'
+  | 'complete'
+  | 'no_speech'
+  | 'failed'
+  | 'expired'
+  | 'error';
+
+const phaseLabels: Record<UploadPhase, string> = {
+  idle: 'Ready',
+  ready: 'Ready',
+  preparing: 'Preparing upload',
+  uploading: 'Uploading',
+  paused: 'Paused',
+  verifying: 'Verifying upload',
+  upload_complete: 'Upload complete',
+  preparing_audio: 'Preparing audio',
+  transcribing: 'Transcribing',
+  reconnecting: 'Reconnecting',
+  complete: 'Complete',
+  no_speech: 'No speech detected',
+  failed: 'Failed',
+  expired: 'Access expired',
+  error: 'Needs attention',
+};
 
 function bytesLabel(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -46,7 +90,11 @@ async function recoverOrCreateSession(
       const existing = await getUploadSession(recovery.sessionId, recovery.capabilityToken);
       return { recovery, session: existing };
     } catch (error) {
-      if (!(error instanceof UploadApiError) || ![403, 404, 410].includes(error.status)) {
+      if (error instanceof UploadApiError && error.status === 410) {
+        clearUploadRecovery(recovery);
+        throw error;
+      }
+      if (!(error instanceof UploadApiError) || ![403, 404].includes(error.status)) {
         throw error;
       }
       clearUploadRecovery(recovery);
@@ -65,6 +113,7 @@ async function recoverOrCreateSession(
     ...recovery,
     sessionId: session.session_id,
     expiresAt: session.expires_at,
+    updatedAt: new Date().toISOString(),
   };
   saveUploadRecovery(recovery);
   return { recovery, session };
@@ -87,25 +136,211 @@ async function waitForDurableCompletion(
   );
 }
 
-const durableUploadMessage =
-  'Durably uploaded. Server-side audio preparation and transcription can continue; transcript results and exports are not shown here yet.';
+function resultMessage(result: UploadResultStatus): string {
+  if (result.state === 'preparing') {
+    return 'Durably uploaded. Preparing audio for transcription…';
+  }
+  if (result.state === 'transcribing') {
+    return 'Durably uploaded. Audio is ready. Transcribing the recording…';
+  }
+  if (result.state === 'complete') {
+    return 'Durably uploaded. Transcript complete. Review it below or export a copy.';
+  }
+  if (result.state === 'no_speech') {
+    return 'Durably uploaded. Processing complete. No speech was detected, so there is no transcript text to show.';
+  }
+  if (result.state === 'failed') {
+    return result.failure_message
+      ? `Durably uploaded. ${result.failure_message}`
+      : 'Durably uploaded, but transcription could not be completed.';
+  }
+  return 'Upload transfer is not durably complete yet. Reselect the same file to resume it.';
+}
 
 export function UploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const uppyRef = useRef<Uppy | null>(null);
+  const resultTimerRef = useRef<number | null>(null);
+  const activeResultSessionRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UploadPhase>('idle');
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('Choose an existing recording to upload.');
   const [dragging, setDragging] = useState(false);
+  const [trackedRecovery, setTrackedRecovery] = useState<UploadRecovery | null>(null);
+  const [processingFailureRecovery, setProcessingFailureRecovery] = useState<UploadRecovery | null>(
+    null,
+  );
+  const [result, setResult] = useState<UploadResultStatus | null>(null);
+  const [transcriptPage, setTranscriptPage] = useState<UploadTranscriptPage | null>(null);
+  const [downloading, setDownloading] = useState<UploadExportFormat | null>(null);
 
-  useEffect(
-    () => () => {
+  function stopResultPolling(): void {
+    activeResultSessionRef.current = null;
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+  }
+
+  function handleExpired(recovery: UploadRecovery): void {
+    stopResultPolling();
+    setProcessingFailureRecovery(null);
+    clearUploadRecovery(recovery);
+    setTrackedRecovery(null);
+    setResult(null);
+    setTranscriptPage(null);
+    setPhase('expired');
+    setMessage(
+      'Saved upload access has expired. The server recording was not deleted; start a fresh upload to access a new result.',
+    );
+  }
+
+  function handleInvalidRecovery(recovery: UploadRecovery): void {
+    stopResultPolling();
+    setProcessingFailureRecovery(null);
+    clearUploadRecovery(recovery);
+    setTrackedRecovery(null);
+    setResult(null);
+    setTranscriptPage(null);
+    setPhase('error');
+    setMessage('Saved upload access is no longer valid. Start a fresh upload to continue.');
+  }
+
+  async function loadTranscriptPage(recovery: UploadRecovery, afterSequence = 0): Promise<void> {
+    if (!recovery.sessionId) return;
+    try {
+      const page = await getUploadTranscript(
+        recovery.sessionId,
+        recovery.capabilityToken,
+        afterSequence,
+        TRANSCRIPT_PAGE_SIZE,
+      );
+      setTranscriptPage(page);
+    } catch (error) {
+      if (error instanceof UploadApiError && error.status === 410) {
+        handleExpired(recovery);
+        return;
+      }
+      if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
+        handleInvalidRecovery(recovery);
+        return;
+      }
+      setMessage('Transcript page could not be loaded. You can retry without re-uploading.');
+    }
+  }
+
+  function scheduleResultPoll(recovery: UploadRecovery, delayMs: number): void {
+    if (!recovery.sessionId || activeResultSessionRef.current !== recovery.sessionId) return;
+    if (resultTimerRef.current !== null) window.clearTimeout(resultTimerRef.current);
+    resultTimerRef.current = window.setTimeout(() => void pollResult(recovery), delayMs);
+  }
+
+  async function pollResult(recovery: UploadRecovery): Promise<void> {
+    if (!recovery.sessionId || activeResultSessionRef.current !== recovery.sessionId) return;
+    try {
+      const next = await getUploadResultStatus(recovery.sessionId, recovery.capabilityToken);
+      if (activeResultSessionRef.current !== recovery.sessionId) return;
+      setResult(next);
+      setMessage(resultMessage(next));
+      if (next.state === 'preparing') {
+        setPhase('preparing_audio');
+        scheduleResultPoll(recovery, RESULT_POLL_MS);
+      } else if (next.state === 'transcribing') {
+        setPhase('transcribing');
+        scheduleResultPoll(recovery, RESULT_POLL_MS);
+      } else if (next.state === 'complete') {
+        setPhase('complete');
+        await loadTranscriptPage(recovery, 0);
+      } else if (next.state === 'no_speech') {
+        setPhase('no_speech');
+        setTranscriptPage(null);
+      } else if (next.state === 'failed') {
+        setProcessingFailureRecovery(recovery);
+        setPhase('failed');
+        setTranscriptPage(null);
+      } else {
+        setPhase('upload_complete');
+        setMessage(resultMessage(next));
+      }
+    } catch (error) {
+      if (activeResultSessionRef.current !== recovery.sessionId) return;
+      if (error instanceof UploadApiError && error.status === 410) {
+        handleExpired(recovery);
+        return;
+      }
+      if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
+        handleInvalidRecovery(recovery);
+        return;
+      }
+      setPhase('reconnecting');
+      setMessage('Result tracking is temporarily disconnected. Reconnecting without re-uploading…');
+      scheduleResultPoll(recovery, RESULT_RETRY_MS);
+    }
+  }
+
+  function trackResult(recovery: UploadRecovery): void {
+    if (!recovery.sessionId) return;
+    stopResultPolling();
+    setProcessingFailureRecovery(null);
+    activeResultSessionRef.current = recovery.sessionId;
+    setTrackedRecovery(recovery);
+    setProgress(100);
+    setPhase('upload_complete');
+    setMessage('Durably uploaded. Checking server processing state…');
+    void pollResult(recovery);
+  }
+
+  async function restoreSavedUpload(recovery: UploadRecovery): Promise<void> {
+    if (!recovery.sessionId) return;
+    if (recovery.durableCompletedAt) {
+      trackResult(recovery);
+      return;
+    }
+    try {
+      const session = await getUploadSession(recovery.sessionId, recovery.capabilityToken);
+      if (session.state === 'uploaded' && session.completed_at) {
+        const completed = markUploadDurablyComplete(
+          recovery,
+          session.completed_at,
+          session.expires_at,
+        );
+        trackResult(completed);
+        return;
+      }
+      if (session.state === 'failed') {
+        setPhase('failed');
+        setMessage('The saved upload failed. Start a fresh upload to try again.');
+        return;
+      }
+      setPhase('ready');
+      setMessage('A saved upload is still in progress. Reselect the same file to resume it.');
+    } catch (error) {
+      if (error instanceof UploadApiError && error.status === 410) {
+        handleExpired(recovery);
+      } else if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
+        handleInvalidRecovery(recovery);
+      } else {
+        setPhase('reconnecting');
+        setMessage('Saved upload state is temporarily unavailable. Reload to retry recovery.');
+      }
+    }
+  }
+
+  useEffect(() => {
+    const saved = loadLatestUploadRecovery();
+    const restoreTimer = saved?.sessionId
+      ? window.setTimeout(() => void restoreSavedUpload(saved), 0)
+      : null;
+    return () => {
+      if (restoreTimer !== null) window.clearTimeout(restoreTimer);
       uppyRef.current?.destroy();
       uppyRef.current = null;
-    },
-    [],
-  );
+      stopResultPolling();
+    };
+    // Recovery is intentionally a one-time mount action. Polling owns subsequent refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function resetTransfer(): void {
     uppyRef.current?.destroy();
@@ -114,9 +349,26 @@ export function UploadPanel() {
   }
 
   function selectFile(nextFile: File | null): void {
+    const failedRecovery = processingFailureRecovery;
+    const selectedRecovery = nextFile ? loadUploadRecovery(nextFile) : null;
+    const reselectedFailedUpload =
+      failedRecovery !== null &&
+      selectedRecovery?.sessionId === failedRecovery.sessionId &&
+      selectedRecovery.capabilityToken === failedRecovery.capabilityToken;
+    if (!reselectedFailedUpload) setProcessingFailureRecovery(null);
+
+    stopResultPolling();
     resetTransfer();
+    setTrackedRecovery(null);
+    setResult(null);
+    setTranscriptPage(null);
     setFile(nextFile);
-    if (nextFile) {
+    if (nextFile && reselectedFailedUpload) {
+      setPhase('failed');
+      setMessage(
+        'This upload finished transferring but processing failed. Start a fresh upload to try again.',
+      );
+    } else if (nextFile) {
       setPhase('ready');
       setMessage('Ready to start or resume this recording upload.');
     } else {
@@ -135,6 +387,33 @@ export function UploadPanel() {
     selectFile(event.dataTransfer.files?.[0] ?? null);
   }
 
+  async function startFreshAfterProcessingFailure(): Promise<void> {
+    if (!file) return;
+    const failedRecovery = processingFailureRecovery;
+    const selectedRecovery = loadUploadRecovery(file);
+    if (
+      !failedRecovery ||
+      selectedRecovery?.sessionId !== failedRecovery.sessionId ||
+      selectedRecovery.capabilityToken !== failedRecovery.capabilityToken
+    ) {
+      setProcessingFailureRecovery(null);
+      await start();
+      return;
+    }
+
+    stopResultPolling();
+    resetTransfer();
+    clearUploadRecovery(failedRecovery);
+    setProcessingFailureRecovery(null);
+    setTrackedRecovery(null);
+    setResult(null);
+    setTranscriptPage(null);
+    setProgress(0);
+    setPhase('ready');
+    setMessage('Starting a fresh upload with new access…');
+    await start();
+  }
+
   async function start(): Promise<void> {
     if (!file) return;
     resetTransfer();
@@ -144,10 +423,12 @@ export function UploadPanel() {
     try {
       const { recovery, session } = await recoverOrCreateSession(file);
       if (session.state === 'uploaded' && session.completed_at) {
-        clearUploadRecovery(recovery);
-        setProgress(100);
-        setPhase('complete');
-        setMessage(durableUploadMessage);
+        const completed = markUploadDurablyComplete(
+          recovery,
+          session.completed_at,
+          session.expires_at,
+        );
+        trackResult(completed);
         return;
       }
 
@@ -181,16 +462,23 @@ export function UploadPanel() {
         setMessage('Transfer complete. Verifying durable server state…');
         void waitForDurableCompletion(session.session_id, recovery.capabilityToken)
           .then((durable) => {
-            clearUploadRecovery(recovery);
-            setProgress(100);
-            setPhase('complete');
-            setMessage(
-              durable.completed_at
-                ? durableUploadMessage
-                : 'Durable upload confirmation is pending. No processing result is claimed yet.',
+            if (!durable.completed_at) {
+              setPhase('error');
+              setMessage('Durable upload confirmation is still pending. Retry safely.');
+              return;
+            }
+            const completed = markUploadDurablyComplete(
+              recovery,
+              durable.completed_at,
+              durable.expires_at,
             );
+            trackResult(completed);
           })
           .catch((error: unknown) => {
+            if (error instanceof UploadApiError && error.status === 410) {
+              handleExpired(recovery);
+              return;
+            }
             setPhase('error');
             setMessage(error instanceof Error ? error.message : 'Durable verification failed.');
           });
@@ -212,6 +500,15 @@ export function UploadPanel() {
       );
       void uppy.upload();
     } catch (error) {
+      if (error instanceof UploadApiError && error.status === 410) {
+        const recovery = loadUploadRecovery(file);
+        if (recovery) clearUploadRecovery(recovery);
+        setPhase('expired');
+        setMessage(
+          'Saved upload access has expired. The server recording was not deleted; start again for a new access capability.',
+        );
+        return;
+      }
       setPhase('error');
       setMessage(error instanceof Error ? error.message : 'Unable to start upload.');
     }
@@ -235,7 +532,41 @@ export function UploadPanel() {
     setMessage('Resuming upload…');
   }
 
+  async function exportTranscript(exportFormat: UploadExportFormat): Promise<void> {
+    const recovery = trackedRecovery;
+    if (!recovery?.sessionId) return;
+    setDownloading(exportFormat);
+    try {
+      const blob = await downloadUploadExport(
+        recovery.sessionId,
+        recovery.capabilityToken,
+        exportFormat,
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `recantor-${recovery.sessionId}.${exportFormat}`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      if (error instanceof UploadApiError && error.status === 410) {
+        handleExpired(recovery);
+      } else if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
+        handleInvalidRecovery(recovery);
+      } else {
+        setMessage('Export could not be downloaded. Retry without re-uploading.');
+      }
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   const busy = ['preparing', 'uploading', 'paused', 'verifying'].includes(phase);
+  const resultReady = result?.state === 'complete' || result?.state === 'no_speech';
+  const terminalProcessingFailure = processingFailureRecovery !== null;
+  let startLabel = 'Start / resume';
+  if (terminalProcessingFailure) startLabel = 'Start fresh upload';
+  else if (phase === 'error' || phase === 'expired') startLabel = 'Start fresh / resume';
 
   return (
     <section
@@ -248,26 +579,27 @@ export function UploadPanel() {
             Upload recording
           </p>
           <h2 id="upload-recording-heading" className="mt-2 text-2xl font-semibold tracking-tight">
-            Resume a large transfer without starting over.
+            Resume the upload, then follow the transcript to completion.
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            WAV, MP3, M4A, OGG, WebM, or MP4. Uploads use resumable tus storage and are only shown
-            as complete after Recantor confirms durable server state.
-          </p>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            After durable upload, server-side audio preparation and transcription can continue
-            automatically. Processing progress, transcript results, and exports are not shown in
-            this workflow yet.
+            WAV, MP3, M4A, OGG, WebM, or MP4. Recantor keeps resumable transfer progress, then uses
+            server-side audio preparation and transcription. Processing progress, transcript
+            results, and exports stay attached to the same durable upload access.
           </p>
         </div>
-        <div className="min-w-28 shrink-0 rounded-2xl border border-[var(--border)] px-4 py-3 text-left sm:text-right">
+        <div className="min-w-36 shrink-0 rounded-2xl border border-[var(--border)] px-4 py-3 text-left sm:text-right">
           <p
             className="font-mono text-2xl font-semibold tabular-nums"
             data-testid="upload-progress"
           >
             {progress}%
           </p>
-          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{phase}</p>
+          <p
+            className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--muted)]"
+            data-testid="upload-phase"
+          >
+            {phaseLabels[phase]}
+          </p>
         </div>
       </div>
 
@@ -325,8 +657,8 @@ export function UploadPanel() {
       <p
         className="mt-4 text-sm leading-6 text-[var(--muted)]"
         data-testid="upload-message"
-        role={phase === 'error' ? 'alert' : 'status'}
-        aria-live={phase === 'error' ? undefined : 'polite'}
+        role={['error', 'failed', 'expired'].includes(phase) ? 'alert' : 'status'}
+        aria-live={['error', 'failed', 'expired'].includes(phase) ? undefined : 'polite'}
       >
         {message}
       </p>
@@ -335,11 +667,13 @@ export function UploadPanel() {
         <button
           type="button"
           className="min-h-11 rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-50"
-          onClick={() => void start()}
-          disabled={!file || busy || phase === 'complete'}
+          onClick={() =>
+            terminalProcessingFailure ? void startFreshAfterProcessingFailure() : void start()
+          }
+          disabled={!file || busy || resultReady}
           data-testid="upload-start"
         >
-          {phase === 'error' ? 'Restart safely' : 'Start / resume'}
+          {startLabel}
         </button>
         <button
           type="button"
@@ -360,6 +694,79 @@ export function UploadPanel() {
           Retry / resume
         </button>
       </div>
+
+      {resultReady && trackedRecovery?.sessionId ? (
+        <div
+          className="mt-7 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5"
+          data-testid="upload-result"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold">Transcript result</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                {result?.transcript_segment_count ?? 0} canonical transcript segment
+                {(result?.transcript_segment_count ?? 0) === 1 ? '' : 's'}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label="Transcript exports">
+              {(['txt', 'json', 'vtt', 'srt'] as const).map((exportFormat) => (
+                <button
+                  key={exportFormat}
+                  type="button"
+                  className="min-h-10 rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] disabled:opacity-50"
+                  onClick={() => void exportTranscript(exportFormat)}
+                  disabled={downloading !== null}
+                  data-testid={`upload-export-${exportFormat}`}
+                >
+                  {downloading === exportFormat ? 'Downloading…' : exportFormat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {result?.state === 'no_speech' ? (
+            <p className="mt-5 text-sm text-[var(--muted)]" data-testid="upload-no-speech">
+              No speech was detected. Exports contain the truthful empty transcript result.
+            </p>
+          ) : transcriptPage ? (
+            <>
+              <TranscriptLog
+                segments={transcriptPage.segments}
+                ariaLabel="Uploaded recording transcript"
+              />
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-[var(--muted)]">
+                  Showing up to {TRANSCRIPT_PAGE_SIZE} segments at a time.
+                </span>
+                {transcriptPage.after_sequence > 0 ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[var(--border)] px-3 py-2 font-semibold"
+                    onClick={() => void loadTranscriptPage(trackedRecovery, 0)}
+                    data-testid="upload-transcript-first-page"
+                  >
+                    Back to first page
+                  </button>
+                ) : null}
+                {transcriptPage.has_more ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[var(--border)] px-3 py-2 font-semibold"
+                    onClick={() =>
+                      void loadTranscriptPage(trackedRecovery, transcriptPage.next_after_sequence)
+                    }
+                    data-testid="upload-transcript-next-page"
+                  >
+                    Next page
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className="mt-5 text-sm text-[var(--muted)]">Loading the canonical transcript…</p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
