@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35296101224
+snapshot_seq: 35296165521
 
-collected_at: 2026-09-18T01:37:58.130185Z
+collected_at: 2026-09-18T01:38:53.468408Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-18T01:29:36Z
+issue_updated_at: 2026-09-18T01:38:44Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,26 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5690261490 author=bohanyt
-# CONTROL_TOWER_SUCCESSOR_HANDOFF_V1
-
-handoff_key: RECANTOR-CT-20260916-Q-GREEN
-repository: bohanyt/recantor
-prepared_on: 2026-09-16 (Asia/Jakarta)
-time_reference_during_verification: 2026-09-16T00:36:43Z
-state: Q_CI_GREEN_AWAITING_INDEPENDENT_REVIEW
-handoff_type: replacement of the continuing PRIMARY CONTROL TOWER, NOT another implementation agent
-owner_request: Bohan explicitly requested a durable handoff so the next day's CT can replace the outgoing CT and continue its work.
-
-## 1. Product goal and role continuity
-
-Deliver Recantor's first coherent, installable, cloud-verified alpha under #41: Live recording -> automatic transcription -> reconnect-safe visible transcript, and existing-recording Upload -> resumable durable transfer -> preparation/transcription -> canonical transcript -> TXT/JSON/VTT/SRT. Normal setup must be truthful and minimal, centered on a local server-side GROQ_API_KEY when exercising real Groq STT.
-
-Capture safety is independent of STT/transcript delivery/LLMs. PostgreSQL and durable audio storage are authoritative; Redis/Celery/WebSocket delivery are not durable truth. There must be no second transcript store, fabricated no-speech transcript, or hidden act
-...[COMMENT_5690261490_TRUNCATED chars=15739]
-
----
-
 comment_id=5690325072 author=bohanyt
 ## CONTROL_TOWER_TAKEOVER_V1 — replacement Primary CT / first #46 review
 
@@ -726,13 +706,18 @@ exclusions:
   - no Live transcript semantic changes
   - no new branch/PR, merge, mark-ready, integration/main write, self-review, reviewer dispatch, or Windows witness
 lease_expires_at: 2026-09-18T01:55:00Z
+
+---
+
+comment_id=5723722010 author=bohanyt
+Q46 implementation lease 5723638361 is released. Final head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0. Handoff: Issue #46 comment 5723713362. CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-18T01:38:44Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-18T01:37:46Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #56 state=open updated=2026-09-18T01:33:47Z title=Phase 3C: upload results and canonical transcript exports
-ISSUE #41 state=open updated=2026-09-18T01:29:36Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -749,4 +734,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35296101224 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35296165521 sections=6
