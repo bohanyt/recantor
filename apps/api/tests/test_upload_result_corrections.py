@@ -11,7 +11,11 @@ from sqlalchemy import select
 from recantor.db import get_sessionmaker
 from recantor.main import app
 from recantor.media_processing import reconcile_upload_processing, upload_utterance_producer_key
-from recantor.media_spec import NORMALIZATION_SPEC_ID, SEGMENTATION_PARAMS_JSON, SEGMENTATION_SPEC_ID
+from recantor.media_spec import (
+    NORMALIZATION_SPEC_ID,
+    SEGMENTATION_PARAMS_JSON,
+    SEGMENTATION_SPEC_ID,
+)
 from recantor.models import (
     RecordingSession,
     SessionState,
