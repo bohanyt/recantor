@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35559933339
+snapshot_seq: 35560110895
 
-collected_at: 2026-09-21T04:09:37.954405Z
+collected_at: 2026-09-21T04:12:45.832083Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T04:09:24Z
+issue_updated_at: 2026-09-21T04:12:33Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -599,13 +599,33 @@ accepted_head: f326cf1f88870804c50ed0468e1551a532f4b851
 review_result: #48 comment 5755242922 CLEAN
 write_scope: advance integration branch to exact accepted head only; force=false; no main write
 lease_expires_at: 2026-09-21T04:35:00Z
+
+---
+
+comment_id=5755282655 author=bohanyt
+CONTROL_TOWER_WINDOWS_BUILD_FIX_INTEGRATED_V1
+
+accepted_review: #48 comment 5755242922 CLEAN
+source_pr: #59
+integration_branch: integration/cloud-alpha-2026-09-11
+integrated_head: f326cf1f88870804c50ed0468e1551a532f4b851
+method: fast-forward exact accepted head, force=false
+integration_lease: #41 comment 5755262634 RELEASED
+fresh_integrated_head_ci:
+- CI 35559938146 SUCCESS
+- Upload foundation CI 35559938135 SUCCESS
+- Media processing CI 35559938123 SUCCESS
+windows_retry_scope: repeat only failed build/start -> preflight; if PASS continue same Live/Upload campaign
+main_merge: not authorized
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-PR #53 state=open updated=2026-09-21T04:09:30Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #41 state=open updated=2026-09-21T04:09:24Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #48 state=open updated=2026-09-21T04:06:19Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+PR #53 state=open updated=2026-09-21T04:12:38Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #48 state=open updated=2026-09-21T04:12:35Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #41 state=open updated=2026-09-21T04:12:33Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -613,9 +633,9 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-21T04:09:30Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T04:12:38Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35559933339 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35560110895 sections=6
