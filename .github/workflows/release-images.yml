@@ -1,0 +1,292 @@
+name: Release images
+
+on:
+  pull_request:
+    branches:
+      - integration/cloud-alpha-2026-09-11
+    paths:
+      - ".github/workflows/release-images.yml"
+      - "apps/api/**"
+      - "apps/web/**"
+      - "infra/compose.release.yaml"
+      - "scripts/release_manifest.py"
+      - "scripts/test_release_manifest.py"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/recantor-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/recantor-web
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Derive release identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="$GITHUB_REF_NAME"
+            if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "Unsupported release tag: $VERSION" >&2
+              exit 1
+            fi
+            if [[ "$VERSION" == *"-alpha"* ]]; then
+              CHANNEL=alpha
+            elif [[ "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
+              CHANNEL=beta
+            else
+              CHANNEL=stable
+            fi
+            PUBLISH=true
+          else
+            VERSION="v0.0.0-dev.${GITHUB_SHA:0:12}"
+            CHANNEL=alpha
+            PUBLISH=false
+          fi
+
+          SCHEMA_HEAD="$(python - <<'PY'
+          import re
+          from pathlib import Path
+          versions = sorted(Path("apps/api/alembic/versions").glob("*.py"))
+          if not versions:
+              raise SystemExit("no Alembic revisions found")
+          text = versions[-1].read_text(encoding="utf-8")
+          match = re.search(r'^revision:\s*str\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if match is None:
+              raise SystemExit(f"could not determine revision from {versions[-1]}")
+          print(match.group(1))
+          PY
+          )"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "schema_head=$SCHEMA_HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Test release manifest contract
+        run: python -m unittest discover -s scripts -p "test_release_manifest.py"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: steps.identity.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refuse an existing immutable release image tag
+        if: steps.identity.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$WEB_IMAGE"; do
+            if docker manifest inspect "$image:$VERSION" >/dev/null 2>&1; then
+              echo "Release image tag already exists and will not be moved: $image:$VERSION" >&2
+              exit 1
+            fi
+          done
+
+      - name: Build API release image
+        id: build-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/api
+          file: ./apps/api/Dockerfile
+          platforms: linux/amd64
+          load: ${{ steps.identity.outputs.publish != 'true' }}
+          push: ${{ steps.identity.outputs.publish == 'true' }}
+          tags: ${{ env.API_IMAGE }}:${{ steps.identity.outputs.version }}
+          build-args: |
+            RECANTOR_VERSION=${{ steps.identity.outputs.version }}
+            RECANTOR_REVISION=${{ github.sha }}
+
+      - name: Build Web release image
+        id: build-web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./apps/web/Dockerfile.release
+          platforms: linux/amd64
+          load: ${{ steps.identity.outputs.publish != 'true' }}
+          push: ${{ steps.identity.outputs.publish == 'true' }}
+          tags: ${{ env.WEB_IMAGE }}:${{ steps.identity.outputs.version }}
+          build-args: |
+            RECANTOR_VERSION=${{ steps.identity.outputs.version }}
+            RECANTOR_REVISION=${{ github.sha }}
+            VITE_API_BASE_URL=http://localhost:8000
+
+      - name: Resolve exact image references
+        id: refs
+        shell: bash
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          PUBLISH: ${{ steps.identity.outputs.publish }}
+          API_DIGEST: ${{ steps.build-api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.build-web.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$API_DIGEST" ]]; then
+            API_DIGEST="$(docker image inspect "$API_IMAGE:$VERSION" --format '{{.Id}}')"
+          fi
+          if [[ -z "$WEB_DIGEST" ]]; then
+            WEB_DIGEST="$(docker image inspect "$WEB_IMAGE:$VERSION" --format '{{.Id}}')"
+          fi
+          if [[ ! "$API_DIGEST" =~ ^sha256:[0-9a-f]{64}$ || ! "$WEB_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Build did not produce immutable sha256 image identities." >&2
+            exit 1
+          fi
+          if [[ "$PUBLISH" == "true" ]]; then
+            API_REF="$API_IMAGE@$API_DIGEST"
+            WEB_REF="$WEB_IMAGE@$WEB_DIGEST"
+            docker pull "$API_REF"
+            docker pull "$WEB_REF"
+          else
+            API_REF="$API_IMAGE:$VERSION"
+            WEB_REF="$WEB_IMAGE:$VERSION"
+          fi
+          echo "api_digest=$API_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "web_digest=$WEB_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "api_ref=$API_REF" >> "$GITHUB_OUTPUT"
+          echo "web_ref=$WEB_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Verify OCI release identity
+        shell: bash
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          API_REF: ${{ steps.refs.outputs.api_ref }}
+          WEB_REF: ${{ steps.refs.outputs.web_ref }}
+        run: |
+          set -euo pipefail
+          for image in "$API_REF" "$WEB_REF"; do
+            test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "$VERSION"
+            test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
+            test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.source" }}')" = "https://github.com/bohanyt/recantor"
+          done
+
+      - name: Validate pull-only release Compose
+        shell: bash
+        env:
+          RECANTOR_API_IMAGE: ${{ steps.refs.outputs.api_ref }}
+          RECANTOR_WEB_IMAGE: ${{ steps.refs.outputs.web_ref }}
+          GROQ_API_KEY: ""
+        run: |
+          set -euo pipefail
+          docker compose -f infra/compose.release.yaml config --quiet
+          docker compose -f infra/compose.release.yaml config --format json > /tmp/release-compose.json
+          python - <<'PY'
+          import json
+          with open("/tmp/release-compose.json", encoding="utf-8") as handle:
+              config = json.load(handle)
+          services = config["services"]
+          recantor = ["migrate", "api", "stt-worker", "stt-upload-worker", "stt-reconciler", "media-worker", "media-reconciler", "web"]
+          for name in recantor:
+              assert "build" not in services[name], f"{name} must not build on the client"
+          api_image = services["api"]["image"]
+          for name in ["migrate", "stt-worker", "stt-upload-worker", "stt-reconciler", "media-worker", "media-reconciler"]:
+              assert services[name]["image"] == api_image, f"{name} must reuse the API image"
+          assert "GROQ_API_KEY" not in services["web"].get("environment", {})
+          assert "GROQ_API_KEY" not in services["media-worker"].get("environment", {})
+          assert "GROQ_API_KEY" not in services["media-reconciler"].get("environment", {})
+          PY
+
+      - name: Start exact release images
+        shell: bash
+        env:
+          RECANTOR_API_IMAGE: ${{ steps.refs.outputs.api_ref }}
+          RECANTOR_WEB_IMAGE: ${{ steps.refs.outputs.web_ref }}
+          GROQ_API_KEY: ""
+        run: |
+          set -euo pipefail
+          docker compose -f infra/compose.release.yaml up -d
+          for _ in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:8000/healthz >/dev/null && curl -fsS http://127.0.0.1:8000/readyz >/dev/null && curl -fsS http://127.0.0.1:5173/ >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/healthz
+          curl -fsS http://127.0.0.1:8000/readyz
+          curl -fsS http://127.0.0.1:5173/ >/dev/null
+          docker compose -f infra/compose.release.yaml ps
+
+      - name: Prove persistent volumes survive ordinary stop/start
+        shell: bash
+        env:
+          RECANTOR_API_IMAGE: ${{ steps.refs.outputs.api_ref }}
+          RECANTOR_WEB_IMAGE: ${{ steps.refs.outputs.web_ref }}
+          GROQ_API_KEY: ""
+        run: |
+          set -euo pipefail
+          docker compose -f infra/compose.release.yaml exec -T api sh -c 'printf recantor-release-audio-persistence > /data/audio/.release-ci-sentinel'
+          docker compose -f infra/compose.release.yaml exec -T postgres psql -U recantor -d recantor -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS release_ci_persistence(value text PRIMARY KEY); INSERT INTO release_ci_persistence(value) VALUES ('kept') ON CONFLICT DO NOTHING;"
+          docker compose -f infra/compose.release.yaml down
+          docker compose -f infra/compose.release.yaml up -d
+          for _ in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          test "$(docker compose -f infra/compose.release.yaml exec -T api cat /data/audio/.release-ci-sentinel)" = "recantor-release-audio-persistence"
+          docker compose -f infra/compose.release.yaml exec -T postgres psql -U recantor -d recantor -Atc "SELECT value FROM release_ci_persistence WHERE value='kept'" | grep -qx kept
+
+      - name: Render exact release manifest
+        shell: bash
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          CHANNEL: ${{ steps.identity.outputs.channel }}
+          SCHEMA_HEAD: ${{ steps.identity.outputs.schema_head }}
+          API_DIGEST: ${{ steps.refs.outputs.api_digest }}
+          WEB_DIGEST: ${{ steps.refs.outputs.web_digest }}
+        run: |
+          set -euo pipefail
+          python scripts/release_manifest.py render --version "$VERSION" --channel "$CHANNEL" --source-revision "$GITHUB_SHA" --api-digest "$API_DIGEST" --web-digest "$WEB_DIGEST" --schema-head "$SCHEMA_HEAD" --platform linux/amd64 --output release-manifest.json
+          python scripts/release_manifest.py validate release-manifest.json
+          cat release-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: release-manifest.json
+          if-no-files-found: error
+
+      - name: Create GitHub Release for immutable tag
+        if: steps.identity.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          CHANNEL: ${{ steps.identity.outputs.channel }}
+        run: |
+          set -euo pipefail
+          args=(release create "$VERSION" release-manifest.json --verify-tag --title "Recantor $VERSION" --generate-notes)
+          if [[ "$CHANNEL" != "stable" ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
+
+      - name: Cleanup CI release stack
+        if: always()
+        shell: bash
+        env:
+          RECANTOR_API_IMAGE: ${{ steps.refs.outputs.api_ref }}
+          RECANTOR_WEB_IMAGE: ${{ steps.refs.outputs.web_ref }}
+          GROQ_API_KEY: ""
+        run: docker compose -f infra/compose.release.yaml down -v --remove-orphans || true

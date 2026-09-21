@@ -230,6 +230,24 @@ Before Recantor may be described as stable:
 
 #47 remains optional and is not a dependency of the first installable alpha.
 
+## Stable-release engineering — #58 / #62 / #63
+
+The first installable alpha remains frozen at `v0.1.0-alpha.1`.
+
+The next release-engineering path is split deliberately:
+
+- #62 / 58A builds Recantor API/Web images in GitHub Actions, publishes immutable GHCR artifacts, records exact digests in a release manifest, and provides a pull-only release Compose path with no Recantor application `build:` directives.
+- #63 / 58B is blocked on accepted #62 and will implement update-channel selection, previous-known-good activation, health-gated update, rollback, and migration-safety refusal.
+
+Development/source Compose remains available for contributors. Supported release installation/update is not allowed to depend on `docker compose ... up --build` on the user's machine.
+
+The project-owned release image contract is exactly two images:
+
+- `ghcr.io/bohanyt/recantor-api` reused across API/migrate/STT/media worker and reconciler roles;
+- `ghcr.io/bohanyt/recantor-web` containing prebuilt static frontend assets.
+
+Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
+
 ## Not implemented yet
 
 The following must not be described as working current capabilities:

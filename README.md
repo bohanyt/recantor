@@ -78,6 +78,30 @@ Delete development database/audio volumes too only when you intentionally want a
 docker compose --env-file .env -f infra/compose.yaml down -v
 ```
 
+## Release architecture
+
+The existing `infra/compose.yaml` quick start above is the **development/source-build path**.
+
+The supported release path introduced by Issue #62 is deliberately different: Recantor application images are built and tested in GitHub Actions, published to GHCR, and then pulled by the client. Normal release installation/update must not compile the API or web application on the user's machine.
+
+The release Compose file requires immutable image references:
+
+```text
+RECANTOR_API_IMAGE=ghcr.io/bohanyt/recantor-api@sha256:<digest>
+RECANTOR_WEB_IMAGE=ghcr.io/bohanyt/recantor-web@sha256:<digest>
+```
+
+With a release-provided environment/manifest, activation is based on:
+
+```bash
+docker compose --env-file .env -f infra/compose.release.yaml pull
+docker compose --env-file .env -f infra/compose.release.yaml up -d
+```
+
+The release path preserves the PostgreSQL and audio named volumes and never uses `down -v` as a normal update operation. The same API image is reused by migration, API, STT worker/reconciler, and media worker/reconciler services; the web image contains prebuilt static assets and does not run Vite development mode.
+
+Exact image digests, source revision, release channel, platform, and database schema compatibility identity are recorded in the machine-readable release manifest. Issue #63 owns the updater/known-good/rollback state machine that will consume this contract. Until #62 and #63 are accepted, this remains release-engineering work rather than a stable-product claim.
+
 ## What works on the current integration line
 
 ### Live recording and canonical transcript

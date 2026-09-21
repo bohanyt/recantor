@@ -1,5 +1,14 @@
 FROM python:3.13-slim
 
+ARG RECANTOR_VERSION=dev
+ARG RECANTOR_REVISION=unknown
+
+LABEL org.opencontainers.image.title="Recantor API" \
+      org.opencontainers.image.description="Recantor API and worker runtime" \
+      org.opencontainers.image.source="https://github.com/bohanyt/recantor" \
+      org.opencontainers.image.version="$RECANTOR_VERSION" \
+      org.opencontainers.image.revision="$RECANTOR_REVISION"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
