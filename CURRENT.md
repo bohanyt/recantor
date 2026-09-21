@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35567083709
+snapshot_seq: 35567139954
 
-collected_at: 2026-09-21T06:08:05.670660Z
+collected_at: 2026-09-21T06:08:37.107795Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T05:27:43Z
+issue_updated_at: 2026-09-21T06:08:25Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -494,21 +494,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5755262634 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: CT-RECANTOR-20260921-R46C1
-mode: integration-only
-issue: #48
-source_pr: #59
-integration_branch: integration/cloud-alpha-2026-09-11
-current_integration_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
-accepted_head: f326cf1f88870804c50ed0468e1551a532f4b851
-review_result: #48 comment 5755242922 CLEAN
-write_scope: advance integration branch to exact accepted head only; force=false; no main write
-lease_expires_at: 2026-09-21T04:35:00Z
-
----
-
 comment_id=5755282655 author=bohanyt
 CONTROL_TOWER_WINDOWS_BUILD_FIX_INTEGRATED_V1
 
@@ -641,13 +626,42 @@ next_windows_scope: update clone to b6602a1 -> Preflight -> visually confirm cor
 main_merge: not authorized
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5756117057 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: CT-RECANTOR-20260921-R46C1
+mode: post-acceptance-integration-reconciliation
+issue: #41
+integration_branch: integration/cloud-alpha-2026-09-11
+current_integration_head: b6602a138fc2186fc37b09d09277871f256bceda
+main_only_commit_to_reconcile: 59ff57502a9a1d84ad332cab106c46c256482d23
+write_scope:
+  - docs/CURRENT.md truth reconciliation
+  - .github/agent-context.toml from main
+  - .github/workflows/agent-context-current.yml from main
+  - one merge-lineage reconciliation commit on integration only
+bounded_goal:
+  - preserve accepted alpha product tree
+  - incorporate main-only agent-context compiler infrastructure
+  - record #48 Windows acceptance complete and next #58/#61 work
+  - obtain exact reconciled-head CI before alpha freeze
+exclusions:
+  - no product behavior changes
+  - no PR #53 merge to main
+  - no #47 work
+  - no updater/#58 or #61 implementation in this lease
+lease_expires_at: 2026-09-21T06:35:00Z
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-21T06:08:25Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #61 state=open updated=2026-09-21T05:52:30Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
 PR #53 state=open updated=2026-09-21T05:27:47Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #41 state=open updated=2026-09-21T05:27:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -660,4 +674,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35567083709 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35567139954 sections=6
