@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35558851577
+snapshot_seq: 35558964803
 
-collected_at: 2026-09-21T03:50:12.636580Z
+collected_at: 2026-09-21T03:52:16.017020Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T03:39:55Z
+issue_updated_at: 2026-09-21T03:52:09Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -542,12 +542,38 @@ CONTROL_TOWER_HOUSEKEEPING_V1
 - PR #53 remains DRAFT; main merge is NOT authorized.
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755146598 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: N
+mode: implementation
+issue: #48
+packet_key: RECANTOR-Q48-WINBUILD-HTTPS-79bf84-20260921
+branch: agent-n/issue-48-windows-build-https
+base_branch: integration/cloud-alpha-2026-09-11
+base_sha: 79bf84da8643c29e6ebf12697532f8b41ec6904e
+write_scope:
+  - apps/api/Dockerfile only unless exact proof requires one additional minimal test/workflow line
+bounded_goal:
+  - force Debian deb.debian.org package source URIs to HTTPS for modern deb822 and legacy sources when present
+  - add small bounded apt retry count
+  - retain ffmpeg/ffprobe verification, uv==0.10.0, frozen dependency install
+exclusions:
+  - no application/product semantic changes
+  - no TLS verification bypass / untrusted mirror / --fix-missing
+  - no #44/#45/#46/#47
+  - no integration/main write, force update, merge, mark-ready, or Windows witness
+lease_expires_at: 2026-09-21T04:15:00Z
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #48 state=open updated=2026-09-21T03:50:03Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #41 state=open updated=2026-09-21T03:39:55Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-21T03:52:09Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #48 state=open updated=2026-09-21T03:52:05Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -561,4 +587,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35558851577 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35558964803 sections=6
