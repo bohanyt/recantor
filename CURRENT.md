@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35561875200
+snapshot_seq: 35561951163
 
-collected_at: 2026-09-21T04:40:28.310629Z
+collected_at: 2026-09-21T04:41:44.758590Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T04:12:33Z
+issue_updated_at: 2026-09-21T04:41:41Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -619,13 +619,40 @@ windows_retry_scope: repeat only failed build/start -> preflight; if PASS contin
 main_merge: not authorized
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755501934 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: O
+mode: implementation
+issue: #48
+packet_key: RECANTOR-Q48-WINUI-TRUTH-f326cf-20260921
+branch: agent-o/issue-48-ui-truth-footer
+base_branch: integration/cloud-alpha-2026-09-11
+base_sha: f326cf1f88870804c50ed0468e1551a532f4b851
+write_scope:
+  - apps/web/src/App.tsx
+  - apps/web/src/App.test.tsx only for direct regression coverage
+bounded_goal:
+  - replace stale footer capability claim with truthful current-alpha copy
+  - assert stale claim absent and truthful replacement present
+exclusions:
+  - no recorder/STT/upload behavior changes
+  - no docs sweep
+  - no #47
+  - no integration/main write
+  - no merge or mark-ready
+lease_expires_at: 2026-09-21T05:05:00Z
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #48 state=open updated=2026-09-21T04:40:13Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #48 state=open updated=2026-09-21T04:41:32Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T04:12:38Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #41 state=open updated=2026-09-21T04:12:33Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-21T04:41:41Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -638,4 +665,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35561875200 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35561951163 sections=6
