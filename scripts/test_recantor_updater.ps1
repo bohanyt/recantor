@@ -84,6 +84,11 @@ Assert-Equal (Get-RecantorChannelForVersion "v1.2.3-beta.1") "beta" "beta versio
 Assert-Equal (Get-RecantorChannelForVersion "v1.2.3-rc.1") "beta" "rc maps to beta"
 Assert-Throws { Get-RecantorChannelForVersion "v1.2.3-preview.1" } "Unsupported" "unknown prerelease"
 
+Assert-Equal (Compare-RecantorVersion "v1.2.3" "v1.2.2") 1 "newer stable compares greater"
+Assert-Equal (Compare-RecantorVersion "v1.2.3-alpha.2" "v1.2.3-alpha.1") 1 "newer alpha ordinal compares greater"
+Assert-Equal (Compare-RecantorVersion "v1.2.3" "v1.2.3-rc.1") 1 "stable outranks prerelease"
+Assert-Equal (Compare-RecantorVersion "v1.2.3-alpha.1" "v1.2.3-alpha.1") 0 "same version compares equal"
+
 $v1 = New-TestManifest -Format 1 -Version "v0.1.0-alpha.2"
 Assert-ReleaseManifest $v1
 Assert-True (-not (Test-ApplicationRollbackSafe -CandidateManifest $v1 -PreviousVersion "v0.1.0-alpha.1")) "format 1 has no inferred rollback safety"
