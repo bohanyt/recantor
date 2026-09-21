@@ -269,21 +269,27 @@ The candidate introduces:
 - no automatic database downgrade and no volume-deleting recovery path;
 - release bundle packaging with updater, pull-only Compose, `.env.example`, and exact release manifest.
 
-Exact candidate cloud proof at head `641d7429ab675ff051ac8713e3708f188557652a` is green:
+The first independent review found the updater core safety semantics coherent but required stronger acceptance evidence before a Windows witness. The bounded correction closes those proof gaps.
 
-- Updater CI `35578927855` SUCCESS:
-  - Windows PowerShell unit/contract tests PASS;
-  - real Docker install from immutable `v0.1.0-alpha.2` artifacts PASS;
-  - representative PostgreSQL/audio persistence PASS;
-  - synthetic N -> N+1 update PASS;
-  - injected rollback-safe candidate failure restores previous known-good app digests without database downgrade;
-  - injected rollback-unsafe failure is refused with `manual_recovery_required`;
-  - state/secret checks PASS.
-- Release images `35578927836` SUCCESS:
+Current correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` is green:
+
+- Updater CI `35584723718` SUCCESS:
+  - Windows PowerShell unit/contract tests PASS, including backup-required pre-apply gating, rollback-attempt health failure -> `rollback_failed_manual_recovery`, and manual rollback target health failure truth;
+  - real Docker install from accepted immutable `v0.1.0-alpha.2` artifacts PASS;
+  - N, N+1, rollback-safe-fail, and rollback-unsafe-fail use four distinct API digests and four distinct Web digests;
+  - a controlled test-only interruption persists `pending.phase=pulling`, then a fresh updater process retries the **same candidate identity** to successful N+1 completion;
+  - N -> N+1 transition proves current/previous manifests carry different exact image identities;
+  - rollback-safe failure proves `active-images.env` and the running API/Web containers return to the exact previous N+1 digest references;
+  - rollback-unsafe failure is refused with `manual_recovery_required` while current known-good identity remains N+1;
+  - representative PostgreSQL/audio data survives all paths;
+  - updater stdout/stderr are captured and scanned against a runtime-generated proof secret, and updater state is scanned for both the secret value and `GROQ_API_KEY`; no leak is found.
+- Release images `35584723674` SUCCESS:
   - release image build/smoke remains green;
   - candidate manifest v2 validates;
-  - release bundle artifact `release-candidate-641d7429ab675ff051ac8713e3708f188557652a` was produced.
-- normal CI `35578927853` SUCCESS.
+  - release bundle creation remains green.
+- normal CI `35584723690` SUCCESS.
+
+These are correction proofs only. Independent correction rereview and the final bounded Windows updater witness still remain before #63 acceptance.
 
 Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
 
