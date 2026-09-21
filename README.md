@@ -5,7 +5,7 @@ Recantor is a self-hosted recording and transcription project built around one r
 The current cloud-alpha integration line has two web workflows:
 
 - **Live** — reliable browser archive recording plus an independent realtime speech lane, durable STT scheduling, canonical transcript recovery, and live transcript display.
-- **Upload recording** — resumable transfer of an existing WAV/MP3/M4A/OGG/WebM/MP4 file into durable upload storage, followed by server-side media validation/normalization, deterministic segmentation, upload-class STT scheduling, and canonical transcript production. Processing/result/export UI is still the next product slice (#46).
+- **Upload recording** — resumable transfer of an existing WAV/MP3/M4A/OGG/WebM/MP4 file into durable upload storage, followed by server-side media validation/normalization, deterministic segmentation, upload-class STT scheduling, canonical transcript/result presentation, and capability-protected TXT/JSON/VTT/SRT exports.
 
 ## Reliability principles
 
@@ -94,7 +94,7 @@ The #44 upload foundation is integrated. Uppy/tus can pause, reload, and resume 
 
 The reviewed #45 processing path is also integrated. After durable upload completion, PostgreSQL owns one immutable processing identity, a dedicated media worker runs bounded ffprobe/FFmpeg normalization to mono signed 16-bit PCM at 16 kHz, deterministic `upload-energy-vad-180s-v1` segmentation creates ordinary durable transcription utterances, and upload STT uses the same provider/canonical `TranscriptSegment` truth as Live. Valid blank provider results end as terminal `no_speech` without fabricating transcript rows. Live and upload STT have separate worker/queue capacity so upload backlog does not consume reserved Live headroom.
 
-The current **UI boundary** is narrower than the backend capability: the Upload screen proves resumable durable transfer, but it does not yet show processing progress, canonical transcript results, or TXT/JSON/VTT/SRT exports. Those product surfaces are Issue #46.
+The independently reviewed #46 result surface is integrated. The Upload screen follows durable processing state, renders the canonical recording-timeline transcript, preserves capability expiry semantics, and exposes TXT/JSON/VTT/SRT derived exports. Canonical `TranscriptSegment` rows remain transcript truth; export files are derived views.
 
 ## Configuration truth
 
@@ -125,6 +125,18 @@ pnpm --dir apps/web build
 ```
 
 GitHub Actions also exercises PostgreSQL migrations/readiness, Redis, Chromium web/API/PostgreSQL behavior, recorder recovery/fencing paths, durable live STT scheduling, resumable upload, uploaded-media processing/queue isolation, and Docker Compose smoke coverage.
+
+### Alpha cloud composition proof
+
+Issue #48 keeps the final cloud-only composition checks isolated from normal development data:
+
+```bash
+python scripts/alpha_cloud_proof.py
+```
+
+The proof uses `infra/compose.alpha-proof.yaml` with Compose project `recantor-alpha-proof`. It points the existing Groq adapter at a deterministic local compatible HTTP endpoint with a fixed non-secret proof credential, exercises final-image media processing, verifies whole-stack persistence across `down` / `up`, then destroys only the isolated proof volumes and verifies a zero-state fresh boot.
+
+The final Windows campaign uses `scripts/windows-alpha-witness.ps1` only after the cloud gate is accepted. The helper checks an approved exact SHA and clean worktree, Docker/Compose and stack health, captures evidence outside the repository, performs post-run Live/Upload assertions, and verifies that the configured Groq secret is absent from Compose logs and tracked diffs without printing the secret. It is a witness helper, not evidence that Windows acceptance has already happened.
 
 ## Production exposure boundary
 
