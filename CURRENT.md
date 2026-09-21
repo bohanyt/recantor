@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35558127420
+snapshot_seq: 35558261115
 
-collected_at: 2026-09-21T03:37:12.756332Z
+collected_at: 2026-09-21T03:39:38.301120Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -531,22 +531,22 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #45 state=open updated=2026-09-21T03:39:31Z title=Phase 3B: uploaded-media normalization and durable queued transcription
+ISSUE #43 state=open updated=2026-09-21T03:39:29Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
+PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #48 state=open updated=2026-09-21T03:18:49Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #41 state=open updated=2026-09-21T03:17:45Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #53 state=open updated=2026-09-21T03:14:43Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
-ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
-ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
+ISSUE #46 state=open updated=2026-09-21T03:39:35Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-21T03:14:43Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T03:39:25Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35558127420 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35558261115 sections=6
