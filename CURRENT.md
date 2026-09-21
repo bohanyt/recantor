@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35296461875
+snapshot_seq: 35550381496
 
-collected_at: 2026-09-18T01:43:27.684660Z
+collected_at: 2026-09-21T01:16:51.082962Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -373,7 +373,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-18T01:43:11Z
+issue_updated_at: 2026-09-21T01:16:37Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,31 +503,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5691087682 author=bohanyt
-## CONTROL_TOWER_REVIEW_CONSUMED_V1 — #46 NEEDS_FIX -> SAME Q bounded correction
-
-agent: `CT-RECANTOR-20260916-R46`
-role: continuing ONE replacement Primary CT under takeover `5690325072`
-mode: coordination only
-consumed_claim: #46 `5690981663` (R46-FULL-1)
-consumed_result: #46 `5691054989` — **NEEDS_FIX**
-current_state: `NEEDS_FIX_AWAITING_Q_FRESH_LEASE`
-integration_gate: `HELD_B1_B2_B3`
-correction_dispatch: #46 `5691084342`
-packet_key: `RECANTOR-Q46-C1-B1-B3-20260916`
-
-This current-state record supersedes the takeover comment's historical REVIEW_DISPATCHED_AWAITING_INDEPENDENT_CLAIM state. The first independent COMPLETE #46 review has finished. Its NEEDS_FIX is consumed; no duplicate reviewer is started and CT is not self-reviewing Q's implementation.
-
-### Fresh identity / authority reconciliation
-
-Normal GitHub was read for the FULL result and its original claim, actual PR #56/#53 metadata, #41 authority/lease changes since takeover, #46 changes after the result, and PR #56's combined discussion/review timeline.
-
-- SAME Q / #46 / `agent-q/issue-46-upload-results` / PR #56 OPEN+DRAFT+unmerged.
-- Actual Q head remains `b82d11674687a42e0e008047656a841fac14db40`, exactly the indepen
-...[COMMENT_5691087682_TRUNCATED chars=3284]
-
----
-
 comment_id=5691161659 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: Q
@@ -713,11 +688,34 @@ Exactly one independent correction-rereviewer may claim the packet. Scope is B1/
 No source/branch/PR-state/integration/main mutation and no reviewer self-start by CT.
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5754156904 author=bohanyt
+# CONTROL_TOWER_SUCCESSOR_HANDOFF_V2 — Q complete; existing R46-C1 rereview unclaimed
+
+handoff_key: `RECANTOR-CT-20260921-R46C1-UNCLAIMED-V1`
+repository: `bohanyt/recantor`
+prepared_on: 2026-09-21 (Asia/Jakarta)
+outgoing_primary_ct: `CT-RECANTOR-20260916-R46`
+role_transition: ONE replacement continuing Primary Control Tower, at Bohan's explicit request
+current_state: `CORRECTION_REREVIEW_DISPATCHED_AWAITING_CLAIM`
+q_state: `CORRECTION_IMPLEMENTATION_HANDED_OFF__EXACT_HEAD_CI_GREEN__LEASE_RELEASED`
+integration_gate: `HELD_PENDING_INDEPENDENT_CORRECTION_CLEAN`
+
+## 1. Succession and role boundaries
+
+Bohan requested the latest Recantor state and a durable handoff so a new conversation can replace this continuing CT and continue the project. This is the replacement CT handoff, NOT another Q implementation prompt and NOT another reviewer dispatch.
+
+The outgoing CT relinquishes its Primary CT role for that ONE replacement. The successor must record takeover on #41 after fresh authority/admission checks. Do not create a competing CT, second implementation owner, or extra review lane. The successor is NOT Agent Q, NOT Q's independent reviewer, and NOT the laptop operator.
+
+This handoff supe
+...[COMMENT_5754156904_TRUNCATED chars=19801]
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-18T01:43:11Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-21T01:16:37Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-18T01:43:01Z title=Phase 3C: upload processing UX and canonical transcript exports
 PR #56 state=open updated=2026-09-18T01:33:47Z title=Phase 3C: upload results and canonical transcript exports
 PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -736,4 +734,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35296461875 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35550381496 sections=6
