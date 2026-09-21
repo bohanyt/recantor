@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35566191091
+snapshot_seq: 35566783185
 
-collected_at: 2026-09-21T05:52:40.502073Z
+collected_at: 2026-09-21T06:02:59.012545Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -645,8 +645,8 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #48 state=open updated=2026-09-21T06:02:42Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #61 state=open updated=2026-09-21T05:52:30Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-ISSUE #48 state=open updated=2026-09-21T05:52:09Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T05:27:47Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #41 state=open updated=2026-09-21T05:27:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
@@ -661,4 +661,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35566191091 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35566783185 sections=6
