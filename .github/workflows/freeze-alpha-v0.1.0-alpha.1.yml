@@ -1,0 +1,33 @@
+name: Freeze alpha v0.1.0-alpha.1
+
+on:
+  push:
+    branches:
+      - ops/freeze-v0.1.0-alpha.1
+
+permissions:
+  contents: write
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Create immutable alpha tag
+        env:
+          TARGET_SHA: 27c7b192f68f19f851728bc2ea3e57706a135fa4
+          TAG_NAME: v0.1.0-alpha.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$TARGET_SHA^{commit}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists; refusing to move it."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG_NAME" "$TARGET_SHA" -m "Recantor first installable alpha"
+          git push origin "refs/tags/$TAG_NAME"
