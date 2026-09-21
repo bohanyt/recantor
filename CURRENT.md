@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35569121927
+snapshot_seq: 35570011727
 
-collected_at: 2026-09-21T06:35:33.839276Z
+collected_at: 2026-09-21T06:47:54.534980Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,7 +672,8 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #58 state=open updated=2026-09-21T06:35:08Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+ISSUE #58 state=open updated=2026-09-21T06:47:43Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+PR #64 state=open updated=2026-09-21T06:47:31Z title=58A: cloud-built release images and pull-only Compose
 ISSUE #62 state=open updated=2026-09-21T06:35:05Z title=58A — Cloud-built release images and pull-only release Compose
 ISSUE #63 state=open updated=2026-09-21T06:31:16Z title=58B — Updater, known-good activation, and rollback safety
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -681,8 +682,9 @@ PR #53 state=open updated=2026-09-21T06:17:33Z title=Integration checkpoint: clo
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
+PR #64 draft=True updated=2026-09-21T06:47:31Z base=integration/cloud-alpha-2026-09-11 head=agent-release/issue-62-cloud-images title=58A: cloud-built release images and pull-only Compose
 PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35569121927 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35570011727 sections=6
