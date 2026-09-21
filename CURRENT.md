@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35573421783
+snapshot_seq: 35573503897
 
-collected_at: 2026-09-21T07:32:19.998811Z
+collected_at: 2026-09-21T07:33:24.998881Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,7 +672,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #62 state=open updated=2026-09-21T07:32:10Z title=58A — Cloud-built release images and pull-only release Compose
+ISSUE #62 state=open updated=2026-09-21T07:33:14Z title=58A — Cloud-built release images and pull-only release Compose
 ISSUE #58 state=open updated=2026-09-21T07:30:02Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 PR #64 state=open updated=2026-09-21T07:26:10Z title=58A: cloud-built release images and pull-only Compose
 ISSUE #63 state=open updated=2026-09-21T06:31:16Z title=58B — Updater, known-good activation, and rollback safety
@@ -687,4 +687,4 @@ PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35573421783 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35573503897 sections=6
