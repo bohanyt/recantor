@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35558277311
+snapshot_seq: 35558285266
 
-collected_at: 2026-09-21T03:40:04.367720Z
+collected_at: 2026-09-21T03:40:17.206451Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -561,4 +561,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35558277311 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35558285266 sections=6
