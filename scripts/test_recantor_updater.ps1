@@ -100,7 +100,7 @@ Assert-True (-not (Test-ApplicationRollbackSafe -CandidateManifest $v2 -Previous
 
 $badRef = New-TestManifest
 $badRef.images.api.reference = "ghcr.io/bohanyt/recantor-api:latest"
-Assert-Throws { Assert-ReleaseManifest $badRef } "immutable" "mutable image tags rejected"
+Assert-Throws { Assert-ReleaseManifest $badRef } "allowed repository" "mutable image tags rejected"
 
 $badChannel = New-TestManifest
 $badChannel.channel = "stable"
