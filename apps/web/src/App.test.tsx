@@ -45,6 +45,14 @@ describe('App product shell', () => {
     expect(screen.getByTestId('workflow-upload-panel')).not.toBeVisible();
     expect(screen.queryByText(/Phase 1 reliable capture/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/durable audio first, intelligence second/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/uploaded-media processing and exports are not available in this alpha yet/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Existing recording uploads are resumable and support server-side processing into a canonical transcript with TXT, JSON, VTT, and SRT exports in this alpha\./i,
+      ),
+    ).toBeVisible();
 
     fireEvent.click(screen.getByTestId('workflow-upload'));
     expect(screen.getByTestId('workflow-upload')).toHaveAttribute('aria-current', 'page');
