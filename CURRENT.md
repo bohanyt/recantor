@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35551385504
+snapshot_seq: 35551644418
 
-collected_at: 2026-09-21T01:35:33.982591Z
+collected_at: 2026-09-21T01:40:21.886862Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -682,6 +682,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #48 state=open updated=2026-09-21T01:40:08Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #41 state=open updated=2026-09-21T01:35:21Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-21T01:31:59Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
@@ -691,7 +692,6 @@ ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex s
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
-ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
 PR #53 draft=True updated=2026-09-21T01:31:59Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
@@ -699,4 +699,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35551385504 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35551644418 sections=6
