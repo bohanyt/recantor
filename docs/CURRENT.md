@@ -10,17 +10,27 @@ Canonical cloud-alpha integration branch:
 
 `integration/cloud-alpha-2026-09-11`
 
-The integration line now contains the independently reviewed candidates for:
+The first installable alpha product candidate was accepted on Windows at exact product head:
 
-- #42 realtime transcript delivery + Live transcript UI;
-- #44 resumable existing-recording upload foundation;
-- #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
-- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`;
-- #46 Upload processing/result UI + TXT/JSON/VTT/SRT exports, independently CLEAN at exact head `005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0` and fast-forward integrated to the canonical line.
+`b6602a138fc2186fc37b09d09277871f256bceda`
 
-The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed. The independently accepted #46 candidate was then fast-forward integrated, and fresh exact integrated-head CI / Upload foundation CI / Media processing CI were green before the #48 cloud gate opened.
+That accepted product head contains the independently reviewed and integrated #42/#43/#44/#45/#46 work, the #48 cloud proof/witness helper, the Windows Docker build transport correction from PR #59, and the truthful alpha footer correction from PR #60.
 
-No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
+Issue #48 is CLOSED / completed. Windows acceptance proved:
+
+- documented Windows Docker build/start;
+- exact-SHA health/readiness preflight;
+- real microphone -> automatic durable STT -> visible canonical transcript -> healthy Stop/finalization;
+- archive safety with zero pending local fragments and zero explicit gaps;
+- native file-picker Upload -> durable completion -> server-side processing -> canonical transcript;
+- TXT/JSON/VTT/SRT exports;
+- truthful alpha capability copy at normal desktop viewport.
+
+Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Current alpha recovery after reopen restores saved upload state and may require reselecting the same local file; true browser-reopen automatic resume is tracked in #61.
+
+Post-acceptance housekeeping reconciles the `main`-only agent-context compiler commit `59ff57502a9a1d84ad332cab106c46c256482d23` into the integration lineage without changing accepted product behavior.
+
+PR #53 remains the integration checkpoint vehicle. No merge to `main` is authorized unless Bohan explicitly says to merge.
 
 ## Product truth on the integration line
 
@@ -199,18 +209,26 @@ Implemented advanced defaults include:
 
 Docker Compose forwards `GROQ_API_KEY` to `api`, `stt-worker`, and `stt-upload-worker`. The web and media-worker services do not need the Groq secret. Real credentials remain local and uncommitted.
 
-## Current acceptance gate — #48
+## Alpha acceptance status — COMPLETE
 
-Issue #48 is the bounded cloud/fresh-install gate before one final Windows Chrome/Edge campaign. Its existing proof matrix remains authoritative; the focused implementation lane is DRAFT PR #57 on `agent-m/issue-48-alpha-proof`.
+Issue #48 is complete.
 
-The remaining #48 proof is composition-only:
+The accepted Windows product witness was performed on exact head:
 
-- secretless successful Live Compose STT through the existing `GroqSTTProvider` pointed at a deterministic local compatible endpoint, including one Redis/worker/reconciler recovery case;
-- representative supported media exercised with ffprobe/FFmpeg inside the actual final `media-worker` image/runtime;
-- whole-stack durable state surviving `docker compose down` without `-v` and restart, followed by `down -v` and a true zero-state fresh boot;
-- a bounded PowerShell witness helper for the later Windows campaign with exact-SHA/clean-tree, stack-health, redacted evidence, post-run, and secret-safety assertions.
+`b6602a138fc2186fc37b09d09277871f256bceda`
 
-This #48 lane does not reopen #44/#45/#46 accepted semantics and does not perform the Windows witness itself. #47 remains optional and outside this gate.
+Accepted local evidence includes Windows Docker build/start, final exact-SHA Preflight, Live real-microphone transcription and healthy Stop/finalization, Upload processing into canonical transcript, all four TXT/JSON/VTT/SRT exports, and truthful UI capability wording.
+
+Cloud evidence remains authoritative for deterministic restart/recovery invariants that do not require a human Windows operator, including persisted non-zero tus offset recovery across API/tusd restart and same-upload continuation.
+
+The current alpha is still trusted-development software, not a stable or production-ready release.
+
+Before Recantor may be described as stable:
+
+- #58 must provide the supported versioning / release / updater / previous-known-good / rollback lifecycle;
+- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not.
+
+#47 remains optional and is not a dependency of the first installable alpha.
 
 ## Not implemented yet
 
@@ -232,8 +250,10 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-1. Complete the bounded #48 A/B/C/D cloud proof on DRAFT PR #57 without reopening accepted predecessor lanes unless a concrete regression appears.
-2. Independently review/integrate only the exact accepted #48 candidate if the proof is green.
-3. If canonical integration changes, obtain exact resulting-head checks before any Windows authorization.
-4. Only after the cloud gate passes, run one bounded Windows Chrome/Edge campaign with the approved exact candidate.
-5. Do not merge PR #53 / integration to `main` without explicit Bohan authorization.
+1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization.
+2. Complete post-acceptance housekeeping only: CURRENT truth, main-only agent-context compiler reconciliation, and exact reconciled-head CI.
+3. Freeze the green reconciled alpha as immutable tag `v0.1.0-alpha.1`.
+4. After the alpha freeze, active development moves to:
+   - #58 — stable release lifecycle: versioning, updater, rollback, known-good recovery;
+   - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported.
+5. Do not reopen completed #48 Live/Upload acceptance work unless a concrete regression appears.

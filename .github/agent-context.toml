@@ -1,0 +1,12 @@
+version = 1
+project = "recantor"
+canonical_branch = "integration/cloud-alpha-2026-09-11"
+current_doc_id = "1ZcMQPDQDEO67wseF6V5BltbWOe7UarVDWEiC9bzML1Q"
+authority_issue = 41
+
+[engine]
+repo = "bohanyt/agent-context-compiler"
+ref = "main"
+
+[authority]
+mode = "orientation_only"
