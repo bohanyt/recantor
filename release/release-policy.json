@@ -1,0 +1,4 @@
+{
+  "application_rollback_safe_to_versions": ["v0.1.0-alpha.2"],
+  "backup_required": false
+}
