@@ -44,21 +44,10 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             VERSION="$GITHUB_REF_NAME"
-            if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-              echo "Unsupported release tag: $VERSION" >&2
-              exit 1
-            fi
-            if [[ "$VERSION" == *"-alpha"* ]]; then
-              CHANNEL=alpha
-            elif [[ "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
-              CHANNEL=beta
-            else
-              CHANNEL=stable
-            fi
           else
-            VERSION="v0.0.0-dev.${SOURCE_REVISION:0:12}"
-            CHANNEL=alpha
+            VERSION="v0.0.0-alpha.dev.${SOURCE_REVISION:0:12}"
           fi
+          CHANNEL="$(python scripts/release_manifest.py channel "$VERSION")"
 
           SCHEMA_HEAD="$(python - <<'PY'
           import re
@@ -269,17 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$GITHUB_REF_NAME"
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Unsupported release tag: $VERSION" >&2
-            exit 1
-          fi
-          if [[ "$VERSION" == *"-alpha"* ]]; then
-            CHANNEL=alpha
-          elif [[ "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
-            CHANNEL=beta
-          else
-            CHANNEL=stable
-          fi
+          CHANNEL="$(python scripts/release_manifest.py channel "$VERSION")"
           SCHEMA_HEAD="$(python - <<'PY'
           import re
           from pathlib import Path

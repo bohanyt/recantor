@@ -7,7 +7,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
+STABLE_VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+ALPHA_VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+-alpha(?:\.[0-9A-Za-z-]+)*$")
+BETA_VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+-beta(?:\.[0-9A-Za-z-]+)*$")
+RC_VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+-rc(?:\.[0-9A-Za-z-]+)*$")
 REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 CHANNELS = {"stable", "beta", "alpha"}
@@ -17,15 +20,36 @@ IMAGE_NAMES = {
 }
 
 
+def channel_for_version(version: str) -> str:
+    if STABLE_VERSION_RE.fullmatch(version):
+        return "stable"
+    if ALPHA_VERSION_RE.fullmatch(version):
+        return "alpha"
+    if BETA_VERSION_RE.fullmatch(version) or RC_VERSION_RE.fullmatch(version):
+        return "beta"
+    raise ValueError(
+        "unsupported release version; allowed forms are "
+        "vX.Y.Z, vX.Y.Z-alpha[.<id>...], vX.Y.Z-beta[.<id>...], "
+        "or vX.Y.Z-rc[.<id>...]"
+    )
+
+
 def validate_manifest(data: dict[str, Any]) -> None:
     if data.get("format_version") != 1:
         raise ValueError("format_version must be 1")
+
     version = data.get("version")
-    if not isinstance(version, str) or VERSION_RE.fullmatch(version) is None:
-        raise ValueError("version must be an immutable semantic release tag such as v0.2.0")
+    if not isinstance(version, str):
+        raise ValueError("version must be a string")
+    expected_channel = channel_for_version(version)
+
     channel = data.get("channel")
     if channel not in CHANNELS:
         raise ValueError(f"channel must be one of {sorted(CHANNELS)}")
+    if channel != expected_channel:
+        raise ValueError(
+            f"version {version} requires channel={expected_channel}, got channel={channel}"
+        )
 
     source = data.get("source")
     if not isinstance(source, dict):
@@ -97,8 +121,12 @@ def render_manifest(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render or validate a Recantor release manifest")
+    parser = argparse.ArgumentParser(description="Render, classify, or validate a Recantor release manifest")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    classify = sub.add_parser("channel")
+    classify.add_argument("version")
+
     render = sub.add_parser("render")
     render.add_argument("--version", required=True)
     render.add_argument("--channel", choices=sorted(CHANNELS), required=True)
@@ -108,6 +136,7 @@ def parse_args() -> argparse.Namespace:
     render.add_argument("--schema-head", required=True)
     render.add_argument("--platform", action="append", required=True)
     render.add_argument("--output", type=Path, required=True)
+
     validate = sub.add_parser("validate")
     validate.add_argument("manifest", type=Path)
     return parser.parse_args()
@@ -115,10 +144,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.command == "channel":
+        print(channel_for_version(args.version))
+        return
+
     if args.command == "render":
         manifest = render_manifest(args)
         args.output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return
+
     data = json.loads(args.manifest.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("manifest root must be an object")
