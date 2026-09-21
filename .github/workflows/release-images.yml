@@ -10,7 +10,9 @@ on:
       - "apps/web/**"
       - "infra/compose.release.yaml"
       - "scripts/release_manifest.py"
-      - "scripts/test_release_manifest.py"\n      - "scripts/recantor.ps1"\n      - "release/**"
+      - "scripts/test_release_manifest.py"
+      - "scripts/recantor.ps1"
+      - "release/**"
   push:
     tags:
       - "v*"
