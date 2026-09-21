@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35567675401
+snapshot_seq: 35567834239
 
-collected_at: 2026-09-21T06:15:43.736171Z
+collected_at: 2026-09-21T06:17:48.492531Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -368,7 +368,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: closed
-issue_updated_at: 2026-09-21T06:13:17Z
+issue_updated_at: 2026-09-21T06:17:36Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -498,33 +498,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5755501934 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: O
-mode: implementation
-issue: #48
-packet_key: RECANTOR-Q48-WINUI-TRUTH-f326cf-20260921
-branch: agent-o/issue-48-ui-truth-footer
-base_branch: integration/cloud-alpha-2026-09-11
-base_sha: f326cf1f88870804c50ed0468e1551a532f4b851
-write_scope:
-  - apps/web/src/App.tsx
-  - apps/web/src/App.test.tsx only for direct regression coverage
-bounded_goal:
-  - replace stale footer capability claim with truthful current-alpha copy
-  - assert stale claim absent and truthful replacement present
-exclusions:
-  - no recorder/STT/upload behavior changes
-  - no docs sweep
-  - no #47
-  - no integration/main write
-  - no merge or mark-ready
-lease_expires_at: 2026-09-21T05:10:00Z
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5755652822 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: O
@@ -673,19 +646,41 @@ ancestry:
 Alpha control-tower goal is complete. Next implementation lanes are #58 and #61 after immutable alpha freeze bookkeeping.
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5756203084 author=bohanyt
+ALPHA_FREEZE_COMPLETE_V1
+
+immutable_tag: v0.1.0-alpha.1
+tagged_commit: 27c7b192f68f19f851728bc2ea3e57706a135fa4
+tag_object: 806ccad24693f2b289adaacca0e14561e5d65f03
+tag_message: Recantor first installable alpha
+freeze_workflow_run: 35567740762 SUCCESS
+
+Exact tagged-head evidence:
+- CI 35567211494 SUCCESS
+- Upload foundation CI 35567211502 SUCCESS
+- Media processing CI 35567211492 SUCCESS
+
+Policy: never move/reuse v0.1.0-alpha.1; future snapshots use a new version tag.
+
+PR #53 remains DRAFT / unmerged to main.
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #61 state=open updated=2026-09-21T06:13:15Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-ISSUE #58 state=open updated=2026-09-21T06:13:12Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
-PR #53 state=open updated=2026-09-21T06:13:09Z title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 state=open updated=2026-09-21T06:17:33Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #61 state=open updated=2026-09-21T06:17:44Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
+ISSUE #58 state=open updated=2026-09-21T06:17:40Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-21T06:13:09Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35567675401 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35567834239 sections=6
