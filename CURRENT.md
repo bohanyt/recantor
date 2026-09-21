@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35563370621
+snapshot_seq: 35563501274
 
-collected_at: 2026-09-21T05:07:32.312099Z
+collected_at: 2026-09-21T05:09:04.815621Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T05:06:47Z
+issue_updated_at: 2026-09-21T05:08:58Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -494,21 +494,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5755068610 author=bohanyt
-CONTROL_TOWER_HOUSEKEEPING_V1
-
-- PR #53 description reconciled to current alpha state and exact head 79bf84da8643c29e6ebf12697532f8b41ec6904e.
-- Completed feature issues #43, #45, #46 closed as completed; final system-level Windows evidence remains owned by #48.
-- #38, #41, #48 remain open because final alpha Windows acceptance is still pending.
-- #47 remains optional/parked.
-- #58 remains open as mandatory stable-release versioning/updater/rollback gate after alpha acceptance.
-- docs/CURRENT.md is known stale regarding PR #57/cloud-gate status. No source patch is made before the authorized Windows witness because changing the integration SHA now would invalidate the approved exact Windows candidate. Reconcile CURRENT after Windows PASS / before any main merge.
-- PR #53 remains DRAFT; main merge is NOT authorized.
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5755146598 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: N
@@ -644,12 +629,29 @@ release: implementation lease released
 no integration/main/Windows authority transferred
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755680001 author=bohanyt
+AGENT_WORK_LEASE_RELEASE_V1
+agent: O
+issue: #48
+lease: #41 comment 5755652822
+branch: agent-o/issue-48-ui-truth-footer
+final_head: b6602a138fc2186fc37b09d09277871f256bceda
+draft_pr: #60
+handoff: #48 comment 5755679438
+result: bounded Windows UI truth footer fix complete; exact-head frontend and normal CI green
+release: implementation-extension lease released
+no integration/main/Windows authority transferred
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-21T05:06:47Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #48 state=open updated=2026-09-21T05:06:37Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #48 state=open updated=2026-09-21T05:08:53Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #41 state=open updated=2026-09-21T05:08:58Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #60 state=open updated=2026-09-21T05:05:13Z title=Fix stale alpha footer capability copy
 PR #53 state=open updated=2026-09-21T04:12:38Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
@@ -665,4 +667,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35563370621 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35563501274 sections=6
