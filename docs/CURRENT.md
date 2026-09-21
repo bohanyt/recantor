@@ -225,7 +225,8 @@ The current alpha is still trusted-development software, not a stable or product
 
 Before Recantor may be described as stable:
 
-- #58 must provide the supported versioning / release / updater / previous-known-good / rollback lifecycle;
+- #62 / 58A cloud-built release artifacts are accepted and integrated;
+- #63 / 58B must still provide the supported updater / previous-known-good / rollback / migration-safety lifecycle;
 - #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not.
 
 #47 remains optional and is not a dependency of the first installable alpha.
@@ -234,17 +235,25 @@ Before Recantor may be described as stable:
 
 The first installable alpha remains frozen at `v0.1.0-alpha.1`.
 
-The next release-engineering path is split deliberately:
+Issue #62 / 58A is **accepted and integrated**. The supported release-artifact path is now cloud-built rather than client-built:
 
-- #62 / 58A builds Recantor API/Web images in GitHub Actions, publishes immutable GHCR artifacts, records exact digests in a release manifest, and provides a pull-only release Compose path with no Recantor application `build:` directives.
-- #63 / 58B is blocked on accepted #62 and will implement update-channel selection, previous-known-good activation, health-gated update, rollback, and migration-safety refusal.
+- GitHub Actions builds the Recantor API and Web release images;
+- normal release Compose uses `image:` references and contains no Recantor application `build:` directives;
+- one API image is reused by migrate/API/STT/media worker and reconciler roles;
+- the Web release image serves prebuilt static assets rather than running Vite development mode;
+- exact source revision, channel, schema head, platform, and immutable API/Web digests are recorded in a validated release manifest;
+- development/source Compose remains available for contributors.
 
-Development/source Compose remains available for contributors. Supported release installation/update is not allowed to depend on `docker compose ... up --build` on the user's machine.
+The first real publication proof is immutable prerelease tag `v0.1.0-alpha.2`, bound to reviewed source commit `a82a7c76b1344803ec1f27e890aecb8898d33989`.
 
-The project-owned release image contract is exactly two images:
+Published proof images:
 
-- `ghcr.io/bohanyt/recantor-api` reused across API/migrate/STT/media worker and reconciler roles;
-- `ghcr.io/bohanyt/recantor-web` containing prebuilt static frontend assets.
+- `ghcr.io/bohanyt/recantor-api@sha256:fe56a055597d0c559857469a89c721f2ba5c343da8d620dce9bcd936c0065b44`;
+- `ghcr.io/bohanyt/recantor-web@sha256:686f145c4336625438c2c7069d15aaaeaa2316c65abcdf9609ef9441516b4ce6`.
+
+Release workflow `35573744267` pulled those exact registry digest references back, verified OCI identity, started them through the pull-only release Compose stack, passed API health/readiness + Web shell smoke, rendered the exact release manifest, and created a GitHub **prerelease**. This is release-path proof, not a stable-product claim.
+
+Issue #63 / 58B is now **unblocked** and owns update-channel selection, previous-known-good activation, health-gated update, rollback, and migration-safety refusal. Supported update/install behavior must consume the #62 immutable artifact contract and must not compile application source on the client.
 
 Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
 
@@ -269,9 +278,9 @@ The current alpha remains trusted-development software. Authentication, authoriz
 ## Immediate coordination rule
 
 1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization.
-2. Complete post-acceptance housekeeping only: CURRENT truth, main-only agent-context compiler reconciliation, and exact reconciled-head CI.
-3. Freeze the green reconciled alpha as immutable tag `v0.1.0-alpha.1`.
-4. After the alpha freeze, active development moves to:
-   - #58 — stable release lifecycle: versioning, updater, rollback, known-good recovery;
+2. Treat #62 / 58A as complete after its accepted cloud build/publish proof; do not reopen it unless a concrete release-artifact regression appears.
+3. Active stable-path engineering is now:
+   - #63 / 58B — updater, previous-known-good activation, rollback, and migration safety using immutable #62 artifacts;
    - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported.
-5. Do not reopen completed #48 Live/Upload acceptance work unless a concrete regression appears.
+4. #47 remains optional/parked and must not block #63 or #61.
+5. Do not describe Recantor as stable until the remaining stable-path gates are accepted.
