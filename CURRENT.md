@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35558968990
+snapshot_seq: 35559241880
 
-collected_at: 2026-09-21T03:52:26.223118Z
+collected_at: 2026-09-21T03:57:09.962290Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T03:52:09Z
+issue_updated_at: 2026-09-21T03:56:59Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -568,11 +568,28 @@ exclusions:
 lease_expires_at: 2026-09-21T04:15:00Z
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755177807 author=bohanyt
+AGENT_WORK_LEASE_RELEASE_V1
+agent: N
+issue: #48
+lease: #41 comment 5755146598
+branch: agent-n/issue-48-windows-build-https
+final_head: f326cf1f88870804c50ed0468e1551a532f4b851
+draft_pr: #59
+result: bounded Windows Docker build transport fix complete; exact-head build and normal CI green
+release: implementation lease released
+no integration/main/Windows authority transferred
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-21T03:52:09Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-21T03:56:59Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #59 state=open updated=2026-09-21T03:53:21Z title=fix: harden Debian apt transport for Windows Docker builds
 ISSUE #48 state=open updated=2026-09-21T03:52:05Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
@@ -582,9 +599,10 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
+PR #59 draft=True updated=2026-09-21T03:53:21Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-48-windows-build-https title=fix: harden Debian apt transport for Windows Docker builds
 PR #53 draft=True updated=2026-09-21T03:39:25Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35558968990 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35559241880 sections=6
