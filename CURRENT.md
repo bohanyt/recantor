@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35561951163
+snapshot_seq: 35561960096
 
-collected_at: 2026-09-21T04:41:44.758590Z
+collected_at: 2026-09-21T04:41:58.868459Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -650,9 +650,9 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-21T04:41:41Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #48 state=open updated=2026-09-21T04:41:32Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T04:12:38Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #41 state=open updated=2026-09-21T04:41:41Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -665,4 +665,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35561951163 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35561960096 sections=6
