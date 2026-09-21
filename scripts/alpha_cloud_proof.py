@@ -81,7 +81,11 @@ def json_http(
 
 def wait_http(url: str, attempts: int = 120) -> None:
     for _ in range(attempts):
-        status, _, _ = http("GET", url, timeout=2)
+        try:
+            status, _, _ = http("GET", url, timeout=2)
+        except urllib.error.URLError:
+            time.sleep(1)
+            continue
         if 200 <= status < 300:
             return
         time.sleep(1)
