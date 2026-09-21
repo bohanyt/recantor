@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35564521811
+snapshot_seq: 35564620887
 
-collected_at: 2026-09-21T05:26:00.193309Z
+collected_at: 2026-09-21T05:27:53.791772Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T05:25:49Z
+issue_updated_at: 2026-09-21T05:27:43Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -494,22 +494,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5755177807 author=bohanyt
-AGENT_WORK_LEASE_RELEASE_V1
-agent: N
-issue: #48
-lease: #41 comment 5755146598
-branch: agent-n/issue-48-windows-build-https
-final_head: f326cf1f88870804c50ed0468e1551a532f4b851
-draft_pr: #59
-result: bounded Windows Docker build transport fix complete; exact-head build and normal CI green
-release: implementation lease released
-no integration/main/Windows authority transferred
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5755262634 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: CT-RECANTOR-20260921-R46C1
@@ -635,13 +619,35 @@ accepted_head: b6602a138fc2186fc37b09d09277871f256bceda
 review_result: #48 comment 5755804213 CLEAN
 write_scope: advance integration branch to exact accepted head only; force=false; no main write
 lease_expires_at: 2026-09-21T05:55:00Z
+
+---
+
+comment_id=5755821789 author=bohanyt
+CONTROL_TOWER_WINDOWS_UI_TRUTH_INTEGRATED_V1
+
+accepted_review: #48 comment 5755804213 CLEAN
+source_pr: #60
+integration_branch: integration/cloud-alpha-2026-09-11
+integrated_head: b6602a138fc2186fc37b09d09277871f256bceda
+method: fast-forward exact accepted head, force=false
+integration_lease: #41 comment 5755808828 RELEASED
+exact_same_head_evidence:
+- CI 35563300298 SUCCESS
+- Upload foundation CI 35563300142 SUCCESS
+- independent review #48 5755804213 CLEAN
+media_processing_note: latest integrated Media processing CI 35559938123 SUCCESS at predecessor f326cf1f; PR #60 changes only apps/web/src/App.tsx and App.test.tsx
+pr53_note: raw GitHub mergeability is currently unknown/recomputing; main-only commit 59ff5750 adds only agent-context compiler config/workflow and does not overlap the two-file UI truth patch
+next_windows_scope: update clone to b6602a1 -> Preflight -> visually confirm corrected footer -> continue Upload witness -> PostRun helper; accepted Live mechanics evidence remains reusable
+main_merge: not authorized
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-PR #53 state=open updated=2026-09-21T05:25:57Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #41 state=open updated=2026-09-21T05:25:49Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #48 state=open updated=2026-09-21T05:25:12Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+PR #53 state=open updated=2026-09-21T05:27:47Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #48 state=open updated=2026-09-21T05:27:45Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #41 state=open updated=2026-09-21T05:27:43Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -649,9 +655,9 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-21T05:25:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T05:27:47Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35564521811 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35564620887 sections=6
