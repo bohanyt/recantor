@@ -7,15 +7,17 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
-  create-tag:
+  create-and-dispatch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Create immutable reviewed RC tag
+
+      - name: Verify or create immutable reviewed RC tag
         env:
           TARGET_SHA: a82a7c76b1344803ec1f27e890aecb8898d33989
           TAG_NAME: v0.1.0-alpha.2
@@ -23,11 +25,24 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse "$TARGET_SHA^{commit}")" = "$TARGET_SHA"
+
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
-            echo "Tag $TAG_NAME already exists; refusing to move it." >&2
-            exit 1
+            git fetch --force origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+            actual="$(git rev-parse "$TAG_NAME^{commit}")"
+            test "$actual" = "$TARGET_SHA" || {
+              echo "Existing tag $TAG_NAME points to $actual, expected $TARGET_SHA" >&2
+              exit 1
+            }
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG_NAME" "$TARGET_SHA" -m "Recantor cloud release candidate"
+            git push origin "refs/tags/$TAG_NAME"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG_NAME" "$TARGET_SHA" -m "Recantor cloud release candidate"
-          git push origin "refs/tags/$TAG_NAME"
+
+      - name: Dispatch reviewed release workflow at immutable tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: v0.1.0-alpha.2
+        shell: bash
+        run: gh workflow run release-images.yml --ref "$TAG_NAME"
