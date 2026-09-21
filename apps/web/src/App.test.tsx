@@ -46,7 +46,9 @@ describe('App product shell', () => {
     expect(screen.queryByText(/Phase 1 reliable capture/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/durable audio first, intelligence second/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/uploaded-media processing and exports are not available in this alpha yet/i),
+      screen.queryByText(
+        /uploaded-media processing and exports are not available in this alpha yet/i,
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
