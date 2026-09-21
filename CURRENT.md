@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35558267394
+snapshot_seq: 35558277311
 
-collected_at: 2026-09-21T03:39:51.238585Z
+collected_at: 2026-09-21T03:40:04.367720Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T03:17:45Z
+issue_updated_at: 2026-09-21T03:39:55Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -527,14 +527,29 @@ next_gate: ONE final Windows acceptance campaign using scripts/windows-alpha-wit
 main_merge: not authorized
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755068610 author=bohanyt
+CONTROL_TOWER_HOUSEKEEPING_V1
+
+- PR #53 description reconciled to current alpha state and exact head 79bf84da8643c29e6ebf12697532f8b41ec6904e.
+- Completed feature issues #43, #45, #46 closed as completed; final system-level Windows evidence remains owned by #48.
+- #38, #41, #48 remain open because final alpha Windows acceptance is still pending.
+- #47 remains optional/parked.
+- #58 remains open as mandatory stable-release versioning/updater/rollback gate after alpha acceptance.
+- docs/CURRENT.md is known stale regarding PR #57/cloud-gate status. No source patch is made before the authorized Windows witness because changing the integration SHA now would invalidate the approved exact Windows candidate. Reconcile CURRENT after Windows PASS / before any main merge.
+- PR #53 remains DRAFT; main merge is NOT authorized.
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-21T03:39:55Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #48 state=open updated=2026-09-21T03:18:49Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #41 state=open updated=2026-09-21T03:17:45Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
@@ -546,4 +561,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35558267394 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35558277311 sections=6
