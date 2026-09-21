@@ -1,0 +1,45 @@
+services:
+  fake-groq:
+    image: python:3.13-slim
+    command: ["python", "/proof/fake_groq.py"]
+    volumes:
+      - ../scripts:/proof:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8787/healthz')",
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  api:
+    environment:
+      GROQ_API_KEY: alpha-proof-key
+      GROQ_STT_ENDPOINT: http://fake-groq:8787/openai/v1/audio/transcriptions
+    depends_on:
+      fake-groq:
+        condition: service_healthy
+
+  stt-worker:
+    environment:
+      GROQ_API_KEY: alpha-proof-key
+      GROQ_STT_ENDPOINT: http://fake-groq:8787/openai/v1/audio/transcriptions
+    depends_on:
+      fake-groq:
+        condition: service_healthy
+
+  stt-upload-worker:
+    environment:
+      GROQ_API_KEY: alpha-proof-key
+      GROQ_STT_ENDPOINT: http://fake-groq:8787/openai/v1/audio/transcriptions
+    depends_on:
+      fake-groq:
+        condition: service_healthy
+
+  media-worker:
+    volumes:
+      - ../scripts:/proof:ro

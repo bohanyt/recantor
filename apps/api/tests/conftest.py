@@ -2,6 +2,7 @@ import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import delete
 
@@ -9,6 +10,15 @@ from recantor.db import Base, get_engine, get_sessionmaker
 from recantor.models import RecordingChunk, RecordingGap, RecordingSession
 from recantor.recording import get_audio_storage
 from recantor.settings import get_settings
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return
+    marker = pytest.mark.skip(reason="#45 media proofs require ffmpeg and ffprobe runtime")
+    for item in items:
+        if item.fspath.basename == "test_media_processing.py":
+            item.add_marker(marker)
 
 
 @pytest_asyncio.fixture
