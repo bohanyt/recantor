@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35551191663
+snapshot_seq: 35551385504
 
-collected_at: 2026-09-21T01:32:01.628871Z
+collected_at: 2026-09-21T01:35:33.982591Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -369,7 +369,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T01:31:49Z
+issue_updated_at: 2026-09-21T01:35:21Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -499,38 +499,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5691179892 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: Q
-continuity: SAME logical Agent Q
-issue: #46
-mode: implementation
-packet_key: RECANTOR-Q46-C1-B1-B3-20260916
-branch: agent-q/issue-46-upload-results
-pr: #56
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-start_head: b82d11674687a42e0e008047656a841fac14db40
-supersedes_lease: 5691161659
-write_scope:
-  - apps/api/src/recantor/upload_result_contracts.py
-  - apps/api/src/recantor/upload_results.py
-  - apps/api/src/recantor/routes/uploads.py
-  - apps/web/src/upload/api.ts
-  - apps/web/src/UploadPanel.tsx
-  - apps/api/tests/test_upload_result_corrections.py
-  - apps/web/e2e/upload-corrections.spec.ts
-  - .github/workflows/upload-foundation-ci.yml
-bounded_goal:
-  - B1 real decodable tus -> media/FFmpeg/segmentation -> deterministic provider -> canonical visible Chromium result proof
-  - B2 fresh browser capability/client-request/session/upload identity after terminal processing failure
-  - B3 bounded Upload-only recording-timeline transcript pagination and TXT/JSON/VTT/SRT ordering across retry/out-of-order STT completion
-exclusions:
-  - no Live transcript cursor/contract rewrite
-  - no integration/main write, merge, mark-ready, self-review, Windows witness,
-...[COMMENT_5691179892_TRUNCATED chars=71]
-
----
-
 comment_id=5691360792 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: Q
@@ -690,14 +658,33 @@ accepted_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
 review_result: #46 comment 5754233273 CLEAN
 write_scope: advance integration branch to exact accepted head only; force=false; no main write
 lease_expires_at: 2026-09-21T01:55:00Z
+
+---
+
+comment_id=5754284026 author=bohanyt
+CONTROL_TOWER_INTEGRATION_COMPLETE_V1
+
+accepted_review: #46 comment 5754233273 CLEAN
+integration_branch: integration/cloud-alpha-2026-09-11
+integrated_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
+method: fast-forward exact accepted head, force=false
+integration_lease: #41 comment 5754261167 RELEASED
+fresh_integrated_head_ci:
+- CI 35551200279 SUCCESS
+- Upload foundation CI 35551200280 SUCCESS
+- Media processing CI 35551200278 SUCCESS
+next_gate: #48 existing proof matrix 5630647074, remaining proofs only
+windows_acceptance: deferred until #48 cloud gates pass
+main_merge: not authorized
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-21T01:31:49Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
-PR #56 state=closed updated=2026-09-21T01:31:59Z title=Phase 3C: upload results and canonical transcript exports
+ISSUE #41 state=open updated=2026-09-21T01:35:21Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #53 state=open updated=2026-09-21T01:31:59Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -712,4 +699,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35551191663 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35551385504 sections=6
