@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35551644418
+snapshot_seq: 35552579407
 
-collected_at: 2026-09-21T01:40:21.886862Z
+collected_at: 2026-09-21T01:58:01.712739Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -369,7 +369,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T01:35:21Z
+issue_updated_at: 2026-09-21T01:57:53Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -499,38 +499,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5691360792 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: Q
-continuity: SAME logical Agent Q
-issue: #46
-mode: implementation
-packet_key: RECANTOR-Q46-C1-B1-B3-20260916
-branch: agent-q/issue-46-upload-results
-pr: #56
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-current_head: a4617d3738a0ff2556f8e35bfd5c371846a67c0c
-supersedes_lease: 5691179892
-write_scope:
-  - apps/api/src/recantor/upload_result_contracts.py
-  - apps/api/src/recantor/upload_results.py
-  - apps/api/src/recantor/routes/uploads.py
-  - apps/web/src/upload/api.ts
-  - apps/web/src/UploadPanel.tsx
-  - apps/api/tests/test_upload_result_corrections.py
-  - apps/web/e2e/upload-corrections.spec.ts
-  - .github/workflows/upload-foundation-ci.yml
-bounded_goal:
-  - B1 real decodable tus -> media/FFmpeg/segmentation -> deterministic provider -> canonical visible Chromium result proof
-  - B2 fresh browser capability/client-request/session/upload identity after terminal processing failure
-  - B3 bounded Upload-only recording-timeline transcript pagination and TXT/JSON/VTT/SRT ordering across retry/out-of-order STT completion
-exclusions:
-  - no Live transcript cursor/contract rewrite
-  - no integration/main write, merge, mark-ready, self-review, Windows witnes
-...[COMMENT_5691360792_TRUNCATED chars=73]
-
----
-
 comment_id=5691449659 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: Q
@@ -678,12 +646,36 @@ windows_acceptance: deferred until #48 cloud gates pass
 main_merge: not authorized
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5754425205 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: M
+mode: implementation
+issue: #48
+packet_key: RECANTOR-Q48-CLOUD-EXEC-005c49-20260921
+branch: agent-m/issue-48-alpha-proof
+base_branch: integration/cloud-alpha-2026-09-11
+base_sha: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
+write_scope:
+  - remaining #48 cloud proof A/B/C/D only
+  - focused proof/test/Compose/docs/Windows-helper paths as required
+exclusions:
+  - no #47
+  - no reopening #42/#44/#45/#46 absent a concrete new regression
+  - no main write
+  - no force ref update
+  - no mark-ready
+  - no Windows/local witness
+  - no production-hardening expansion
+lease_expires_at: 2026-09-21T02:25:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #48 state=open updated=2026-09-21T01:40:08Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #41 state=open updated=2026-09-21T01:35:21Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #41 state=open updated=2026-09-21T01:57:53Z title=Control Tower: cloud-first productization swarm to first installable alpha
+ISSUE #48 state=open updated=2026-09-21T01:57:50Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T01:31:59Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
@@ -699,4 +691,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35551644418 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35552579407 sections=6
