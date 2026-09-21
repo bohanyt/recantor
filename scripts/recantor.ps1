@@ -199,7 +199,7 @@ function Start-ReleaseInfrastructure {
 
 function Invoke-CandidateMigration {
     param([string]$ImageEnv)
-    Invoke-Compose -ImageEnv $ImageEnv -Arguments @("run", "--rm", "--no-deps", "migrate")
+    Invoke-Compose -ImageEnv $ImageEnv -Arguments @("run", "--rm", "migrate")
 }
 
 function Start-ApplicationServices {
@@ -251,6 +251,7 @@ function Set-PendingState {
         candidate = $Candidate
         phase = $Phase
         message = $Message
+        recovery_checkpoint = $RecoveryCheckpoint
         updated_at_utc = [DateTime]::UtcNow.ToString("o")
     }
 }
