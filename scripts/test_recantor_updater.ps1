@@ -137,6 +137,60 @@ finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+
+$backupCandidate = New-TestManifest -Version "v0.1.0-alpha.6" -BackupRequired $true
+$backupState = New-ReleaseState
+$backupState.current = $v1
+Assert-Throws {
+    Apply-Release -Mode update -State $backupState -Candidate $backupCandidate -SelectedChannel alpha -StatePath (Join-Path $tmp "backup-state.json") -ActiveEnvPath (Join-Path $tmp "backup-active.env") -PendingEnvPath (Join-Path $tmp "backup-pending.env")
+} "external recovery checkpoint" "backup-required candidate is gated before apply"
+
+$env:RECANTOR_UPDATER_TEST_MODE = "1"
+$env:RECANTOR_UPDATER_TEST_INTERRUPT_AFTER_PHASE = "pulling"
+Assert-Throws { Invoke-TestInterruption -Phase "pulling" } "TEST_INTERRUPTION_AFTER_pulling" "gated interruption hook"
+Remove-Item Env:RECANTOR_UPDATER_TEST_INTERRUPT_AFTER_PHASE -ErrorAction SilentlyContinue
+Remove-Item Env:RECANTOR_UPDATER_TEST_MODE -ErrorAction SilentlyContinue
+
+# Focused fail-closed rollback-attempt regression with Docker boundaries stubbed.
+function Assert-LocalPreflight { param([string]$ImageEnv) }
+function Invoke-Docker { param([string[]]$Arguments) }
+function Start-ReleaseInfrastructure { param([string]$ImageEnv) }
+function Invoke-CandidateMigration { param([string]$ImageEnv) }
+function Start-ApplicationServices { param([string]$ImageEnv,[string]$OverrideFile) }
+$script:RollbackHealthCalls = 0
+function Wait-ReleaseHealthy {
+    $script:RollbackHealthCalls += 1
+    throw "synthetic health failure $script:RollbackHealthCalls"
+}
+
+$rollbackFailState = New-ReleaseState
+$rollbackFailState.channel = "alpha"
+$rollbackFailState.current = $v1
+$rollbackFailCandidate = New-TestManifest -Version "v0.1.0-alpha.3" -SafeTo @("v0.1.0-alpha.2")
+$rollbackFailStatePath = Join-Path $tmp "rollback-fail-state.json"
+Assert-Throws {
+    Apply-Release -Mode update -State $rollbackFailState -Candidate $rollbackFailCandidate -SelectedChannel alpha -StatePath $rollbackFailStatePath -ActiveEnvPath (Join-Path $tmp "rollback-fail-active.env") -PendingEnvPath (Join-Path $tmp "rollback-fail-pending.env")
+} "synthetic health failure" "rollback attempt health failure is surfaced"
+$rollbackFailPersisted = Read-ReleaseState $rollbackFailStatePath
+Assert-Equal $rollbackFailPersisted.pending.phase "manual_recovery_required" "failed rollback enters manual recovery"
+Assert-Equal $rollbackFailPersisted.last_attempt.result "rollback_failed_manual_recovery" "failed rollback result is truthful"
+Assert-Equal $rollbackFailPersisted.current.version "v0.1.0-alpha.2" "failed rollback never advances current identity"
+
+# Manual rollback target health failure must leave current state truthful and restore active env.
+$manualState = New-ReleaseState
+$manualState.current = $v2
+$manualState.previous = $v1
+$manualStatePath = Join-Path $tmp "manual-rollback-state.json"
+$manualEnvPath = Join-Path $tmp "manual-rollback-active.env"
+Write-AtomicJson -Path $manualStatePath -Object $manualState
+function Wait-ReleaseHealthy { throw "synthetic manual rollback target health failure" }
+Assert-Throws {
+    Invoke-ManualRollback -State $manualState -StatePath $manualStatePath -ActiveEnvPath $manualEnvPath
+} "active image state was restored" "manual rollback health failure restores truthful image state"
+Assert-Equal $manualState.current.version "v0.1.0-alpha.3" "manual rollback failure leaves current unchanged"
+$manualEnvText = Get-Content -LiteralPath $manualEnvPath -Raw
+Assert-True ($manualEnvText -match "RECANTOR_RELEASE_VERSION=v0.1.0-alpha.3") "manual rollback failure restores current active env"
+
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot "recantor.ps1") -Raw
 Assert-True ($source -notmatch 'alembic\s+downgrade') "updater contains no automatic Alembic downgrade"
 Assert-True ($source -notmatch 'down\s+-v') "updater contains no volume-deleting recovery path"
