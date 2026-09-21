@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35568781528
+snapshot_seq: 35568847728
 
-collected_at: 2026-09-21T06:30:40.358417Z
+collected_at: 2026-09-21T06:31:21.845290Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,11 +672,11 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #63 state=open updated=2026-09-21T06:30:18Z title=58B — Updater, known-good activation, and rollback safety
-ISSUE #62 state=open updated=2026-09-21T06:30:15Z title=58A — Cloud-built release images and pull-only release Compose
+ISSUE #62 state=open updated=2026-09-21T06:31:13Z title=58A — Cloud-built release images and pull-only release Compose
+ISSUE #58 state=open updated=2026-09-21T06:31:10Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+ISSUE #63 state=open updated=2026-09-21T06:31:16Z title=58B — Updater, known-good activation, and rollback safety
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #61 state=open updated=2026-09-21T06:17:44Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-ISSUE #58 state=open updated=2026-09-21T06:17:40Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 PR #53 state=open updated=2026-09-21T06:17:33Z title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
@@ -685,4 +685,4 @@ PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35568781528 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35568847728 sections=6
