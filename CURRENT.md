@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35559678717
+snapshot_seq: 35559762294
 
-collected_at: 2026-09-21T04:05:03.725639Z
+collected_at: 2026-09-21T04:06:29.702066Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -588,7 +588,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #48 state=open updated=2026-09-21T04:04:51Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
+ISSUE #48 state=open updated=2026-09-21T04:06:19Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 ISSUE #41 state=open updated=2026-09-21T03:56:59Z title=Control Tower: cloud-first productization swarm to first installable alpha
 PR #59 state=open updated=2026-09-21T03:53:21Z title=fix: harden Debian apt transport for Windows Docker builds
 PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -605,4 +605,4 @@ PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35559678717 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35559762294 sections=6
