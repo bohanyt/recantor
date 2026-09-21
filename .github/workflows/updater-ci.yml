@@ -1,0 +1,31 @@
+name: Updater CI
+
+on:
+  pull_request:
+    branches:
+      - integration/cloud-alpha-2026-09-11
+    paths:
+      - ".github/workflows/updater-ci.yml"
+      - "scripts/recantor.ps1"
+      - "scripts/test_recantor_updater.ps1"
+      - "scripts/release_manifest.py"
+      - "scripts/test_release_manifest.py"
+      - "release/**"
+      - "infra/compose.release.yaml"
+      - ".github/workflows/release-images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  updater-unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: PowerShell updater unit contract
+        shell: pwsh
+        run: ./scripts/test_recantor_updater.ps1
+      - name: Python release manifest contract
+        shell: pwsh
+        run: python -m unittest discover -s scripts -p "test_release_manifest.py"
