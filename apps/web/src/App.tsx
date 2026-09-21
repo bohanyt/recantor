@@ -8,6 +8,9 @@ import { UploadPanel } from './UploadPanel';
 
 type Workflow = 'live' | 'upload';
 
+const alphaCapabilityCopy =
+  'Live archive capture and canonical transcript recovery are independent safety paths. Existing recording uploads are resumable and support server-side processing into a canonical transcript with TXT, JSON, VTT, and SRT exports in this alpha.';
+
 type ServiceStatusProps = {
   title: string;
   value: string;
@@ -185,7 +188,7 @@ export default function App() {
       </div>
 
       <footer className="mt-auto pt-8 text-xs leading-5 text-[var(--muted)]">
-        {'Live archive capture and canonical transcript recovery are independent safety paths. Existing recording uploads are resumable and support server-side processing into a canonical transcript with TXT, JSON, VTT, and SRT exports in this alpha.'}
+        {alphaCapabilityCopy}
       </footer>
     </main>
   );
