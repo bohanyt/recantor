@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35568854409
+snapshot_seq: 35569118894
 
-collected_at: 2026-09-21T06:31:33.898606Z
+collected_at: 2026-09-21T06:35:18.993480Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,9 +672,9 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #58 state=open updated=2026-09-21T06:35:08Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+ISSUE #62 state=open updated=2026-09-21T06:35:05Z title=58A — Cloud-built release images and pull-only release Compose
 ISSUE #63 state=open updated=2026-09-21T06:31:16Z title=58B — Updater, known-good activation, and rollback safety
-ISSUE #62 state=open updated=2026-09-21T06:31:13Z title=58A — Cloud-built release images and pull-only release Compose
-ISSUE #58 state=open updated=2026-09-21T06:31:10Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #61 state=open updated=2026-09-21T06:17:44Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
 PR #53 state=open updated=2026-09-21T06:17:33Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -685,4 +685,4 @@ PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35568854409 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35569118894 sections=6
