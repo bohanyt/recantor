@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35573503897
+snapshot_seq: 35574383253
 
-collected_at: 2026-09-21T07:33:24.998881Z
+collected_at: 2026-09-21T07:44:32.478477Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: 27c7b192f68f19f851728bc2ea3e57706a135fa4
-canonical_commit_message: chore(alpha): reconcile accepted Windows alpha state
+canonical_head: a82a7c76b1344803ec1f27e890aecb8898d33989
+canonical_commit_message: fix(release): enforce version channel invariant
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -363,7 +363,7 @@ The desktop productization pass provides:
 - obvious `Live` / `Upload recording` top-level workflow shell;
 - active microphone `requesting` or `recording` capture cannot be hidden behind Upload navigation;
 - Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery
-...[CURRENT_TRUNCATED chars=4262]
+...[CURRENT_TRUNCATED chars=5428]
 
 SECTION authority_issue
 issue_number: 41
@@ -672,19 +672,17 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #62 state=open updated=2026-09-21T07:33:14Z title=58A — Cloud-built release images and pull-only release Compose
-ISSUE #58 state=open updated=2026-09-21T07:30:02Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
-PR #64 state=open updated=2026-09-21T07:26:10Z title=58A: cloud-built release images and pull-only Compose
+PR #53 state=open updated=2026-09-21T07:44:28Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #58 state=open updated=2026-09-21T07:44:24Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+ISSUE #62 state=open updated=2026-09-21T07:44:21Z title=58A — Cloud-built release images and pull-only release Compose
 ISSUE #63 state=open updated=2026-09-21T06:31:16Z title=58B — Updater, known-good activation, and rollback safety
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #61 state=open updated=2026-09-21T06:17:44Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-PR #53 state=open updated=2026-09-21T06:17:33Z title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
-PR #64 draft=True updated=2026-09-21T07:26:10Z base=integration/cloud-alpha-2026-09-11 head=agent-release/issue-62-cloud-images title=58A: cloud-built release images and pull-only Compose
-PR #53 draft=True updated=2026-09-21T06:17:33Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T07:44:28Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35573503897 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35574383253 sections=6
