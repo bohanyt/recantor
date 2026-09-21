@@ -29,6 +29,59 @@ function Get-RecantorChannelForVersion {
     throw "Unsupported release version '$Version'."
 }
 
+function ConvertTo-RecantorVersionParts {
+    param([string]$Version)
+    [void](Get-RecantorChannelForVersion $Version)
+    $body = $Version.Substring(1)
+    $dash = $body.IndexOf("-")
+    if ($dash -ge 0) {
+        $coreText = $body.Substring(0, $dash)
+        $prerelease = @($body.Substring($dash + 1).Split("."))
+    } else {
+        $coreText = $body
+        $prerelease = @()
+    }
+    $core = @($coreText.Split(".") | ForEach-Object { [long]$_ })
+    return [pscustomobject]@{ core = $core; prerelease = $prerelease }
+}
+
+function Compare-RecantorVersion {
+    param([string]$Left, [string]$Right)
+    $a = ConvertTo-RecantorVersionParts $Left
+    $b = ConvertTo-RecantorVersionParts $Right
+
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($a.core[$i] -lt $b.core[$i]) { return -1 }
+        if ($a.core[$i] -gt $b.core[$i]) { return 1 }
+    }
+
+    if ($a.prerelease.Count -eq 0 -and $b.prerelease.Count -eq 0) { return 0 }
+    if ($a.prerelease.Count -eq 0) { return 1 }
+    if ($b.prerelease.Count -eq 0) { return -1 }
+
+    $limit = [Math]::Min($a.prerelease.Count, $b.prerelease.Count)
+    for ($i = 0; $i -lt $limit; $i++) {
+        $leftNumber = 0L
+        $rightNumber = 0L
+        $leftIsNumber = [long]::TryParse($a.prerelease[$i], [ref]$leftNumber)
+        $rightIsNumber = [long]::TryParse($b.prerelease[$i], [ref]$rightNumber)
+        if ($leftIsNumber -and $rightIsNumber) {
+            if ($leftNumber -lt $rightNumber) { return -1 }
+            if ($leftNumber -gt $rightNumber) { return 1 }
+            continue
+        }
+        if ($leftIsNumber -and -not $rightIsNumber) { return -1 }
+        if (-not $leftIsNumber -and $rightIsNumber) { return 1 }
+        $cmp = [string]::CompareOrdinal($a.prerelease[$i], $b.prerelease[$i])
+        if ($cmp -lt 0) { return -1 }
+        if ($cmp -gt 0) { return 1 }
+    }
+
+    if ($a.prerelease.Count -lt $b.prerelease.Count) { return -1 }
+    if ($a.prerelease.Count -gt $b.prerelease.Count) { return 1 }
+    return 0
+}
+
 function Test-HasProperty {
     param($Object, [string]$Name)
     return $null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name]
@@ -212,15 +265,21 @@ function Resolve-LatestManifestUri {
     param([string]$SelectedChannel)
     $headers = @{ "User-Agent" = "recantor-updater"; "Accept" = "application/vnd.github+json" }
     $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/bohanyt/recantor/releases?per_page=30" -Headers $headers -ErrorAction Stop
+    $bestRelease = $null
     foreach ($release in @($releases)) {
         if ($release.draft) { continue }
         try { $releaseChannel = Get-RecantorChannelForVersion ([string]$release.tag_name) }
         catch { continue }
         if ($releaseChannel -ne $SelectedChannel) { continue }
         $asset = @($release.assets) | Where-Object { $_.name -eq "release-manifest.json" } | Select-Object -First 1
-        if ($null -ne $asset) { return [string]$asset.browser_download_url }
+        if ($null -eq $asset) { continue }
+        if ($null -eq $bestRelease -or (Compare-RecantorVersion ([string]$release.tag_name) ([string]$bestRelease.tag_name)) -gt 0) {
+            $bestRelease = $release
+        }
     }
-    throw "No Recantor release manifest found for channel '$SelectedChannel'."
+    if ($null -eq $bestRelease) { throw "No Recantor release manifest found for channel '$SelectedChannel'." }
+    $bestAsset = @($bestRelease.assets) | Where-Object { $_.name -eq "release-manifest.json" } | Select-Object -First 1
+    return [string]$bestAsset.browser_download_url
 }
 
 function Resolve-Manifest {
@@ -273,6 +332,9 @@ function Apply-Release {
     if ($Mode -eq "update" -and $null -eq $State.current) { throw "No installed known-good release is recorded. Use install first." }
     if ($Mode -eq "update" -and [int]$Candidate.format_version -ne 2) { throw "Updates require a format 2 manifest with explicit rollback/backup policy." }
     if ($null -ne $State.current -and [string]$State.current.version -eq [string]$Candidate.version) { throw "Release $($Candidate.version) is already current." }
+    if ($Mode -eq "update" -and (Compare-RecantorVersion ([string]$Candidate.version) ([string]$State.current.version)) -le 0) {
+        throw "Update candidate $($Candidate.version) must be newer than current $($State.current.version). Use rollback for an intentional downgrade."
+    }
 
     Assert-PendingCompatible -State $State -Candidate $Candidate
 
@@ -326,8 +388,15 @@ function Apply-Release {
         }
 
         Write-ImageEnv -Path $ActiveEnvPath -Manifest $State.current
-        Start-ApplicationServices -ImageEnv $ActiveEnvPath
-        Wait-ReleaseHealthy
+        try {
+            Start-ApplicationServices -ImageEnv $ActiveEnvPath
+            Wait-ReleaseHealthy
+        } catch {
+            Set-PendingState -State $State -Candidate $Candidate -Phase "manual_recovery_required" -Message "Candidate failed and rollback to $previousVersion also failed health verification."
+            Set-LastAttempt -State $State -CandidateVersion ([string]$Candidate.version) -Result "rollback_failed_manual_recovery" -Message $_.Exception.Message
+            Write-AtomicJson -Path $StatePath -Object $State
+            throw
+        }
         $State.pending = $null
         Set-LastAttempt -State $State -CandidateVersion ([string]$Candidate.version) -Result "rolled_back_to_previous_known_good" -Message $activationError
         Write-AtomicJson -Path $StatePath -Object $State
@@ -354,8 +423,13 @@ function Invoke-ManualRollback {
     $oldCurrent = $State.current
     $target = $State.previous
     Write-ImageEnv -Path $ActiveEnvPath -Manifest $target
-    Start-ApplicationServices -ImageEnv $ActiveEnvPath
-    Wait-ReleaseHealthy
+    try {
+        Start-ApplicationServices -ImageEnv $ActiveEnvPath
+        Wait-ReleaseHealthy
+    } catch {
+        Write-ImageEnv -Path $ActiveEnvPath -Manifest $oldCurrent
+        throw "Manual rollback target failed health verification; active image state was restored to $currentVersion."
+    }
     $State.current = $target
     $State.previous = $oldCurrent
     $State.pending = $null
