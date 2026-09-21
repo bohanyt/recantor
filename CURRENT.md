@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35556586782
+snapshot_seq: 35556870525
 
-collected_at: 2026-09-21T03:10:10.767866Z
+collected_at: 2026-09-21T03:14:49.815223Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
-canonical_commit_message: style: match Ruff formatter for upload correction test
+canonical_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
+canonical_commit_message: test: retry transient readiness connection resets
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -182,7 +182,7 @@ SECTION trusted_operational_current
 source: docs/CURRENT.md
 # Current
 
-Last updated: 2026-09-14
+Last updated: 2026-09-21
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
@@ -197,9 +197,10 @@ The integration line now contains the independently reviewed candidates for:
 - #42 realtime transcript delivery + Live transcript UI;
 - #44 resumable existing-recording upload foundation;
 - #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
-- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`.
+- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`;
+- #46 Upload processing/result UI + TXT/JSON/VTT/SRT exports, independently CLEAN at exact head `005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0` and fast-forward integrated to the canonical line.
 
-The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed, with a bounded integration-only reconciliation so normal UI and documentation do not incorrectly claim that processing is absent.
+The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed. The independently accepted #46 candidate was then fast-forward integrated, and fresh exact integrated-head CI / Upload foundation CI / Media processing CI were green before the #48 cloud gate opened.
 
 No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
 
@@ -210,7 +211,7 @@ Recantor currently has two bounded web workflows:
 1. **Live** — reliable browser archive recording, an independent realtime speech lane, PostgreSQL-authoritative live STT scheduling, canonical transcript recovery, and the #42 reconnect-safe Live transcript surface.
 2. **Upload recording** — Uppy+tus/tusd resumable transfer with durable completion evidence, followed by PostgreSQL-authoritative media processing, bounded ffprobe/FFmpeg normalization, deterministic D3-A segmentation, upload-class STT scheduling, and canonical `TranscriptSegment` production.
 
-The Upload **backend path** now reaches canonical transcript truth. The current Upload **product UI** still stops after durable-transfer confirmation: processing progress, uploaded-recording transcript/result presentation, and TXT/JSON/VTT/SRT export controls belong to #46.
+The Upload backend and product result path now reach canonical transcript truth. The capability-protected Upload UI exposes processing/result state, canonical recording-timeline transcript presentation, terminal recovery semantics, and TXT/JSON/VTT/SRT exports derived from canonical `TranscriptSegment` rows.
 
 Desktop Chrome/Edge on an **awake** computer is the first browser recording reliability target. Recantor does not claim continuous browser capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile background suspension.
 
@@ -357,19 +358,13 @@ The desktop productization pass provides:
 - `Advanced / Diagnostics` is collapsed by default and read-only;
 - #42 transcript logic remains canonical/reconnect truth;
 - normal setup truth is centered on server-side `GROQ_API_KEY`;
-- laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression coverage.
-
-The Upload screen is intentionally not pretending #46 exists: it can confirm durable transfer and truthfully state that server-side preparation/transcription may continue, but it does not yet expose processing/result/export UI.
-
-## Configuration truth
-
-Backend `Settings` currently impl
-...[CURRENT_TRUNCATED chars=3006]
+- laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression co
+...[CURRENT_TRUNCATED chars=3487]
 
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T02:16:06Z
+issue_updated_at: 2026-09-21T03:14:37Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -499,172 +494,26 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5723638361 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: Q
-continuity: SAME logical Agent Q
-issue: #46
-mode: implementation
-packet_key: RECANTOR-Q46-C1-B1-B3-20260916
-branch: agent-q/issue-46-upload-results
-pr: #56
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-current_head: 44afd2d7d5240c9d1e398da4ead8840d75a8ce79
-write_scope:
-  - apps/web/src/UploadPanel.tsx — canonical Prettier formatting cleanup only
-  - apps/api/tests/test_upload_result_corrections.py — Ruff import/order/format cleanup and one E501 line-wrap only
-  - exact-final-head CI diagnosis/verification only
-bounded_goal:
-  - clear only the currently proven Standard-CI formatting/lint gates
-  - preserve completed B1/B2/B3 behavior and tests
-exclusions:
-  - no B1/B2/B3 redesign or semantic broadening
-  - no dependency/lockfile/workflow/product-scope changes unless a newly proven exact-head failure requires the smallest correction
-  - no Live transcript semantic changes
-  - no new branch/PR, merge, mark-ready, integration/main write, self-review, reviewer dispatch, or Windows witness
-lease_expires_at: 2026-09-18T01:55:00Z
-
----
-
-comment_id=5723722010 author=bohanyt
-Q46 implementation lease 5723638361 is released. Final head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0. Handoff: Issue #46 comment 5723713362. CONTROL_TOWER_READY
-
----
-
-comment_id=5723764580 author=bohanyt
-## CONTROL_TOWER_CORRECTION_REREVIEW_DISPATCHED_V1
-
-primary_ct: `CT-RECANTOR-20260916-R46`
-issue: #46
-pr: #56
-current_state: `CORRECTION_REREVIEW_DISPATCHED_AWAITING_CLAIM`
-review_packet: #46 comment `5723762790`
-packet_key: `RECANTOR-R46-C1-005c49-20260918`
-reviewer_slot: `R46-C1-1`
-
-Fresh admission immediately before dispatch:
-- PR #56 OPEN / DRAFT / unmerged
-- base `22f6422ca5c6fe724940504fe9d2bf2880cdc1b8`
-- corrected head `005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0`
-- Standard CI `35295826886` SUCCESS
-- Upload foundation CI `35295826916` SUCCESS
-- Media processing CI `35295826895` SUCCESS
-- Q correction handoff #46 `5723713362`
-- Q lease released #41 `5723722010`
-- no equivalent correction-rereview claim/result found during admission
-
-Exactly one independent correction-rereviewer may claim the packet. Scope is B1/B2/B3 plus correction-induced regressions only; unchanged positive evidence from the first complete #46 review may be reused. This dispatch does not launch the reviewer automatically.
-
-No source/branch/PR-state/integration/main mutation and no reviewer self-start by CT.
-
-CONTROL_TOWER_READY
-
----
-
-comment_id=5754156904 author=bohanyt
-# CONTROL_TOWER_SUCCESSOR_HANDOFF_V2 — Q complete; existing R46-C1 rereview unclaimed
-
-handoff_key: `RECANTOR-CT-20260921-R46C1-UNCLAIMED-V1`
-repository: `bohanyt/recantor`
-prepared_on: 2026-09-21 (Asia/Jakarta)
-outgoing_primary_ct: `CT-RECANTOR-20260916-R46`
-role_transition: ONE replacement continuing Primary Control Tower, at Bohan's explicit request
-current_state: `CORRECTION_REREVIEW_DISPATCHED_AWAITING_CLAIM`
-q_state: `CORRECTION_IMPLEMENTATION_HANDED_OFF__EXACT_HEAD_CI_GREEN__LEASE_RELEASED`
-integration_gate: `HELD_PENDING_INDEPENDENT_CORRECTION_CLEAN`
-
-## 1. Succession and role boundaries
-
-Bohan requested the latest Recantor state and a durable handoff so a new conversation can replace this continuing CT and continue the project. This is the replacement CT handoff, NOT another Q implementation prompt and NOT another reviewer dispatch.
-
-The outgoing CT relinquishes its Primary CT role for that ONE replacement. The successor must record takeover on #41 after fresh authority/admission checks. Do not create a competing CT, second implementation owner, or extra review lane. The successor is NOT Agent Q, NOT Q's independent reviewer, and NOT the laptop operator.
-
-This handoff supe
-...[COMMENT_5754156904_TRUNCATED chars=19801]
-
----
-
-comment_id=5754261167 author=bohanyt
+comment_id=5754906472 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: CT-RECANTOR-20260921-R46C1
 mode: integration-only
-issue: #46
-source_pr: #56
+issue: #48
+source_pr: #57
 integration_branch: integration/cloud-alpha-2026-09-11
-current_integration_head: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-accepted_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
-review_result: #46 comment 5754233273 CLEAN
+current_integration_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
+accepted_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
+review_result: #48 comment 5754872182 CLEAN
 write_scope: advance integration branch to exact accepted head only; force=false; no main write
-lease_expires_at: 2026-09-21T01:55:00Z
-
----
-
-comment_id=5754284026 author=bohanyt
-CONTROL_TOWER_INTEGRATION_COMPLETE_V1
-
-accepted_review: #46 comment 5754233273 CLEAN
-integration_branch: integration/cloud-alpha-2026-09-11
-integrated_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
-method: fast-forward exact accepted head, force=false
-integration_lease: #41 comment 5754261167 RELEASED
-fresh_integrated_head_ci:
-- CI 35551200279 SUCCESS
-- Upload foundation CI 35551200280 SUCCESS
-- Media processing CI 35551200278 SUCCESS
-next_gate: #48 existing proof matrix 5630647074, remaining proofs only
-windows_acceptance: deferred until #48 cloud gates pass
-main_merge: not authorized
-
-CONTROL_TOWER_READY
-
----
-
-comment_id=5754425205 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: M
-mode: implementation
-issue: #48
-packet_key: RECANTOR-Q48-CLOUD-EXEC-005c49-20260921
-branch: agent-m/issue-48-alpha-proof
-base_branch: integration/cloud-alpha-2026-09-11
-base_sha: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
-write_scope:
-  - remaining #48 cloud proof A/B/C/D only
-  - focused proof/test/Compose/docs/Windows-helper paths as required
-exclusions:
-  - no #47
-  - no reopening #42/#44/#45/#46 absent a concrete new regression
-  - no main write
-  - no force ref update
-  - no mark-ready
-  - no Windows/local witness
-  - no production-hardening expansion
-lease_expires_at: 2026-09-21T02:25:00Z
-
----
-
-comment_id=5754542012 author=bohanyt
-AGENT_WORK_LEASE_RELEASE_V1
-agent: M
-issue: #48
-lease: #41 comment 5754425205
-branch: agent-m/issue-48-alpha-proof
-final_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
-draft_pr: #57
-handoff: #48 comment 5754541826
-result: bounded A/B/C/D cloud implementation proof green; source work complete
-release: implementation lease released
-no integration/main/Windows authority transferred
-
-CONTROL_TOWER_READY
+lease_expires_at: 2026-09-21T03:05:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-21T03:14:37Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #48 state=open updated=2026-09-21T03:09:56Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #41 state=open updated=2026-09-21T02:16:06Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #57 state=open updated=2026-09-21T02:11:05Z title=Issue #48: bounded alpha cloud proof
-PR #53 state=open updated=2026-09-21T01:31:59Z title=Integration checkpoint: cloud alpha 2026-09-12
+PR #57 state=closed updated=2026-09-21T03:14:44Z title=Issue #48: bounded alpha cloud proof
+PR #53 state=open updated=2026-09-21T03:14:43Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
@@ -674,10 +523,9 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #57 draft=True updated=2026-09-21T02:11:05Z base=integration/cloud-alpha-2026-09-11 head=agent-m/issue-48-alpha-proof title=Issue #48: bounded alpha cloud proof
-PR #53 draft=True updated=2026-09-21T01:31:59Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T03:14:43Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35556586782 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35556870525 sections=6
