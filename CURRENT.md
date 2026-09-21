@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35567139954
+snapshot_seq: 35567502885
 
-collected_at: 2026-09-21T06:08:37.107795Z
+collected_at: 2026-09-21T06:13:16.934376Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: b6602a138fc2186fc37b09d09277871f256bceda
-canonical_commit_message: style(web): match project prettier wrapping
+canonical_head: 27c7b192f68f19f851728bc2ea3e57706a135fa4
+canonical_commit_message: chore(alpha): reconcile accepted Windows alpha state
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -192,17 +192,27 @@ Canonical cloud-alpha integration branch:
 
 `integration/cloud-alpha-2026-09-11`
 
-The integration line now contains the independently reviewed candidates for:
+The first installable alpha product candidate was accepted on Windows at exact product head:
 
-- #42 realtime transcript delivery + Live transcript UI;
-- #44 resumable existing-recording upload foundation;
-- #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
-- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`;
-- #46 Upload processing/result UI + TXT/JSON/VTT/SRT exports, independently CLEAN at exact head `005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0` and fast-forward integrated to the canonical line.
+`b6602a138fc2186fc37b09d09277871f256bceda`
 
-The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed. The independently accepted #46 candidate was then fast-forward integrated, and fresh exact integrated-head CI / Upload foundation CI / Media processing CI were green before the #48 cloud gate opened.
+That accepted product head contains the independently reviewed and integrated #42/#43/#44/#45/#46 work, the #48 cloud proof/witness helper, the Windows Docker build transport correction from PR #59, and the truthful alpha footer correction from PR #60.
 
-No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
+Issue #48 is CLOSED / completed. Windows acceptance proved:
+
+- documented Windows Docker build/start;
+- exact-SHA health/readiness preflight;
+- real microphone -> automatic durable STT -> visible canonical transcript -> healthy Stop/finalization;
+- archive safety with zero pending local fragments and zero explicit gaps;
+- native file-picker Upload -> durable completion -> server-side processing -> canonical transcript;
+- TXT/JSON/VTT/SRT exports;
+- truthful alpha capability copy at normal desktop viewport.
+
+Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Current alpha recovery after reopen restores saved upload state and may require reselecting the same local file; true browser-reopen automatic resume is tracked in #61.
+
+Post-acceptance housekeeping reconciles the `main`-only agent-context compiler commit `59ff57502a9a1d84ad332cab106c46c256482d23` into the integration lineage without changing accepted product behavior.
+
+PR #53 remains the integration checkpoint vehicle. No merge to `main` is authorized unless Bohan explicitly says to merge.
 
 ## Product truth on the integration line
 
@@ -352,19 +362,13 @@ The desktop productization pass provides:
 
 - obvious `Live` / `Upload recording` top-level workflow shell;
 - active microphone `requesting` or `recording` capture cannot be hidden behind Upload navigation;
-- Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery/loss controls, then canonical transcript;
-- archive-audio and transcription state are visually/semantically separate;
-- fenced ownership, missing-audio loss, spool failure, recovery, and sync controls remain reachable outside Diagnostics;
-- `Advanced / Diagnostics` is collapsed by default and read-only;
-- #42 transcript logic remains canonical/reconnect truth;
-- normal setup truth is centered on server-side `GROQ_API_KEY`;
-- laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression co
-...[CURRENT_TRUNCATED chars=3487]
+- Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery
+...[CURRENT_TRUNCATED chars=4262]
 
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T06:08:25Z
+issue_updated_at: 2026-09-21T06:13:06Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -494,26 +498,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5755282655 author=bohanyt
-CONTROL_TOWER_WINDOWS_BUILD_FIX_INTEGRATED_V1
-
-accepted_review: #48 comment 5755242922 CLEAN
-source_pr: #59
-integration_branch: integration/cloud-alpha-2026-09-11
-integrated_head: f326cf1f88870804c50ed0468e1551a532f4b851
-method: fast-forward exact accepted head, force=false
-integration_lease: #41 comment 5755262634 RELEASED
-fresh_integrated_head_ci:
-- CI 35559938146 SUCCESS
-- Upload foundation CI 35559938135 SUCCESS
-- Media processing CI 35559938123 SUCCESS
-windows_retry_scope: repeat only failed build/start -> preflight; if PASS continue same Live/Upload campaign
-main_merge: not authorized
-
-CONTROL_TOWER_READY
-
----
-
 comment_id=5755501934 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: O
@@ -655,23 +639,57 @@ exclusions:
 lease_expires_at: 2026-09-21T06:35:00Z
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5756158420 author=bohanyt
+CONTROL_TOWER_POST_ACCEPTANCE_RECONCILIATION_COMPLETE_V1
+
+accepted_windows_product_head: b6602a138fc2186fc37b09d09277871f256bceda
+reconciled_integration_head: 27c7b192f68f19f851728bc2ea3e57706a135fa4
+reconciliation_commit: merge-lineage commit with parents:
+- b6602a138fc2186fc37b09d09277871f256bceda
+- 59ff57502a9a1d84ad332cab106c46c256482d23
+
+reconciled_paths:
+- docs/CURRENT.md — post-acceptance truth
+- .github/agent-context.toml — preserved from main
+- .github/workflows/agent-context-current.yml — preserved from main
+
+product_behavior_change: NONE
+integration_lease: #41 comment 5756117057 RELEASED
+
+exact_reconciled_head_ci:
+- CI 35567211494 SUCCESS
+- Upload foundation CI 35567211502 SUCCESS
+- Media processing CI 35567211492 SUCCESS
+
+ancestry:
+- main 59ff57502a9a1d84ad332cab106c46c256482d23 is now ancestor of integration
+- integration is ahead of main and behind_by=0
+- PR #53 remains OPEN / DRAFT / unmerged
+- main merge remains NOT authorized
+
+Alpha control-tower goal is complete. Next implementation lanes are #58 and #61 after immutable alpha freeze bookkeeping.
+
+CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-21T06:08:25Z title=Control Tower: cloud-first productization swarm to first installable alpha
-ISSUE #61 state=open updated=2026-09-21T05:52:30Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-PR #53 state=open updated=2026-09-21T05:27:47Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+ISSUE #41 state=open updated=2026-09-21T06:13:06Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #53 state=open updated=2026-09-21T06:13:09Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #61 state=open updated=2026-09-21T06:13:15Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
+ISSUE #58 state=open updated=2026-09-21T06:13:12Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #53 draft=True updated=2026-09-21T05:27:47Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T06:13:09Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35567139954 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35567502885 sections=6
