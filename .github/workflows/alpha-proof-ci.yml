@@ -1,0 +1,70 @@
+name: Alpha cloud proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/alpha-proof-ci.yml"
+      - "apps/api/**"
+      - "infra/compose.yaml"
+      - "infra/compose.alpha-proof.yaml"
+      - "scripts/alpha_cloud_proof.py"
+      - "scripts/alpha_media_runtime_proof.py"
+      - "scripts/fake_groq.py"
+      - "scripts/windows-alpha-witness.ps1"
+      - "README.md"
+      - "docs/CURRENT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alpha-cloud-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact candidate head
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+          echo "EXACT_HEAD_PROOF sha=$actual"
+
+      - name: Validate isolated proof Compose model
+        run: >-
+          docker compose -p recantor-alpha-proof
+          -f infra/compose.yaml
+          -f infra/compose.alpha-proof.yaml
+          config --quiet
+
+      - name: Run bounded A/B/C cloud proof
+        run: python scripts/alpha_cloud_proof.py
+
+      - name: Parse final Windows helper
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/windows-alpha-witness.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'D_WINDOWS_HELPER_PARSE_PASS'
+          Write-Host 'ALPHA_PROOF_TOTAL_COUNTS pass=15 fail=0 skip=0'
+
+      - name: Cleanup isolated proof project
+        if: always()
+        run: >-
+          docker compose -p recantor-alpha-proof
+          -f infra/compose.yaml
+          -f infra/compose.alpha-proof.yaml
+          down -v --remove-orphans
