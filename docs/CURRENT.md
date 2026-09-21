@@ -1,6 +1,6 @@
 # Current
 
-Last updated: 2026-09-14
+Last updated: 2026-09-21
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
@@ -15,9 +15,10 @@ The integration line now contains the independently reviewed candidates for:
 - #42 realtime transcript delivery + Live transcript UI;
 - #44 resumable existing-recording upload foundation;
 - #45 uploaded-media normalization + durable upload-to-transcript processing, accepted exact head `18453eaabea11fac01f664f73c949c7b2ea7f32c`;
-- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`.
+- #43 product shell / truthful setup, accepted exact head `0dc2295e496da76ff8a9921140ed8be6e95877d5`;
+- #46 Upload processing/result UI + TXT/JSON/VTT/SRT exports, independently CLEAN at exact head `005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0` and fast-forward integrated to the canonical line.
 
-The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed, with a bounded integration-only reconciliation so normal UI and documentation do not incorrectly claim that processing is absent.
+The #45 candidate was integrated first because it establishes backend/media/runtime truth. The #43 product/docs candidate followed. The independently accepted #46 candidate was then fast-forward integrated, and fresh exact integrated-head CI / Upload foundation CI / Media processing CI were green before the #48 cloud gate opened.
 
 No merge to `main` is authorized by this integration work. PR #53 remains the cloud-alpha checkpoint vehicle.
 
@@ -28,7 +29,7 @@ Recantor currently has two bounded web workflows:
 1. **Live** — reliable browser archive recording, an independent realtime speech lane, PostgreSQL-authoritative live STT scheduling, canonical transcript recovery, and the #42 reconnect-safe Live transcript surface.
 2. **Upload recording** — Uppy+tus/tusd resumable transfer with durable completion evidence, followed by PostgreSQL-authoritative media processing, bounded ffprobe/FFmpeg normalization, deterministic D3-A segmentation, upload-class STT scheduling, and canonical `TranscriptSegment` production.
 
-The Upload **backend path** now reaches canonical transcript truth. The current Upload **product UI** still stops after durable-transfer confirmation: processing progress, uploaded-recording transcript/result presentation, and TXT/JSON/VTT/SRT export controls belong to #46.
+The Upload backend and product result path now reach canonical transcript truth. The capability-protected Upload UI exposes processing/result state, canonical recording-timeline transcript presentation, terminal recovery semantics, and TXT/JSON/VTT/SRT exports derived from canonical `TranscriptSegment` rows.
 
 Desktop Chrome/Edge on an **awake** computer is the first browser recording reliability target. Recantor does not claim continuous browser capture through desktop sleep/shutdown, execution-suspending lock behavior, or mobile background suspension.
 
@@ -177,7 +178,7 @@ The desktop productization pass provides:
 - normal setup truth is centered on server-side `GROQ_API_KEY`;
 - laptop layout/accessibility/focus and requesting-navigation safety have Chromium regression coverage.
 
-The Upload screen is intentionally not pretending #46 exists: it can confirm durable transfer and truthfully state that server-side preparation/transcription may continue, but it does not yet expose processing/result/export UI.
+The Upload screen now includes the independently reviewed #46 processing/result surface. It preserves the existing #44 capability boundary, renders canonical transcript results in recording-timeline order, and exposes TXT/JSON/VTT/SRT as derived views rather than a second transcript store.
 
 ## Configuration truth
 
@@ -198,29 +199,23 @@ Implemented advanced defaults include:
 
 Docker Compose forwards `GROQ_API_KEY` to `api`, `stt-worker`, and `stt-upload-worker`. The web and media-worker services do not need the Groq secret. Real credentials remain local and uncommitted.
 
-## Next product dependency — #46
+## Current acceptance gate — #48
 
-Issue #46 is the next implementation lane after exact integrated-head cloud checks and an explicit D1/D2 authorization decision based on the actual integrated upload capability contract.
+Issue #48 is the bounded cloud/fresh-install gate before one final Windows Chrome/Edge campaign. Its existing proof matrix remains authoritative; the focused implementation lane is DRAFT PR #57 on `agent-m/issue-48-alpha-proof`.
 
-#46 owns only:
+The remaining #48 proof is composition-only:
 
-- human processing-state/result reads for Upload;
-- canonical uploaded-recording transcript presentation;
-- TXT / JSON or JSONL / VTT / SRT derivation from canonical `TranscriptSegment` rows;
-- focused product tests/E2E and truthful docs.
+- secretless successful Live Compose STT through the existing `GroqSTTProvider` pointed at a deterministic local compatible endpoint, including one Redis/worker/reconciler recovery case;
+- representative supported media exercised with ffprobe/FFmpeg inside the actual final `media-worker` image/runtime;
+- whole-stack durable state surviving `docker compose down` without `-v` and restart, followed by `down -v` and a true zero-state fresh boot;
+- a bounded PowerShell witness helper for the later Windows campaign with exact-SHA/clean-tree, stack-health, redacted evidence, post-run, and secret-safety assertions.
 
-There must be no second transcript truth, diarization, summaries, production auth platform, or #47 dependency.
-
-Before dispatching #46, Control Tower must freeze:
-
-- **D1** — the smallest result/export authorization boundary using the actual integrated #44 capability-token semantics;
-- **D2** — result availability after capability expiry, separating server-side retention, bearer-token validity, and browser reload/resume UX.
+This #48 lane does not reopen #44/#45/#46 accepted semantics and does not perform the Windows witness itself. #47 remains optional and outside this gate.
 
 ## Not implemented yet
 
 The following must not be described as working current capabilities:
 
-- **#46 upload result/export UX**: uploaded-recording processing-state/result views and TXT/JSON/VTT/SRT exports;
 - local faster-whisper fallback/provider selection;
 - diarization/speaker labels;
 - rolling/final summaries;
@@ -237,10 +232,8 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-1. Complete exact integrated-head CI/Compose/E2E/migration checks for the current integration branch.
-2. If green, freeze D1/D2 from the integrated #44/#45 contracts.
-3. Dispatch exactly one bounded #46 implementation owner.
-4. Independently review/integrate #46.
-5. Run #48 cloud/fresh-install gate.
-6. Only after cloud failures are exhausted, run one bounded Windows Chrome/Edge acceptance campaign.
-7. Do not merge PR #53 / integration to `main` without explicit Bohan authorization.
+1. Complete the bounded #48 A/B/C/D cloud proof on DRAFT PR #57 without reopening accepted predecessor lanes unless a concrete regression appears.
+2. Independently review/integrate only the exact accepted #48 candidate if the proof is green.
+3. If canonical integration changes, obtain exact resulting-head checks before any Windows authorization.
+4. Only after the cloud gate passes, run one bounded Windows Chrome/Edge campaign with the approved exact candidate.
+5. Do not merge PR #53 / integration to `main` without explicit Bohan authorization.
