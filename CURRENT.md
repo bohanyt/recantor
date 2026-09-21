@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35561960096
+snapshot_seq: 35563248392
 
-collected_at: 2026-09-21T04:41:58.868459Z
+collected_at: 2026-09-21T05:05:16.509363Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T04:41:41Z
+issue_updated_at: 2026-09-21T05:05:06Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -494,21 +494,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5754906472 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: CT-RECANTOR-20260921-R46C1
-mode: integration-only
-issue: #48
-source_pr: #57
-integration_branch: integration/cloud-alpha-2026-09-11
-current_integration_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
-accepted_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
-review_result: #48 comment 5754872182 CLEAN
-write_scope: advance integration branch to exact accepted head only; force=false; no main write
-lease_expires_at: 2026-09-21T03:05:00Z
-
----
-
 comment_id=5754928824 author=bohanyt
 CONTROL_TOWER_ALPHA_INTEGRATION_COMPLETE_V1
 
@@ -643,14 +628,32 @@ exclusions:
   - no #47
   - no integration/main write
   - no merge or mark-ready
-lease_expires_at: 2026-09-21T05:05:00Z
+lease_expires_at: 2026-09-21T05:10:00Z
+
+CONTROL_TOWER_READY
+
+---
+
+comment_id=5755652822 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: O
+mode: implementation-extension
+issue: #48
+packet_key: RECANTOR-Q48-WINUI-TRUTH-f326cf-20260921
+branch: agent-o/issue-48-ui-truth-footer
+current_head: b6602a138fc2186fc37b09d09277871f256bceda
+write_scope: same bounded two-path UI truth fix only
+reason: finish exact-head frontend/normal CI after formatter correction
+exclusions: unchanged; no integration/main write, merge, mark-ready, docs, #47, recorder/STT/upload behavior
+lease_expires_at: 2026-09-21T05:35:00Z
 
 CONTROL_TOWER_READY
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #41 state=open updated=2026-09-21T04:41:41Z title=Control Tower: cloud-first productization swarm to first installable alpha
+PR #60 state=open updated=2026-09-21T05:05:13Z title=Fix stale alpha footer capability copy
+ISSUE #41 state=open updated=2026-09-21T05:05:06Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #48 state=open updated=2026-09-21T04:41:32Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 PR #53 state=open updated=2026-09-21T04:12:38Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
@@ -660,9 +663,10 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
+PR #60 draft=True updated=2026-09-21T05:05:13Z base=integration/cloud-alpha-2026-09-11 head=agent-o/issue-48-ui-truth-footer title=Fix stale alpha footer capability copy
 PR #53 draft=True updated=2026-09-21T04:12:38Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35561960096 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35563248392 sections=6
