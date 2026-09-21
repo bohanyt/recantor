@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35559762294
+snapshot_seq: 35559933339
 
-collected_at: 2026-09-21T04:06:29.702066Z
+collected_at: 2026-09-21T04:09:37.954405Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
-canonical_commit_message: test: retry transient readiness connection resets
+canonical_head: f326cf1f88870804c50ed0468e1551a532f4b851
+canonical_commit_message: fix: use HTTPS and retries for Debian package installs
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -364,7 +364,7 @@ The desktop productization pass provides:
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T03:56:59Z
+issue_updated_at: 2026-09-21T04:09:24Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -584,14 +584,28 @@ release: implementation lease released
 no integration/main/Windows authority transferred
 
 CONTROL_TOWER_READY
+
+---
+
+comment_id=5755262634 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: CT-RECANTOR-20260921-R46C1
+mode: integration-only
+issue: #48
+source_pr: #59
+integration_branch: integration/cloud-alpha-2026-09-11
+current_integration_head: 79bf84da8643c29e6ebf12697532f8b41ec6904e
+accepted_head: f326cf1f88870804c50ed0468e1551a532f4b851
+review_result: #48 comment 5755242922 CLEAN
+write_scope: advance integration branch to exact accepted head only; force=false; no main write
+lease_expires_at: 2026-09-21T04:35:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+PR #53 state=open updated=2026-09-21T04:09:30Z title=Integration checkpoint: cloud alpha 2026-09-12
+ISSUE #41 state=open updated=2026-09-21T04:09:24Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #48 state=open updated=2026-09-21T04:06:19Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
-ISSUE #41 state=open updated=2026-09-21T03:56:59Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #59 state=open updated=2026-09-21T03:53:21Z title=fix: harden Debian apt transport for Windows Docker builds
-PR #53 state=open updated=2026-09-21T03:39:25Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-21T03:37:01Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #38 state=open updated=2026-09-11T21:15:52Z title=Phase 2E: durable live STT queue, reconciliation, retry, and fairness
@@ -599,10 +613,9 @@ PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only 
 PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E live scheduling
 
 OPEN_PRS
-PR #59 draft=True updated=2026-09-21T03:53:21Z base=integration/cloud-alpha-2026-09-11 head=agent-n/issue-48-windows-build-https title=fix: harden Debian apt transport for Windows Docker builds
-PR #53 draft=True updated=2026-09-21T03:39:25Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T04:09:30Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35559762294 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35559933339 sections=6
