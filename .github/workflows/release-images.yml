@@ -10,7 +10,7 @@ on:
       - "apps/web/**"
       - "infra/compose.release.yaml"
       - "scripts/release_manifest.py"
-      - "scripts/test_release_manifest.py"
+      - "scripts/test_release_manifest.py"\n      - "scripts/recantor.ps1"\n      - "release/**"
   push:
     tags:
       - "v*"
@@ -219,7 +219,7 @@ jobs:
           WEB_DIGEST: ${{ steps.refs.outputs.web_digest }}
         run: |
           set -euo pipefail
-          python scripts/release_manifest.py render --version "$VERSION" --channel "$CHANNEL" --source-revision "$SOURCE_REVISION" --api-digest "$API_DIGEST" --web-digest "$WEB_DIGEST" --schema-head "$SCHEMA_HEAD" --platform linux/amd64 --output release-manifest.json
+          python scripts/release_manifest.py render --version "$VERSION" --channel "$CHANNEL" --source-revision "$SOURCE_REVISION" --api-digest "$API_DIGEST" --web-digest "$WEB_DIGEST" --schema-head "$SCHEMA_HEAD" --platform linux/amd64 --policy release/release-policy.json --output release-manifest.json
           python scripts/release_manifest.py validate release-manifest.json
           cat release-manifest.json
 
@@ -393,7 +393,7 @@ jobs:
           WEB_DIGEST: ${{ steps.refs.outputs.web_digest }}
         run: |
           set -euo pipefail
-          python scripts/release_manifest.py render --version "$VERSION" --channel "$CHANNEL" --source-revision "$GITHUB_SHA" --api-digest "$API_DIGEST" --web-digest "$WEB_DIGEST" --schema-head "$SCHEMA_HEAD" --platform linux/amd64 --output release-manifest.json
+          python scripts/release_manifest.py render --version "$VERSION" --channel "$CHANNEL" --source-revision "$GITHUB_SHA" --api-digest "$API_DIGEST" --web-digest "$WEB_DIGEST" --schema-head "$SCHEMA_HEAD" --platform linux/amd64 --policy release/release-policy.json --output release-manifest.json
           python scripts/release_manifest.py validate release-manifest.json
           cat release-manifest.json
 
