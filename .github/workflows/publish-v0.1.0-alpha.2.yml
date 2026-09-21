@@ -1,0 +1,33 @@
+name: Publish v0.1.0-alpha.2 tag
+
+on:
+  push:
+    branches:
+      - ops/publish-v0.1.0-alpha.2
+
+permissions:
+  contents: write
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Create immutable reviewed RC tag
+        env:
+          TARGET_SHA: a82a7c76b1344803ec1f27e890aecb8898d33989
+          TAG_NAME: v0.1.0-alpha.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$TARGET_SHA^{commit}")" = "$TARGET_SHA"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists; refusing to move it." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG_NAME" "$TARGET_SHA" -m "Recantor cloud release candidate"
+          git push origin "refs/tags/$TAG_NAME"
