@@ -85,7 +85,7 @@ jobs:
             local marker="$4"
             local push_log="/tmp/push-${tag}.log"
             docker build --pull=false               --build-arg BASE="$base"               --build-arg MARKER="$marker"               -t "$repo:$tag"               /tmp/proof-image >/tmp/build-${tag}.log
-            docker push "$repo:$tag" | tee "$push_log"
+            docker push "$repo:$tag" | tee "$push_log" >&2
             local digest
             digest="$(awk '/digest: sha256:/{print $3}' "$push_log" | tail -1)"
             [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
