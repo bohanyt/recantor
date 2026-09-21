@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35551013949
+snapshot_seq: 35551191663
 
-collected_at: 2026-09-21T01:28:44.391142Z
+collected_at: 2026-09-21T01:32:01.628871Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,12 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-canonical_commit_message: Apply exact Prettier output and remove diagnostic hook
-
-Restore apps/web/package.json byte-for-byte to the pre-diagnostic manifest and apply the exact Prettier 3.9.6 output captured from CI to the bounded product-shell reconciliation proof.
-
-No behavior or product scope change.
+canonical_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
+canonical_commit_message: style: match Ruff formatter for upload correction test
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -373,7 +369,7 @@ Backend `Settings` currently impl
 SECTION authority_issue
 issue_number: 41
 issue_state: open
-issue_updated_at: 2026-09-21T01:16:37Z
+issue_updated_at: 2026-09-21T01:31:49Z
 <<<UNTRUSTED_GITHUB_DATA source=issue-41>>>
 title: Control Tower: cloud-first productization swarm to first installable alpha
 body:
@@ -503,38 +499,6 @@ Only after cloud integration is coherent:
 
 SECTION latest_authority_comments
 <<<UNTRUSTED_GITHUB_DATA source=issue-41-latest-comments>>>
-comment_id=5691161659 author=bohanyt
-AGENT_WORK_LEASE_V1
-agent: Q
-continuity: SAME logical Agent Q
-issue: #46
-mode: implementation
-packet_key: RECANTOR-Q46-C1-B1-B3-20260916
-branch: agent-q/issue-46-upload-results
-pr: #56
-base_sha: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
-start_head: b82d11674687a42e0e008047656a841fac14db40
-write_scope:
-  - apps/api/src/recantor/upload_result_contracts.py
-  - apps/api/src/recantor/upload_results.py
-  - apps/api/src/recantor/routes/uploads.py
-  - apps/api/tests/test_upload_results.py
-  - apps/web/src/upload/api.ts
-  - apps/web/src/UploadPanel.tsx
-  - apps/web/e2e/upload-results.spec.ts
-  - apps/web/e2e/upload.spec.ts
-  - .github/workflows/upload-foundation-ci.yml
-bounded_goal:
-  - B1 real decodable tus -> media/FFmpeg/segmentation -> deterministic provider -> canonical visible Chromium result proof
-  - B2 fresh browser capability/client-request/session/upload identity after terminal processing failure
-  - B3 bounded Upload-only recording-timeline transcript pagination and TXT/JSON/VTT/SRT ordering across retry/out-of-order STT completion
-exclusions:
-  - no Live transcript cursor/contract rewrite
-  - no integration/main write, merge, mark-ready, self-review, Windows witness, new branch/
-...[COMMENT_5691161659_TRUNCATED chars=59]
-
----
-
 comment_id=5691179892 author=bohanyt
 AGENT_WORK_LEASE_V1
 agent: Q
@@ -711,14 +675,29 @@ The outgoing CT relinquishes its Primary CT role for that ONE replacement. The s
 
 This handoff supe
 ...[COMMENT_5754156904_TRUNCATED chars=19801]
+
+---
+
+comment_id=5754261167 author=bohanyt
+AGENT_WORK_LEASE_V1
+agent: CT-RECANTOR-20260921-R46C1
+mode: integration-only
+issue: #46
+source_pr: #56
+integration_branch: integration/cloud-alpha-2026-09-11
+current_integration_head: 22f6422ca5c6fe724940504fe9d2bf2880cdc1b8
+accepted_head: 005c49c4b32fb3c0fd2abe5c3ee9abe5316b48e0
+review_result: #46 comment 5754233273 CLEAN
+write_scope: advance integration branch to exact accepted head only; force=false; no main write
+lease_expires_at: 2026-09-21T01:55:00Z
 >>>UNTRUSTED_GITHUB_DATA
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #41 state=open updated=2026-09-21T01:31:49Z title=Control Tower: cloud-first productization swarm to first installable alpha
 ISSUE #46 state=open updated=2026-09-21T01:28:33Z title=Phase 3C: upload processing UX and canonical transcript exports
-ISSUE #41 state=open updated=2026-09-21T01:16:37Z title=Control Tower: cloud-first productization swarm to first installable alpha
-PR #56 state=open updated=2026-09-18T01:33:47Z title=Phase 3C: upload results and canonical transcript exports
-PR #53 state=open updated=2026-09-14T04:44:57Z title=Integration checkpoint: cloud alpha 2026-09-12
+PR #56 state=closed updated=2026-09-21T01:31:59Z title=Phase 3C: upload results and canonical transcript exports
+PR #53 state=open updated=2026-09-21T01:31:59Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #45 state=open updated=2026-09-14T03:31:45Z title=Phase 3B: uploaded-media normalization and durable queued transcription
 ISSUE #43 state=open updated=2026-09-14T03:28:42Z title=Desktop product UX: Live/Upload shell, simple status, diagnostics drawer, truthful setup
 ISSUE #47 state=open updated=2026-09-11T23:37:37Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
@@ -728,10 +707,9 @@ PR #40 state=open updated=2026-09-11T20:12:47Z title=feat(stt): durable Phase 2E
 ISSUE #48 state=open updated=2026-09-11T06:52:36Z title=Alpha integration gate: cloud hardening, fresh-install proof, and deferred final local acceptance
 
 OPEN_PRS
-PR #56 draft=True updated=2026-09-18T01:33:47Z base=integration/cloud-alpha-2026-09-11 head=agent-q/issue-46-upload-results title=Phase 3C: upload results and canonical transcript exports
-PR #53 draft=True updated=2026-09-14T04:44:57Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-09-21T01:31:59Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 PR #40 draft=True updated=2026-09-11T20:12:47Z base=main head=agent-a/issue-38-phase2e-live-stt title=feat(stt): durable Phase 2E live scheduling
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35551013949 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35551191663 sections=6
