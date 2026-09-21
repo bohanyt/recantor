@@ -83,7 +83,7 @@ def wait_http(url: str, attempts: int = 120) -> None:
     for _ in range(attempts):
         try:
             status, _, _ = http("GET", url, timeout=2)
-        except urllib.error.URLError:
+        except (urllib.error.URLError, ConnectionError, TimeoutError):
             time.sleep(1)
             continue
         if 200 <= status < 300:
