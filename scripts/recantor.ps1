@@ -19,6 +19,16 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $script:ApiRepository = "ghcr.io/bohanyt/recantor-api"
 $script:WebRepository = "ghcr.io/bohanyt/recantor-web"
+$script:AllowedApiRepositories = @($script:ApiRepository)
+$script:AllowedWebRepositories = @($script:WebRepository)
+if ($env:RECANTOR_UPDATER_TEST_MODE -eq "1") {
+    if ($env:RECANTOR_UPDATER_TEST_API_REPOSITORY) {
+        $script:AllowedApiRepositories += [string]$env:RECANTOR_UPDATER_TEST_API_REPOSITORY
+    }
+    if ($env:RECANTOR_UPDATER_TEST_WEB_REPOSITORY) {
+        $script:AllowedWebRepositories += [string]$env:RECANTOR_UPDATER_TEST_WEB_REPOSITORY
+    }
+}
 $script:AppServices = @("api", "stt-worker", "stt-upload-worker", "stt-reconciler", "media-worker", "media-reconciler", "tusd", "web")
 
 function Get-RecantorChannelForVersion {
@@ -88,11 +98,14 @@ function Test-HasProperty {
 }
 
 function Assert-ImmutableImageReference {
-    param([string]$Reference, [string]$Repository)
-    $escaped = [regex]::Escape($Repository)
-    if ($Reference -notmatch "^$escaped@sha256:[0-9a-f]{64}$") {
-        throw "Image reference must be immutable $Repository@sha256:<64 lowercase hex>."
+    param([string]$Reference, [string[]]$Repositories)
+    foreach ($repository in @($Repositories)) {
+        $escaped = [regex]::Escape($repository)
+        if ($Reference -match "^$escaped@sha256:[0-9a-f]{64}$") {
+            return
+        }
     }
+    throw "Image reference must use an allowed repository with @sha256:<64 lowercase hex>."
 }
 
 function Assert-ReleaseManifest {
@@ -108,8 +121,8 @@ function Assert-ReleaseManifest {
     if ([string]$Manifest.source.repository -ne "https://github.com/bohanyt/recantor") { throw "Manifest source repository is not Recantor." }
     if ([string]$Manifest.source.revision -notmatch '^[0-9a-f]{40}$') { throw "Manifest source revision must be an exact Git SHA." }
 
-    Assert-ImmutableImageReference ([string]$Manifest.images.api.reference) $script:ApiRepository
-    Assert-ImmutableImageReference ([string]$Manifest.images.web.reference) $script:WebRepository
+    Assert-ImmutableImageReference ([string]$Manifest.images.api.reference) $script:AllowedApiRepositories
+    Assert-ImmutableImageReference ([string]$Manifest.images.web.reference) $script:AllowedWebRepositories
 
     if ([string]$Manifest.compatibility.schema_head -eq "") { throw "Manifest schema_head must not be empty." }
     if ([bool]$Manifest.compatibility.automatic_database_downgrade) { throw "Recantor updater never accepts automatic database downgrade." }
@@ -315,6 +328,16 @@ function Set-PendingState {
     }
 }
 
+function Invoke-TestInterruption {
+    param([string]$Phase)
+    if (
+        $env:RECANTOR_UPDATER_TEST_MODE -eq "1" -and
+        $env:RECANTOR_UPDATER_TEST_INTERRUPT_AFTER_PHASE -eq $Phase
+    ) {
+        throw "TEST_INTERRUPTION_AFTER_$Phase"
+    }
+}
+
 function Set-LastAttempt {
     param($State, [string]$CandidateVersion, [string]$Result, [string]$Message)
     $State.last_attempt = [pscustomobject]@{
@@ -346,12 +369,14 @@ function Apply-Release {
     Assert-LocalPreflight -ImageEnv $PendingEnvPath
     Set-PendingState -State $State -Candidate $Candidate -Phase "pulling" -Message $null
     Write-AtomicJson -Path $StatePath -Object $State
+    Invoke-TestInterruption -Phase "pulling"
 
     Invoke-Docker @("pull", [string]$Candidate.images.api.reference)
     Invoke-Docker @("pull", [string]$Candidate.images.web.reference)
 
     Set-PendingState -State $State -Candidate $Candidate -Phase "migrating" -Message $null
     Write-AtomicJson -Path $StatePath -Object $State
+    Invoke-TestInterruption -Phase "migrating"
     Start-ReleaseInfrastructure -ImageEnv $PendingEnvPath
 
     try {
@@ -365,6 +390,7 @@ function Apply-Release {
 
     Set-PendingState -State $State -Candidate $Candidate -Phase "activating" -Message $null
     Write-AtomicJson -Path $StatePath -Object $State
+    Invoke-TestInterruption -Phase "activating"
 
     try {
         Start-ApplicationServices -ImageEnv $PendingEnvPath -OverrideFile $TestCandidateComposeOverride
