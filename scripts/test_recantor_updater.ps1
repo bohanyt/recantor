@@ -127,11 +127,37 @@ try {
     Assert-True ($envText -match "RECANTOR_WEB_IMAGE=ghcr.io/bohanyt/recantor-web@sha256:") "active env stores exact Web digest"
     Assert-True ($envText -notmatch "GROQ") "active image env stores no provider secret"
 
-    $state.pending = [pscustomobject]@{ candidate_version = "v0.1.0-alpha.3" }
+    Set-PendingState -State $state -Candidate $v2 -Phase "pulling" -Message $null
+    Write-AtomicJson -Path $statePath -Object $state
+    $pendingIdentityBefore = Get-ReleaseIdentity (Read-ReleaseState $statePath).pending.candidate
     Assert-PendingCompatible -State $state -Candidate $v2
+    Assert-Equal (Get-ReleaseIdentity $state.pending.candidate) (Get-ReleaseIdentity $v2) "exact pending candidate is accepted"
 
-    $different = New-TestManifest -Version "v0.1.0-alpha.4"
-    Assert-Throws { Assert-PendingCompatible -State $state -Candidate $different } "different update is pending" "pending identity fences another candidate"
+    $differentApi = New-TestManifest
+    $differentApi.images.api.digest = ("sha256:" + ("d" * 64))
+    $differentApi.images.api.reference = ("ghcr.io/bohanyt/recantor-api@sha256:" + ("d" * 64))
+    Assert-Throws {
+        Apply-Release -Mode update -State $state -Candidate $differentApi -SelectedChannel alpha -StatePath $statePath -ActiveEnvPath $envPath -PendingEnvPath (Join-Path $tmp "pending-api.env")
+    } "different update is pending" "same-version different API identity is rejected before pending rewrite"
+    Assert-Equal (Get-ReleaseIdentity (Read-ReleaseState $statePath).pending.candidate) $pendingIdentityBefore "API mismatch leaves persisted pending identity unchanged"
+
+    $differentWeb = New-TestManifest
+    $differentWeb.images.web.digest = ("sha256:" + ("e" * 64))
+    $differentWeb.images.web.reference = ("ghcr.io/bohanyt/recantor-web@sha256:" + ("e" * 64))
+    Assert-Throws {
+        Apply-Release -Mode update -State $state -Candidate $differentWeb -SelectedChannel alpha -StatePath $statePath -ActiveEnvPath $envPath -PendingEnvPath (Join-Path $tmp "pending-web.env")
+    } "different update is pending" "same-version different Web identity is rejected before pending rewrite"
+    Assert-Equal (Get-ReleaseIdentity (Read-ReleaseState $statePath).pending.candidate) $pendingIdentityBefore "Web mismatch leaves persisted pending identity unchanged"
+
+    $differentSource = New-TestManifest
+    $differentSource.source.revision = ("f" * 40)
+    Assert-Throws {
+        Apply-Release -Mode update -State $state -Candidate $differentSource -SelectedChannel alpha -StatePath $statePath -ActiveEnvPath $envPath -PendingEnvPath (Join-Path $tmp "pending-source.env")
+    } "different update is pending" "same-version different source revision is rejected before pending rewrite"
+    Assert-Equal (Get-ReleaseIdentity (Read-ReleaseState $statePath).pending.candidate) $pendingIdentityBefore "source mismatch leaves persisted pending identity unchanged"
+
+    $differentVersion = New-TestManifest -Version "v0.1.0-alpha.4"
+    Assert-Throws { Assert-PendingCompatible -State $state -Candidate $differentVersion } "different update is pending" "pending identity still fences another version"
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
