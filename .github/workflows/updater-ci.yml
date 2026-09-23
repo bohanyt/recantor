@@ -1,0 +1,292 @@
+name: Updater CI
+
+on:
+  pull_request:
+    branches:
+      - integration/cloud-alpha-2026-09-11
+    paths:
+      - ".github/workflows/updater-ci.yml"
+      - "scripts/recantor.ps1"
+      - "scripts/test_recantor_updater.ps1"
+      - "scripts/release_manifest.py"
+      - "scripts/test_release_manifest.py"
+      - "release/**"
+      - "infra/compose.release.yaml"
+      - ".github/workflows/release-images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  updater-unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: PowerShell updater unit contract
+        shell: pwsh
+        run: ./scripts/test_recantor_updater.ps1
+      - name: Python release manifest contract
+        shell: pwsh
+        run: python -m unittest discover -s scripts -p "test_release_manifest.py"
+
+  updater-docker-proof:
+    needs: updater-unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch accepted N manifest and create hidden proof secret
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recantor-n /tmp/updater-logs
+          gh release download v0.1.0-alpha.2 -R bohanyt/recantor -p release-manifest.json -D /tmp/recantor-n
+          python scripts/release_manifest.py validate /tmp/recantor-n/release-manifest.json
+          openssl rand -hex 32 > /tmp/updater-proof-secret
+          printf 'GROQ_API_KEY=%s\n' "$(cat /tmp/updater-proof-secret)" > .env
+
+      - name: Install N from accepted immutable cloud images
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh ./scripts/recantor.ps1 install             -ManifestPath /tmp/recantor-n/release-manifest.json             -Channel alpha             -StateDir /tmp/recantor-state             -ComposeFile infra/compose.release.yaml             -EnvFile .env             -HealthTimeoutSeconds 90             > /tmp/updater-logs/install-n.log 2>&1
+
+      - name: Create representative persistent state
+        shell: bash
+        run: |
+          set -euo pipefail
+          C=(docker compose --env-file .env --env-file /tmp/recantor-state/active-images.env -f infra/compose.release.yaml)
+          "${C[@]}" exec -T api sh -c 'printf updater-audio-sentinel > /data/audio/.updater-proof'
+          "${C[@]}" exec -T postgres psql -U recantor -d recantor -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS updater_proof(value text PRIMARY KEY); INSERT INTO updater_proof(value) VALUES ('kept') ON CONFLICT DO NOTHING;"
+
+      - name: Build distinct proof image identities in local registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          N_API_REF="$(jq -r '.images.api.reference' /tmp/recantor-n/release-manifest.json)"
+          N_WEB_REF="$(jq -r '.images.web.reference' /tmp/recantor-n/release-manifest.json)"
+
+          docker run -d --name recantor-proof-registry -p 5000:5000 registry:2
+          mkdir -p /tmp/proof-image
+          cat > /tmp/proof-image/Dockerfile <<'DOCKER'
+          ARG BASE
+          FROM ${BASE}
+          ARG MARKER
+          LABEL io.recantor.updater-proof.marker="${MARKER}"
+          DOCKER
+
+          make_image() {
+            local base="$1"
+            local repo="$2"
+            local tag="$3"
+            local marker="$4"
+            local push_log="/tmp/push-${tag}.log"
+            docker build --pull=false               --build-arg BASE="$base"               --build-arg MARKER="$marker"               -t "$repo:$tag"               /tmp/proof-image >/tmp/build-${tag}.log
+            docker push "$repo:$tag" | tee "$push_log" >&2
+            local digest
+            digest="$(awk '/digest: sha256:/{print $3}' "$push_log" | tail -1)"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s@%s\n' "$repo" "$digest"
+          }
+
+          N1_API_REF="$(make_image "$N_API_REF" localhost:5000/recantor-api n1 api-n1)"
+          N1_WEB_REF="$(make_image "$N_WEB_REF" localhost:5000/recantor-web n1 web-n1)"
+          SAFE_API_REF="$(make_image "$N_API_REF" localhost:5000/recantor-api safe-fail api-safe-fail)"
+          SAFE_WEB_REF="$(make_image "$N_WEB_REF" localhost:5000/recantor-web safe-fail web-safe-fail)"
+          UNSAFE_API_REF="$(make_image "$N_API_REF" localhost:5000/recantor-api unsafe-fail api-unsafe-fail)"
+          UNSAFE_WEB_REF="$(make_image "$N_WEB_REF" localhost:5000/recantor-web unsafe-fail web-unsafe-fail)"
+
+          {
+            printf 'N_API_REF=%s\n' "$N_API_REF"
+            printf 'N_WEB_REF=%s\n' "$N_WEB_REF"
+            printf 'N1_API_REF=%s\n' "$N1_API_REF"
+            printf 'N1_WEB_REF=%s\n' "$N1_WEB_REF"
+            printf 'SAFE_API_REF=%s\n' "$SAFE_API_REF"
+            printf 'SAFE_WEB_REF=%s\n' "$SAFE_WEB_REF"
+            printf 'UNSAFE_API_REF=%s\n' "$UNSAFE_API_REF"
+            printf 'UNSAFE_WEB_REF=%s\n' "$UNSAFE_WEB_REF"
+          } > /tmp/proof-refs.env
+
+          test "$(printf '%s\n' "$N_API_REF" "$N1_API_REF" "$SAFE_API_REF" "$UNSAFE_API_REF" | sed 's/.*@//' | sort -u | wc -l)" -eq 4
+          test "$(printf '%s\n' "$N_WEB_REF" "$N1_WEB_REF" "$SAFE_WEB_REF" "$UNSAFE_WEB_REF" | sed 's/.*@//' | sort -u | wc -l)" -eq 4
+
+      - name: Render distinct synthetic candidate manifests
+        shell: bash
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          source /tmp/proof-refs.env
+          export SOURCE_REVISION N1_API_REF N1_WEB_REF SAFE_API_REF SAFE_WEB_REF UNSAFE_API_REF UNSAFE_WEB_REF
+
+          python - <<'PY'
+          import copy
+          import json
+          import os
+
+          with open("/tmp/recantor-n/release-manifest.json", encoding="utf-8") as handle:
+              base = json.load(handle)
+
+          def render(path, version, api_ref, web_ref, safe_to):
+              manifest = copy.deepcopy(base)
+              manifest["format_version"] = 2
+              manifest["version"] = version
+              manifest["channel"] = "alpha"
+              manifest["source"]["revision"] = os.environ["SOURCE_REVISION"]
+              for role, ref in (("api", api_ref), ("web", web_ref)):
+                  repo, digest = ref.split("@", 1)
+                  manifest["images"][role]["repository"] = repo
+                  manifest["images"][role]["digest"] = digest
+                  manifest["images"][role]["reference"] = ref
+              manifest["compatibility"]["application_rollback_safe_to_versions"] = safe_to
+              manifest["compatibility"]["backup_required"] = False
+              with open(path, "w", encoding="utf-8") as handle:
+                  json.dump(manifest, handle, indent=2, sort_keys=True)
+                  handle.write("\n")
+
+          render(
+              "/tmp/n1.json",
+              "v0.1.0-alpha.3",
+              os.environ["N1_API_REF"],
+              os.environ["N1_WEB_REF"],
+              ["v0.1.0-alpha.2"],
+          )
+          render(
+              "/tmp/safe-fail.json",
+              "v0.1.0-alpha.4",
+              os.environ["SAFE_API_REF"],
+              os.environ["SAFE_WEB_REF"],
+              ["v0.1.0-alpha.3"],
+          )
+          render(
+              "/tmp/unsafe-fail.json",
+              "v0.1.0-alpha.5",
+              os.environ["UNSAFE_API_REF"],
+              os.environ["UNSAFE_WEB_REF"],
+              [],
+          )
+          PY
+
+          cat > /tmp/fail-api.yaml <<'YAML'
+          services:
+            api:
+              command: ["sh", "-c", "exit 42"]
+          YAML
+
+      - name: Interrupt N to N+1 after persisted pulling phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /tmp/proof-refs.env
+          set +e
+          RECANTOR_UPDATER_TEST_MODE=1           RECANTOR_UPDATER_TEST_API_REPOSITORY=localhost:5000/recantor-api           RECANTOR_UPDATER_TEST_WEB_REPOSITORY=localhost:5000/recantor-web           RECANTOR_UPDATER_TEST_INTERRUPT_AFTER_PHASE=pulling           pwsh ./scripts/recantor.ps1 update             -ManifestPath /tmp/n1.json             -Channel alpha             -StateDir /tmp/recantor-state             -ComposeFile infra/compose.release.yaml             -EnvFile .env             -HealthTimeoutSeconds 90             > /tmp/updater-logs/n1-interrupted.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q 'TEST_INTERRUPTION_AFTER_pulling' /tmp/updater-logs/n1-interrupted.log
+          test "$(jq -r '.current.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.2"
+          test "$(jq -r '.pending.phase' /tmp/recantor-state/state.json)" = "pulling"
+          test "$(jq -r '.pending.candidate.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.3"
+          test "$(jq -r '.pending.candidate.images.api.reference' /tmp/recantor-state/state.json)" = "$N1_API_REF"
+          test "$(jq -r '.pending.candidate.images.web.reference' /tmp/recantor-state/state.json)" = "$N1_WEB_REF"
+
+      - name: Retry same pending N+1 identity to completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECANTOR_UPDATER_TEST_MODE=1           RECANTOR_UPDATER_TEST_API_REPOSITORY=localhost:5000/recantor-api           RECANTOR_UPDATER_TEST_WEB_REPOSITORY=localhost:5000/recantor-web           pwsh ./scripts/recantor.ps1 update             -ManifestPath /tmp/n1.json             -Channel alpha             -StateDir /tmp/recantor-state             -ComposeFile infra/compose.release.yaml             -EnvFile .env             -HealthTimeoutSeconds 90             > /tmp/updater-logs/n1-retry.log 2>&1
+
+      - name: Assert distinct N to N+1 image transition and persistent data
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /tmp/proof-refs.env
+          test "$(jq -r '.current.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.3"
+          test "$(jq -r '.previous.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.2"
+          test "$(jq -r '.current.images.api.reference' /tmp/recantor-state/state.json)" = "$N1_API_REF"
+          test "$(jq -r '.current.images.web.reference' /tmp/recantor-state/state.json)" = "$N1_WEB_REF"
+          test "$(jq -r '.previous.images.api.reference' /tmp/recantor-state/state.json)" = "$N_API_REF"
+          test "$(jq -r '.previous.images.web.reference' /tmp/recantor-state/state.json)" = "$N_WEB_REF"
+          test "$(jq -r '.pending' /tmp/recantor-state/state.json)" = "null"
+          test "$(jq -r '.last_attempt.result' /tmp/recantor-state/state.json)" = "success"
+          grep -Fx "RECANTOR_API_IMAGE=$N1_API_REF" /tmp/recantor-state/active-images.env
+          grep -Fx "RECANTOR_WEB_IMAGE=$N1_WEB_REF" /tmp/recantor-state/active-images.env
+          test "$(docker inspect recantor-api-1 --format '{{.Config.Image}}')" = "$N1_API_REF"
+          test "$(docker inspect recantor-web-1 --format '{{.Config.Image}}')" = "$N1_WEB_REF"
+
+          C=(docker compose --env-file .env --env-file /tmp/recantor-state/active-images.env -f infra/compose.release.yaml)
+          test "$("${C[@]}" exec -T api cat /data/audio/.updater-proof)" = "updater-audio-sentinel"
+          "${C[@]}" exec -T postgres psql -U recantor -d recantor -Atc "SELECT value FROM updater_proof WHERE value='kept'" | grep -qx kept
+
+      - name: Inject distinct rollback-safe activation failure and prove exact digest restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /tmp/proof-refs.env
+          set +e
+          RECANTOR_UPDATER_TEST_MODE=1           RECANTOR_UPDATER_TEST_API_REPOSITORY=localhost:5000/recantor-api           RECANTOR_UPDATER_TEST_WEB_REPOSITORY=localhost:5000/recantor-web           pwsh ./scripts/recantor.ps1 update             -ManifestPath /tmp/safe-fail.json             -Channel alpha             -StateDir /tmp/recantor-state             -ComposeFile infra/compose.release.yaml             -EnvFile .env             -HealthTimeoutSeconds 10             -TestCandidateComposeOverride /tmp/fail-api.yaml             > /tmp/updater-logs/safe-fail.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          test "$(jq -r '.current.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.3"
+          test "$(jq -r '.current.images.api.reference' /tmp/recantor-state/state.json)" = "$N1_API_REF"
+          test "$(jq -r '.current.images.web.reference' /tmp/recantor-state/state.json)" = "$N1_WEB_REF"
+          test "$(jq -r '.pending' /tmp/recantor-state/state.json)" = "null"
+          test "$(jq -r '.last_attempt.result' /tmp/recantor-state/state.json)" = "rolled_back_to_previous_known_good"
+          grep -Fx "RECANTOR_API_IMAGE=$N1_API_REF" /tmp/recantor-state/active-images.env
+          grep -Fx "RECANTOR_WEB_IMAGE=$N1_WEB_REF" /tmp/recantor-state/active-images.env
+          test "$(docker inspect recantor-api-1 --format '{{.Config.Image}}')" = "$N1_API_REF"
+          test "$(docker inspect recantor-web-1 --format '{{.Config.Image}}')" = "$N1_WEB_REF"
+          curl -fsS http://127.0.0.1:8000/readyz >/dev/null
+          curl -fsS http://127.0.0.1:5173/ >/dev/null
+
+      - name: Inject distinct rollback-unsafe activation failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /tmp/proof-refs.env
+          set +e
+          RECANTOR_UPDATER_TEST_MODE=1           RECANTOR_UPDATER_TEST_API_REPOSITORY=localhost:5000/recantor-api           RECANTOR_UPDATER_TEST_WEB_REPOSITORY=localhost:5000/recantor-web           pwsh ./scripts/recantor.ps1 update             -ManifestPath /tmp/unsafe-fail.json             -Channel alpha             -StateDir /tmp/recantor-state             -ComposeFile infra/compose.release.yaml             -EnvFile .env             -HealthTimeoutSeconds 10             -TestCandidateComposeOverride /tmp/fail-api.yaml             > /tmp/updater-logs/unsafe-fail.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          test "$(jq -r '.current.version' /tmp/recantor-state/state.json)" = "v0.1.0-alpha.3"
+          test "$(jq -r '.current.images.api.reference' /tmp/recantor-state/state.json)" = "$N1_API_REF"
+          test "$(jq -r '.pending.phase' /tmp/recantor-state/state.json)" = "manual_recovery_required"
+          test "$(jq -r '.pending.candidate.images.api.reference' /tmp/recantor-state/state.json)" = "$UNSAFE_API_REF"
+          test "$(jq -r '.last_attempt.result' /tmp/recantor-state/state.json)" = "rollback_refused_unsafe"
+          grep -Fx "RECANTOR_API_IMAGE=$N1_API_REF" /tmp/recantor-state/active-images.env
+          grep -Fx "RECANTOR_WEB_IMAGE=$N1_WEB_REF" /tmp/recantor-state/active-images.env
+
+      - name: Prove data survives and updater stdout stderr are secret-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          C=(docker compose --env-file .env --env-file /tmp/recantor-state/active-images.env -f infra/compose.release.yaml)
+          "${C[@]}" exec -T postgres psql -U recantor -d recantor -Atc "SELECT value FROM updater_proof WHERE value='kept'" | grep -qx kept
+          test "$("${C[@]}" run --rm --no-deps --entrypoint sh api -c 'cat /data/audio/.updater-proof')" = "updater-audio-sentinel"
+
+          secret="$(cat /tmp/updater-proof-secret)"
+          if grep -R --fixed-strings "$secret" /tmp/recantor-state /tmp/updater-logs; then
+            echo "proof secret leaked into updater state or updater stdout/stderr" >&2
+            exit 1
+          fi
+          if grep -R --fixed-strings 'GROQ_API_KEY' /tmp/recantor-state; then
+            echo "provider secret name leaked into updater state" >&2
+            exit 1
+          fi
+          ! grep -Eq 'alembic[[:space:]]+downgrade|down[[:space:]]+-v' scripts/recantor.ps1
+
+      - name: Cleanup proof stack
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/recantor-state/active-images.env ]]; then
+            docker compose --env-file .env --env-file /tmp/recantor-state/active-images.env -f infra/compose.release.yaml down -v --remove-orphans || true
+          else
+            docker compose -f infra/compose.release.yaml down -v --remove-orphans || true
+          fi
+          docker rm -f recantor-proof-registry >/dev/null 2>&1 || true
