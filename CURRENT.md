@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35833807183
+snapshot_seq: 35838870493
 
-collected_at: 2026-09-23T07:50:22.340817Z
+collected_at: 2026-09-23T08:44:55.841448Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,8 +672,8 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #63 state=open updated=2026-09-23T08:44:44Z title=58B — Updater, known-good activation, and rollback safety
 ISSUE #58 state=open updated=2026-09-23T07:50:04Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
-ISSUE #63 state=open updated=2026-09-23T07:50:00Z title=58B — Updater, known-good activation, and rollback safety
 PR #65 state=open updated=2026-09-23T07:45:42Z title=58B: updater, known-good activation, and rollback safety
 PR #66 state=open updated=2026-09-22T08:38:55Z title=docs: record future local MCP agent integration
 PR #53 state=open updated=2026-09-21T07:48:53Z title=Integration checkpoint: cloud alpha 2026-09-12
@@ -688,4 +688,4 @@ PR #53 draft=True updated=2026-09-21T07:48:53Z base=main head=integration/cloud-
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35833807183 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35838870493 sections=6
