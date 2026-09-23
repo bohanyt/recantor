@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 35585653569
+snapshot_seq: 35806461229
 
-collected_at: 2026-09-21T09:52:21.129315Z
+collected_at: 2026-09-23T01:29:11.269081Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,18 +672,20 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #63 state=open updated=2026-09-21T09:52:08Z title=58B — Updater, known-good activation, and rollback safety
+ISSUE #58 state=open updated=2026-09-23T01:28:58Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+PR #66 state=open updated=2026-09-22T08:38:55Z title=docs: record future local MCP agent integration
+ISSUE #63 state=open updated=2026-09-23T01:29:05Z title=58B — Updater, known-good activation, and rollback safety
 PR #65 state=open updated=2026-09-21T09:51:56Z title=58B: updater, known-good activation, and rollback safety
-ISSUE #58 state=open updated=2026-09-21T09:51:44Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 PR #53 state=open updated=2026-09-21T07:48:53Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 ISSUE #61 state=open updated=2026-09-21T06:17:44Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
+PR #66 draft=True updated=2026-09-22T08:38:55Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
 PR #65 draft=True updated=2026-09-21T09:51:56Z base=integration/cloud-alpha-2026-09-11 head=agent-release/issue-63-updater-rollback title=58B: updater, known-good activation, and rollback safety
 PR #53 draft=True updated=2026-09-21T07:48:53Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=35585653569 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=35806461229 sections=6
