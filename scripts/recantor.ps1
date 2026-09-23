@@ -310,10 +310,28 @@ function Resolve-Manifest {
     return $manifest
 }
 
+function Get-ReleaseIdentity {
+    param($Manifest)
+    if ($null -eq $Manifest) { return $null }
+    return @(
+        "version=$([string]$Manifest.version)"
+        "source_revision=$([string]$Manifest.source.revision)"
+        "api_reference=$([string]$Manifest.images.api.reference)"
+        "api_digest=$([string]$Manifest.images.api.digest)"
+        "web_reference=$([string]$Manifest.images.web.reference)"
+        "web_digest=$([string]$Manifest.images.web.digest)"
+    ) -join "`n"
+}
+
 function Assert-PendingCompatible {
     param($State, $Candidate)
     if ($null -eq $State.pending) { return }
-    if ([string]$State.pending.candidate_version -ne [string]$Candidate.version) { throw "A different update is pending manual recovery: $($State.pending.candidate_version)." }
+    if (-not (Test-HasProperty $State.pending "candidate") -or $null -eq $State.pending.candidate) {
+        throw "A different update is pending manual recovery: $($State.pending.candidate_version). Persisted candidate identity is unavailable."
+    }
+    if ((Get-ReleaseIdentity $State.pending.candidate) -cne (Get-ReleaseIdentity $Candidate)) {
+        throw "A different update is pending manual recovery: $($State.pending.candidate_version)."
+    }
 }
 
 function Set-PendingState {
