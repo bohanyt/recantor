@@ -15,12 +15,21 @@ import {
   type UploadTranscriptPage,
 } from './upload/api';
 import {
-  clearUploadRecovery,
+  pickRecordingWithHandle,
+  reacquireFile,
+  supportsPersistentFileHandles,
+} from './upload/fileHandle';
+import { discardUploadRecovery, getUploadHandleStore } from './upload/handleStore';
+import {
+  checkFileAgainstRecovery,
+  computeContentEvidence,
+  contentEvidenceEquals,
   createUploadRecovery,
   loadLatestUploadRecovery,
   loadUploadRecovery,
   markUploadDurablyComplete,
   saveUploadRecovery,
+  UploadFileChangedError,
   type UploadRecovery,
 } from './upload/recovery';
 
@@ -37,6 +46,8 @@ type UploadPhase =
   | 'preparing'
   | 'uploading'
   | 'paused'
+  | 'needs_access'
+  | 'file_changed'
   | 'verifying'
   | 'upload_complete'
   | 'preparing_audio'
@@ -54,6 +65,8 @@ const phaseLabels: Record<UploadPhase, string> = {
   preparing: 'Preparing upload',
   uploading: 'Uploading',
   paused: 'Paused',
+  needs_access: 'Permission needed',
+  file_changed: 'File changed',
   verifying: 'Verifying upload',
   upload_complete: 'Upload complete',
   preparing_audio: 'Preparing audio',
@@ -80,10 +93,28 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
+type ReselectReason = 'unavailable' | 'unsupported' | 'denied' | 'missing' | 'error';
+
+const RESELECT_PREFIX = 'A saved upload is still in progress.';
+const reselectMessages: Record<ReselectReason, string> = {
+  unavailable: `${RESELECT_PREFIX} Choose the same file to resume it.`,
+  unsupported: `${RESELECT_PREFIX} This browser cannot reopen the file automatically. Choose the same file to resume it.`,
+  denied: `${RESELECT_PREFIX} Access to the original file was not granted. Choose the same file to resume it.`,
+  missing: `${RESELECT_PREFIX} The original file could not be found; it may have been moved, renamed, or deleted. Choose the same file to resume it.`,
+  error: `${RESELECT_PREFIX} The original file could not be reopened. Choose the same file to resume it.`,
+};
+const savedFileChangedMessage = `${RESELECT_PREFIX} The file at the saved location has changed, so it was not used. Choose the original file to resume it; saved server progress is kept.`;
+const selectedFileChangedMessage =
+  'This file has the same name, size, and date as a saved upload but different content, so it was not added to that upload. Choose the original file, or start a fresh upload with this one.';
+
 async function recoverOrCreateSession(
   file: File,
 ): Promise<{ recovery: UploadRecovery; session: UploadSession }> {
-  let recovery = loadUploadRecovery(file) ?? createUploadRecovery(file);
+  const evidence = await computeContentEvidence(file);
+  let recovery = loadUploadRecovery(file) ?? createUploadRecovery(file, evidence);
+  if (recovery.contentEvidence && !contentEvidenceEquals(recovery.contentEvidence, evidence)) {
+    throw new UploadFileChangedError();
+  }
 
   if (recovery.sessionId) {
     try {
@@ -91,14 +122,14 @@ async function recoverOrCreateSession(
       return { recovery, session: existing };
     } catch (error) {
       if (error instanceof UploadApiError && error.status === 410) {
-        clearUploadRecovery(recovery);
+        discardUploadRecovery(recovery);
         throw error;
       }
       if (!(error instanceof UploadApiError) || ![403, 404].includes(error.status)) {
         throw error;
       }
-      clearUploadRecovery(recovery);
-      recovery = createUploadRecovery(file);
+      discardUploadRecovery(recovery);
+      recovery = createUploadRecovery(file, evidence);
     }
   }
 
@@ -162,6 +193,9 @@ export function UploadPanel() {
   const uppyRef = useRef<Uppy | null>(null);
   const resultTimerRef = useRef<number | null>(null);
   const activeResultSessionRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const selectedHandleRef = useRef<FileSystemFileHandle | null>(null);
+  const pendingAccessRef = useRef<UploadRecovery | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UploadPhase>('idle');
   const [progress, setProgress] = useState(0);
@@ -174,6 +208,7 @@ export function UploadPanel() {
   const [result, setResult] = useState<UploadResultStatus | null>(null);
   const [transcriptPage, setTranscriptPage] = useState<UploadTranscriptPage | null>(null);
   const [downloading, setDownloading] = useState<UploadExportFormat | null>(null);
+  const [savedUploadNeedsFile, setSavedUploadNeedsFile] = useState(false);
 
   function stopResultPolling(): void {
     activeResultSessionRef.current = null;
@@ -186,7 +221,7 @@ export function UploadPanel() {
   function handleExpired(recovery: UploadRecovery): void {
     stopResultPolling();
     setProcessingFailureRecovery(null);
-    clearUploadRecovery(recovery);
+    discardUploadRecovery(recovery);
     setTrackedRecovery(null);
     setResult(null);
     setTranscriptPage(null);
@@ -199,7 +234,7 @@ export function UploadPanel() {
   function handleInvalidRecovery(recovery: UploadRecovery): void {
     stopResultPolling();
     setProcessingFailureRecovery(null);
-    clearUploadRecovery(recovery);
+    discardUploadRecovery(recovery);
     setTrackedRecovery(null);
     setResult(null);
     setTranscriptPage(null);
@@ -281,6 +316,7 @@ export function UploadPanel() {
 
   function trackResult(recovery: UploadRecovery): void {
     if (!recovery.sessionId) return;
+    void getUploadHandleStore().delete(recovery.clientRequestId);
     stopResultPolling();
     setProcessingFailureRecovery(null);
     activeResultSessionRef.current = recovery.sessionId;
@@ -289,6 +325,93 @@ export function UploadPanel() {
     setPhase('upload_complete');
     setMessage('Durably uploaded. Checking server processing state…');
     void pollResult(recovery);
+  }
+
+  function handleSessionError(error: unknown, recovery: UploadRecovery): void {
+    if (error instanceof UploadApiError && error.status === 410) {
+      handleExpired(recovery);
+    } else if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
+      handleInvalidRecovery(recovery);
+    } else {
+      setPhase('reconnecting');
+      setMessage('Saved upload state is temporarily unavailable. Reload to retry recovery.');
+    }
+  }
+
+  function offerReselect(reason: ReselectReason): void {
+    setSavedUploadNeedsFile(true);
+    setPhase('ready');
+    setMessage(reselectMessages[reason]);
+  }
+
+  // Resume-only: this never calls createUploadSession, so a restart can only continue the
+  // saved upload identity or surface why it cannot.
+  async function resumeFromSavedHandle(
+    recovery: UploadRecovery,
+    requestPermission: boolean,
+    knownSession: UploadSession | null,
+  ): Promise<void> {
+    const sessionId = recovery.sessionId;
+    if (!sessionId) return;
+    setPhase('preparing');
+    setMessage('Restoring access to your saved recording…');
+
+    const handle = await getUploadHandleStore().get(recovery.clientRequestId);
+    if (!mountedRef.current) return;
+    if (!handle) {
+      offerReselect('unavailable');
+      return;
+    }
+
+    const reacquired = await reacquireFile(handle, { requestPermission });
+    if (!mountedRef.current) return;
+    if (reacquired.status === 'needs_permission') {
+      pendingAccessRef.current = recovery;
+      setPhase('needs_access');
+      setMessage(
+        'Recantor can resume this upload automatically once you allow access to the original recording.',
+      );
+      return;
+    }
+    if (reacquired.status !== 'ready') {
+      offerReselect(reacquired.status);
+      return;
+    }
+
+    const match = await checkFileAgainstRecovery(reacquired.file, recovery);
+    if (!mountedRef.current) return;
+    if (match === 'no_evidence') {
+      offerReselect('unavailable');
+      return;
+    }
+    if (match !== 'match') {
+      setSavedUploadNeedsFile(true);
+      setPhase('file_changed');
+      setMessage(savedFileChangedMessage);
+      return;
+    }
+
+    try {
+      const session = knownSession ?? (await getUploadSession(sessionId, recovery.capabilityToken));
+      if (!mountedRef.current) return;
+      if (session.state === 'failed') {
+        setPhase('failed');
+        setMessage('The saved upload failed. Start a fresh upload to try again.');
+        return;
+      }
+      pendingAccessRef.current = null;
+      selectedHandleRef.current = handle;
+      setFile(reacquired.file);
+      beginTransfer(reacquired.file, recovery, session);
+    } catch (error) {
+      handleSessionError(error, recovery);
+    }
+  }
+
+  async function allowAccessAndResume(): Promise<void> {
+    const recovery = pendingAccessRef.current;
+    if (!recovery) return;
+    await resumeFromSavedHandle(recovery, true, null);
   }
 
   async function restoreSavedUpload(recovery: UploadRecovery): Promise<void> {
@@ -313,26 +436,20 @@ export function UploadPanel() {
         setMessage('The saved upload failed. Start a fresh upload to try again.');
         return;
       }
-      setPhase('ready');
-      setMessage('A saved upload is still in progress. Reselect the same file to resume it.');
+      await resumeFromSavedHandle(recovery, false, session);
     } catch (error) {
-      if (error instanceof UploadApiError && error.status === 410) {
-        handleExpired(recovery);
-      } else if (error instanceof UploadApiError && [403, 404].includes(error.status)) {
-        handleInvalidRecovery(recovery);
-      } else {
-        setPhase('reconnecting');
-        setMessage('Saved upload state is temporarily unavailable. Reload to retry recovery.');
-      }
+      handleSessionError(error, recovery);
     }
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     const saved = loadLatestUploadRecovery();
     const restoreTimer = saved?.sessionId
       ? window.setTimeout(() => void restoreSavedUpload(saved), 0)
       : null;
     return () => {
+      mountedRef.current = false;
       if (restoreTimer !== null) window.clearTimeout(restoreTimer);
       uppyRef.current?.destroy();
       uppyRef.current = null;
@@ -348,7 +465,9 @@ export function UploadPanel() {
     setProgress(0);
   }
 
-  function selectFile(nextFile: File | null): void {
+  function selectFile(nextFile: File | null, handle: FileSystemFileHandle | null = null): void {
+    selectedHandleRef.current = nextFile ? handle : null;
+    setSavedUploadNeedsFile(false);
     const failedRecovery = processingFailureRecovery;
     const selectedRecovery = nextFile ? loadUploadRecovery(nextFile) : null;
     const reselectedFailedUpload =
@@ -403,7 +522,7 @@ export function UploadPanel() {
 
     stopResultPolling();
     resetTransfer();
-    clearUploadRecovery(failedRecovery);
+    discardUploadRecovery(failedRecovery);
     setProcessingFailureRecovery(null);
     setTrackedRecovery(null);
     setResult(null);
@@ -414,6 +533,117 @@ export function UploadPanel() {
     await start();
   }
 
+  async function chooseRecording(): Promise<void> {
+    if (!supportsPersistentFileHandles()) {
+      inputRef.current?.click();
+      return;
+    }
+    const picked = await pickRecordingWithHandle();
+    if (picked.kind === 'picked') {
+      selectFile(picked.file, picked.handle);
+    } else if (picked.kind === 'error') {
+      setMessage(
+        `The file picker could not open (${picked.message}). Drop the recording here instead.`,
+      );
+    } else if (picked.kind === 'unsupported') {
+      inputRef.current?.click();
+    }
+  }
+
+  async function startFreshAfterFileChanged(): Promise<void> {
+    if (!file) return;
+    const stale = loadUploadRecovery(file);
+    if (stale) discardUploadRecovery(stale);
+    await start();
+  }
+
+  async function persistSelectedHandle(recovery: UploadRecovery): Promise<void> {
+    const handle = selectedHandleRef.current;
+    if (handle) await getUploadHandleStore().put(recovery.clientRequestId, handle);
+  }
+
+  function beginTransfer(target: File, recovery: UploadRecovery, session: UploadSession): void {
+    resetTransfer();
+    if (session.state === 'uploaded' && session.completed_at) {
+      const completed = markUploadDurablyComplete(
+        recovery,
+        session.completed_at,
+        session.expires_at,
+      );
+      trackResult(completed);
+      return;
+    }
+
+    setSavedUploadNeedsFile(false);
+    const uppy = new Uppy({
+      autoProceed: false,
+      allowMultipleUploadBatches: false,
+      restrictions: {
+        maxNumberOfFiles: 1,
+        allowedFileTypes: ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'],
+      },
+    }).use(Tus, {
+      endpoint: session.upload_endpoint,
+      headers: { 'X-Recantor-Upload-Token': recovery.capabilityToken },
+      retryDelays: [0, 1_000, 3_000, 5_000, 10_000],
+      allowedMetaFields: ['recantor_session_id', 'filename', 'filetype'],
+    });
+    uppyRef.current = uppy;
+
+    uppy.on('upload-progress', (_uppyFile, uploadProgress) => {
+      const total = uploadProgress.bytesTotal ?? target.size;
+      const percent = total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
+      setProgress(Math.min(99, Math.max(0, percent)));
+    });
+    uppy.on('upload-error', (_uppyFile, error, response) => {
+      const status = response?.status ? ` (HTTP ${response.status})` : '';
+      setPhase('error');
+      setMessage(`${error.message || 'Upload interrupted'}${status}. You can retry safely.`);
+    });
+    uppy.on('upload-success', () => {
+      setPhase('verifying');
+      setMessage('Transfer complete. Verifying durable server state…');
+      void waitForDurableCompletion(session.session_id, recovery.capabilityToken)
+        .then((durable) => {
+          if (!durable.completed_at) {
+            setPhase('error');
+            setMessage('Durable upload confirmation is still pending. Retry safely.');
+            return;
+          }
+          const completed = markUploadDurablyComplete(
+            recovery,
+            durable.completed_at,
+            durable.expires_at,
+          );
+          trackResult(completed);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof UploadApiError && error.status === 410) {
+            handleExpired(recovery);
+            return;
+          }
+          setPhase('error');
+          setMessage(error instanceof Error ? error.message : 'Durable verification failed.');
+        });
+    });
+
+    uppy.addFile({
+      name: target.name,
+      type: mediaType(target),
+      data: target,
+      meta: {
+        recantor_session_id: session.session_id,
+        filename: session.original_filename,
+        filetype: session.content_type,
+      },
+    });
+    setPhase('uploading');
+    setMessage(
+      session.received_bytes > 0 ? 'Resuming from durable server progress…' : 'Uploading…',
+    );
+    void uppy.upload();
+  }
+
   async function start(): Promise<void> {
     if (!file) return;
     resetTransfer();
@@ -422,87 +652,18 @@ export function UploadPanel() {
 
     try {
       const { recovery, session } = await recoverOrCreateSession(file);
-      if (session.state === 'uploaded' && session.completed_at) {
-        const completed = markUploadDurablyComplete(
-          recovery,
-          session.completed_at,
-          session.expires_at,
-        );
-        trackResult(completed);
+      await persistSelectedHandle(recovery);
+      beginTransfer(file, recovery, session);
+    } catch (error) {
+      if (error instanceof UploadFileChangedError) {
+        setSavedUploadNeedsFile(true);
+        setPhase('file_changed');
+        setMessage(selectedFileChangedMessage);
         return;
       }
-
-      const uppy = new Uppy({
-        autoProceed: false,
-        allowMultipleUploadBatches: false,
-        restrictions: {
-          maxNumberOfFiles: 1,
-          allowedFileTypes: ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'],
-        },
-      }).use(Tus, {
-        endpoint: session.upload_endpoint,
-        headers: { 'X-Recantor-Upload-Token': recovery.capabilityToken },
-        retryDelays: [0, 1_000, 3_000, 5_000, 10_000],
-        allowedMetaFields: ['recantor_session_id', 'filename', 'filetype'],
-      });
-      uppyRef.current = uppy;
-
-      uppy.on('upload-progress', (_uppyFile, uploadProgress) => {
-        const total = uploadProgress.bytesTotal ?? file.size;
-        const percent = total > 0 ? Math.floor((uploadProgress.bytesUploaded / total) * 100) : 0;
-        setProgress(Math.min(99, Math.max(0, percent)));
-      });
-      uppy.on('upload-error', (_uppyFile, error, response) => {
-        const status = response?.status ? ` (HTTP ${response.status})` : '';
-        setPhase('error');
-        setMessage(`${error.message || 'Upload interrupted'}${status}. You can retry safely.`);
-      });
-      uppy.on('upload-success', () => {
-        setPhase('verifying');
-        setMessage('Transfer complete. Verifying durable server state…');
-        void waitForDurableCompletion(session.session_id, recovery.capabilityToken)
-          .then((durable) => {
-            if (!durable.completed_at) {
-              setPhase('error');
-              setMessage('Durable upload confirmation is still pending. Retry safely.');
-              return;
-            }
-            const completed = markUploadDurablyComplete(
-              recovery,
-              durable.completed_at,
-              durable.expires_at,
-            );
-            trackResult(completed);
-          })
-          .catch((error: unknown) => {
-            if (error instanceof UploadApiError && error.status === 410) {
-              handleExpired(recovery);
-              return;
-            }
-            setPhase('error');
-            setMessage(error instanceof Error ? error.message : 'Durable verification failed.');
-          });
-      });
-
-      uppy.addFile({
-        name: file.name,
-        type: mediaType(file),
-        data: file,
-        meta: {
-          recantor_session_id: session.session_id,
-          filename: session.original_filename,
-          filetype: session.content_type,
-        },
-      });
-      setPhase('uploading');
-      setMessage(
-        session.received_bytes > 0 ? 'Resuming from durable server progress…' : 'Uploading…',
-      );
-      void uppy.upload();
-    } catch (error) {
       if (error instanceof UploadApiError && error.status === 410) {
         const recovery = loadUploadRecovery(file);
-        if (recovery) clearUploadRecovery(recovery);
+        if (recovery) discardUploadRecovery(recovery);
         setPhase('expired');
         setMessage(
           'Saved upload access has expired. The server recording was not deleted; start again for a new access capability.',
@@ -566,6 +727,7 @@ export function UploadPanel() {
   const terminalProcessingFailure = processingFailureRecovery !== null;
   let startLabel = 'Start / resume';
   if (terminalProcessingFailure) startLabel = 'Start fresh upload';
+  else if (phase === 'file_changed' && file) startLabel = 'Start fresh upload';
   else if (phase === 'error' || phase === 'expired') startLabel = 'Start fresh / resume';
 
   return (
@@ -627,10 +789,11 @@ export function UploadPanel() {
         <button
           type="button"
           className="min-h-11 rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => void chooseRecording()}
           disabled={busy}
+          data-testid="upload-choose"
         >
-          Choose recording
+          {savedUploadNeedsFile ? 'Choose the same file to resume' : 'Choose recording'}
         </button>
         <p className="mt-3 text-sm text-[var(--muted)]">or drop one file here</p>
         {file ? (
@@ -657,19 +820,33 @@ export function UploadPanel() {
       <p
         className="mt-4 text-sm leading-6 text-[var(--muted)]"
         data-testid="upload-message"
-        role={['error', 'failed', 'expired'].includes(phase) ? 'alert' : 'status'}
-        aria-live={['error', 'failed', 'expired'].includes(phase) ? undefined : 'polite'}
+        role={['error', 'failed', 'expired', 'file_changed'].includes(phase) ? 'alert' : 'status'}
+        aria-live={
+          ['error', 'failed', 'expired', 'file_changed'].includes(phase) ? undefined : 'polite'
+        }
       >
         {message}
       </p>
 
       <div className="mt-5 flex flex-wrap gap-3">
+        {phase === 'needs_access' ? (
+          <button
+            type="button"
+            className="min-h-11 rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[var(--background)]"
+            onClick={() => void allowAccessAndResume()}
+            data-testid="upload-allow-access"
+          >
+            Allow access and resume
+          </button>
+        ) : null}
         <button
           type="button"
           className="min-h-11 rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-50"
-          onClick={() =>
-            terminalProcessingFailure ? void startFreshAfterProcessingFailure() : void start()
-          }
+          onClick={() => {
+            if (terminalProcessingFailure) void startFreshAfterProcessingFailure();
+            else if (phase === 'file_changed') void startFreshAfterFileChanged();
+            else void start();
+          }}
           disabled={!file || busy || resultReady}
           data-testid="upload-start"
         >

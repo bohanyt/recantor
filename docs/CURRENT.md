@@ -227,7 +227,7 @@ Before Recantor may be described as stable:
 
 - #62 / 58A cloud-built release artifacts are accepted and integrated;
 - #63 / 58B must still provide the supported updater / previous-known-good / rollback / migration-safety lifecycle;
-- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not.
+- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not. A draft implementation persists the picker's `FileSystemFileHandle` in IndexedDB, resumes automatically only when read permission is already granted, shows one `Allow access and resume` action when the browser needs a gesture, and otherwise falls back to `Choose the same file to resume`. Resume is resume-only (it never creates a second upload) and re-validates the reopened file against the saved metadata fingerprint plus a bounded SHA-256 of its size and first/last 256 KiB; bytes between the samples are not covered. It is not accepted until exact-head review and a real Windows Chrome/Edge reopen proof, and it cannot be promised on browsers without persistent file handles.
 
 #47 remains optional and is not a dependency of the first installable alpha.
 
