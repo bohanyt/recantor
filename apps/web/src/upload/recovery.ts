@@ -1,4 +1,19 @@
+import { sha256Blob } from '../recorder/hash';
+
 const STORE_KEY = 'recantor:upload-recovery:v1';
+
+export const CONTENT_EVIDENCE_ALGORITHM = 'sha256-size-head-tail-256k-v1';
+const CONTENT_SAMPLE_BYTES = 256 * 1024;
+
+/**
+ * Bounded content evidence: SHA-256 over the byte length plus the first and last 256 KiB.
+ * It complements the metadata fingerprint without hashing a potentially huge media file.
+ * Bytes between the two samples are not covered.
+ */
+export type ContentEvidence = {
+  algorithm: string;
+  digest: string;
+};
 
 export type UploadRecovery = {
   fingerprint: string;
@@ -8,7 +23,17 @@ export type UploadRecovery = {
   expiresAt: string | null;
   updatedAt: string;
   durableCompletedAt: string | null;
+  contentEvidence?: ContentEvidence | null;
 };
+
+export type RecoveryFileMatch = 'match' | 'metadata_changed' | 'content_changed' | 'no_evidence';
+
+export class UploadFileChangedError extends Error {
+  constructor() {
+    super('The selected file no longer matches the saved upload.');
+    this.name = 'UploadFileChangedError';
+  }
+}
 
 type RecoveryMap = Record<string, UploadRecovery>;
 
@@ -26,6 +51,12 @@ function readMap(): RecoveryMap {
 
 function writeMap(value: RecoveryMap): void {
   window.localStorage.setItem(STORE_KEY, JSON.stringify(value));
+}
+
+function normalizeEvidence(candidate: unknown): ContentEvidence | null {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const { algorithm, digest } = candidate as Partial<ContentEvidence>;
+  return typeof algorithm === 'string' && typeof digest === 'string' ? { algorithm, digest } : null;
 }
 
 function normalizeRecovery(candidate: UploadRecovery | undefined): UploadRecovery | null {
@@ -46,6 +77,7 @@ function normalizeRecovery(candidate: UploadRecovery | undefined): UploadRecover
         : candidate.expiresAt || new Date(0).toISOString(),
     durableCompletedAt:
       typeof candidate.durableCompletedAt === 'string' ? candidate.durableCompletedAt : null,
+    contentEvidence: normalizeEvidence(candidate.contentEvidence),
   };
 }
 
@@ -53,6 +85,34 @@ export function fileFingerprint(file: File): string {
   return [file.name, file.size, file.lastModified, file.type || 'application/octet-stream'].join(
     ':',
   );
+}
+
+export async function computeContentEvidence(file: Blob): Promise<ContentEvidence> {
+  const size = new DataView(new ArrayBuffer(8));
+  size.setBigUint64(0, BigInt(file.size));
+  const head = file.slice(0, CONTENT_SAMPLE_BYTES);
+  const tail = file.slice(Math.max(0, file.size - CONTENT_SAMPLE_BYTES), file.size);
+  return {
+    algorithm: CONTENT_EVIDENCE_ALGORITHM,
+    digest: await sha256Blob(new Blob([size.buffer, head, tail])),
+  };
+}
+
+export function contentEvidenceEquals(
+  left: ContentEvidence | null | undefined,
+  right: ContentEvidence | null | undefined,
+): boolean {
+  return !!left && !!right && left.algorithm === right.algorithm && left.digest === right.digest;
+}
+
+export async function checkFileAgainstRecovery(
+  file: File,
+  recovery: UploadRecovery,
+): Promise<RecoveryFileMatch> {
+  if (fileFingerprint(file) !== recovery.fingerprint) return 'metadata_changed';
+  if (!recovery.contentEvidence) return 'no_evidence';
+  const evidence = await computeContentEvidence(file);
+  return contentEvidenceEquals(recovery.contentEvidence, evidence) ? 'match' : 'content_changed';
 }
 
 export function loadUploadRecovery(file: File): UploadRecovery | null {
@@ -74,7 +134,10 @@ export function loadLatestUploadRecovery(): UploadRecovery | null {
   );
 }
 
-export function createUploadRecovery(file: File): UploadRecovery {
+export function createUploadRecovery(
+  file: File,
+  contentEvidence: ContentEvidence | null = null,
+): UploadRecovery {
   const bytes = window.crypto.getRandomValues(new Uint8Array(32));
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -91,6 +154,7 @@ export function createUploadRecovery(file: File): UploadRecovery {
     expiresAt: null,
     updatedAt: new Date().toISOString(),
     durableCompletedAt: null,
+    contentEvidence,
   };
   saveUploadRecovery(recovery);
   return recovery;
