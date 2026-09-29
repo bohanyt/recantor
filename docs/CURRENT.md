@@ -253,7 +253,43 @@ Published proof images:
 
 Release workflow `35573744267` pulled those exact registry digest references back, verified OCI identity, started them through the pull-only release Compose stack, passed API health/readiness + Web shell smoke, rendered the exact release manifest, and created a GitHub **prerelease**. This is release-path proof, not a stable-product claim.
 
-Issue #63 / 58B is now **unblocked** and owns update-channel selection, previous-known-good activation, health-gated update, rollback, and migration-safety refusal. Supported update/install behavior must consume the #62 immutable artifact contract and must not compile application source on the client.
+Issue #63 / 58B now has an implementation candidate in DRAFT PR #65. It is **not accepted yet**; independent review and a bounded Windows updater witness still remain.
+
+The candidate introduces:
+
+- `scripts/recantor.ps1` as the Windows updater entrypoint;
+- local updater state under `.recantor/` with current, previous-known-good, pending, channel, and last-attempt truth;
+- exact immutable GHCR digest activation only;
+- release manifest format 2 with explicit `application_rollback_safe_to_versions` and `backup_required` policy while retaining read compatibility for the already-published format-1 `v0.1.0-alpha.2`;
+- forward-only normal `update`; intentional downgrade is a rollback operation;
+- candidate migration before application activation;
+- health/readiness/Web gating before a candidate becomes known-good;
+- application-only rollback to exact previous digests when explicitly declared schema-safe;
+- fail-closed `manual_recovery_required` state when rollback is unsafe or rollback itself fails;
+- no automatic database downgrade and no volume-deleting recovery path;
+- release bundle packaging with updater, pull-only Compose, `.env.example`, and exact release manifest.
+
+The first independent review found the updater core safety semantics coherent but required stronger acceptance evidence before a Windows witness. The bounded correction closes those proof gaps.
+
+Current correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` is green:
+
+- Updater CI `35584723718` SUCCESS:
+  - Windows PowerShell unit/contract tests PASS, including backup-required pre-apply gating, rollback-attempt health failure -> `rollback_failed_manual_recovery`, and manual rollback target health failure truth;
+  - real Docker install from accepted immutable `v0.1.0-alpha.2` artifacts PASS;
+  - N, N+1, rollback-safe-fail, and rollback-unsafe-fail use four distinct API digests and four distinct Web digests;
+  - a controlled test-only interruption persists `pending.phase=pulling`, then a fresh updater process retries the **same candidate identity** to successful N+1 completion;
+  - N -> N+1 transition proves current/previous manifests carry different exact image identities;
+  - rollback-safe failure proves `active-images.env` and the running API/Web containers return to the exact previous N+1 digest references;
+  - rollback-unsafe failure is refused with `manual_recovery_required` while current known-good identity remains N+1;
+  - representative PostgreSQL/audio data survives all paths;
+  - updater stdout/stderr are captured and scanned against a runtime-generated proof secret, and updater state is scanned for both the secret value and `GROQ_API_KEY`; no leak is found.
+- Release images `35584723674` SUCCESS:
+  - release image build/smoke remains green;
+  - candidate manifest v2 validates;
+  - release bundle creation remains green.
+- normal CI `35584723690` SUCCESS.
+
+These are correction proofs only. Independent correction rereview and the final bounded Windows updater witness still remain before #63 acceptance.
 
 Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
 
@@ -280,7 +316,7 @@ The current alpha remains trusted-development software. Authentication, authoriz
 1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization.
 2. Treat #62 / 58A as complete after its accepted cloud build/publish proof; do not reopen it unless a concrete release-artifact regression appears.
 3. Active stable-path engineering is now:
-   - #63 / 58B — updater, previous-known-good activation, rollback, and migration safety using immutable #62 artifacts;
+   - #63 / 58B — DRAFT PR #65 is the updater/previous-known-good/rollback candidate; source review and final bounded Windows updater witness remain before acceptance;
    - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported.
 4. #47 remains optional/parked and must not block #63 or #61.
 5. Do not describe Recantor as stable until the remaining stable-path gates are accepted.
