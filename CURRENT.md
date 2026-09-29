@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 36512375507
+snapshot_seq: 36513886237
 
-collected_at: 2026-09-29T02:24:20.307837Z
+collected_at: 2026-09-29T02:43:08.113716Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -672,7 +672,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #61 state=open updated=2026-09-29T02:23:32Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
+ISSUE #61 state=open updated=2026-09-29T02:42:56Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
 ISSUE #63 state=open updated=2026-09-29T01:35:08Z title=58B — Updater, known-good activation, and rollback safety
 ISSUE #58 state=open updated=2026-09-29T00:41:33Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
 PR #65 state=open updated=2026-09-23T07:45:42Z title=58B: updater, known-good activation, and rollback safety
@@ -688,4 +688,4 @@ PR #53 draft=True updated=2026-09-21T07:48:53Z base=main head=integration/cloud-
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=36512375507 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=36513886237 sections=6
