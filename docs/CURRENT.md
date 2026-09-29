@@ -227,7 +227,7 @@ Before Recantor may be described as stable:
 
 - #62 / 58A cloud-built release artifacts are accepted and integrated;
 - #63 / 58B must still provide the supported updater / previous-known-good / rollback / migration-safety lifecycle;
-- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not. A draft implementation persists the picker's `FileSystemFileHandle` in IndexedDB, resumes automatically only when read permission is already granted, shows one `Allow access and resume` action when the browser needs a gesture, and otherwise falls back to `Choose the same file to resume`. Resume is resume-only (it never creates a second upload) and re-validates the reopened file against the saved metadata fingerprint plus a bounded SHA-256 of its size and first/last 256 KiB; bytes between the samples are not covered. It is not accepted until exact-head review and a real Windows Chrome/Edge reopen proof, and it cannot be promised on browsers without persistent file handles.
+- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not. A draft implementation persists the picker's `FileSystemFileHandle` in IndexedDB, resumes automatically only when read permission is already granted, shows one `Allow access and resume` action when the browser needs a gesture, and otherwise falls back to `Choose the same file to resume`. Resume is resume-only (it never creates a second upload) and re-validates the reopened file against the saved metadata fingerprint plus a bounded SHA-256 of its size and first/last 256 KiB; bytes between the samples are not covered. Status: implementation (`4d2fe9ae`), independent review (R61-R1 CLEAN) and a real Windows Edge disk-file reopen witness (PASS: the browser returned `prompt`, one `Allow access and resume` action resumed the same upload from the non-zero offset) are accepted and locally integrated under the temporary local-CI authority below. The fully automatic already-`granted` branch is covered by deterministic browser regression only, not by that real-browser run. It cannot be promised on browsers without persistent file handles.
 
 #47 remains optional and is not a dependency of the first installable alpha.
 
@@ -253,7 +253,7 @@ Published proof images:
 
 Release workflow `35573744267` pulled those exact registry digest references back, verified OCI identity, started them through the pull-only release Compose stack, passed API health/readiness + Web shell smoke, rendered the exact release manifest, and created a GitHub **prerelease**. This is release-path proof, not a stable-product claim.
 
-Issue #63 / 58B now has an implementation candidate in DRAFT PR #65. It is **not accepted yet**; independent review and a bounded Windows updater witness still remain.
+Issue #63 / 58B has an implementation candidate in DRAFT PR #65 (source head `2a4aa7f4`, independent review R63-C2 CLEAN, local Windows updater pre-witness PASS against a local registry). Its source is now integrated on this line under the temporary local-CI authority below, but #63 is **not accepted**: pull-only remote GHCR publication of the exact candidate digests and ONE final bounded Windows release-distribution witness remain required. The candidate digests were not remotely pullable at the last anonymous probe, and local-registry or locally built images do not substitute for that gate.
 
 The candidate introduces:
 
@@ -289,7 +289,7 @@ Current correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` 
   - release bundle creation remains green.
 - normal CI `35584723690` SUCCESS.
 
-These are correction proofs only. Independent correction rereview and the final bounded Windows updater witness still remain before #63 acceptance.
+These are historical correction proofs only; the later fence for exact pending candidate identity (`2a4aa7f4`) was reviewed CLEAN. The final remote GHCR distribution witness still remains before #63 acceptance.
 
 Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
 
@@ -313,10 +313,10 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization.
+1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization. The GitHub Actions quota hold remains active: Bohan has temporarily authorized deterministic local tests to substitute for GitHub-hosted CI when integrating #61 and #63 (parent #58 comment 5884462317). This changes the CI gate only; it does not waive the #63 remote GHCR distribution requirement.
 2. Treat #62 / 58A as complete after its accepted cloud build/publish proof; do not reopen it unless a concrete release-artifact regression appears.
 3. Active stable-path engineering is now:
-   - #63 / 58B — DRAFT PR #65 is the updater/previous-known-good/rollback candidate; source review and final bounded Windows updater witness remain before acceptance;
-   - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported.
+   - #63 / 58B — updater/previous-known-good/rollback source is integrated (from DRAFT PR #65) but stays OPEN until pull-only remote GHCR publication and ONE final bounded Windows release-distribution witness pass;
+   - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported: implementation, review and real Windows witness accepted and locally integrated.
 4. #47 remains optional/parked and must not block #63 or #61.
 5. Do not describe Recantor as stable until the remaining stable-path gates are accepted.
