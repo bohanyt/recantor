@@ -25,6 +25,7 @@ from recantor.transcript_realtime import (
     transcript_channel,
     transcript_notice,
 )
+from recantor.uploads import create_upload_session
 
 
 def recovery_token(writer_id: str) -> str:
@@ -280,6 +281,43 @@ async def test_real_websocket_route_rejects_missing_session(client: AsyncClient)
         error = await recv_json(websocket)
         assert error["type"] == "error"
         assert error["code"] == "session_not_found"
+        with pytest.raises(ConnectionClosed) as closed:
+            await websocket.recv()
+        assert closed.value.code == 1008
+
+
+@pytest.mark.asyncio
+async def test_generic_transcript_websocket_rejects_upload_session(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del client
+    async with get_sessionmaker()() as db:
+        session, _ = await create_upload_session(
+            db,
+            client_request_id=uuid4(),
+            capability_token="U" * 43,
+            original_filename="private.wav",
+            content_type="audio/wav",
+            byte_length=4096,
+            duration_ms=1000,
+        )
+        upload_id = session.id
+    await commit_segment(upload_id, "upload-private", 0, "private upload text")
+
+    def reject_redis():
+        raise AssertionError("Upload session must be rejected before Redis subscription")
+
+    monkeypatch.setattr("recantor.routes.transcript.create_transcript_redis", reject_redis)
+    async with (
+        live_api_server() as port,
+        connect(transcript_ws_url(port, upload_id)) as websocket,
+    ):
+        assert await recv_json(websocket) == {
+            "type": "error",
+            "code": "session_not_found",
+            "detail": "recording session not found",
+        }
         with pytest.raises(ConnectionClosed) as closed:
             await websocket.recv()
         assert closed.value.code == 1008

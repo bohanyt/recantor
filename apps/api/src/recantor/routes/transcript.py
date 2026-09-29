@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.db import get_db_session, get_sessionmaker
-from recantor.models import RecordingSession
+from recantor.models import RecordingSession, SessionKind
 from recantor.schemas import TranscriptPageResponse, TranscriptSegmentResponse
 from recantor.transcript import TranscriptConflict, TranscriptNotFound, read_transcript_segments
 from recantor.transcript_realtime import (
@@ -50,6 +50,16 @@ async def get_session_transcript(
     after_sequence: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> TranscriptPageResponse:
+    live_session = await db.scalar(
+        select(RecordingSession.id).where(
+            RecordingSession.id == session_id,
+            RecordingSession.kind == SessionKind.LIVE.value,
+        )
+    )
+    if live_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recording session not found"
+        )
     try:
         segments, has_more = await read_transcript_segments(
             db,
@@ -79,7 +89,10 @@ async def session_transcript_live(websocket: WebSocket, session_id: UUID) -> Non
 
     async with get_sessionmaker()() as db:
         session_exists = await db.scalar(
-            select(RecordingSession.id).where(RecordingSession.id == session_id)
+            select(RecordingSession.id).where(
+                RecordingSession.id == session_id,
+                RecordingSession.kind == SessionKind.LIVE.value,
+            )
         )
     if session_exists is None:
         await _safe_send_json(
