@@ -218,11 +218,59 @@ function Get-ComposePrefix {
     return $args
 }
 
+function Get-ImageEnvReferences {
+    param([string]$ImageEnv)
+    $values = @{}
+    foreach ($line in @(Get-Content -LiteralPath $ImageEnv)) {
+        if ($line -match '^(RECANTOR_API_IMAGE|RECANTOR_WEB_IMAGE)=(.+)$') {
+            $values[$Matches[1]] = $Matches[2]
+        }
+    }
+    if (-not $values.ContainsKey("RECANTOR_API_IMAGE") -or -not $values.ContainsKey("RECANTOR_WEB_IMAGE")) {
+        throw "Updater image environment file is missing release image references."
+    }
+    return $values
+}
+
 function Invoke-Compose {
     param([string]$ImageEnv, [string[]]$Arguments, [string]$OverrideFile)
     $all = @(Get-ComposePrefix -ImageEnv $ImageEnv -OverrideFile $OverrideFile)
     $all += $Arguments
-    Invoke-Docker $all
+    $refs = Get-ImageEnvReferences $ImageEnv
+    $oldApi = [Environment]::GetEnvironmentVariable("RECANTOR_API_IMAGE", "Process")
+    $oldWeb = [Environment]::GetEnvironmentVariable("RECANTOR_WEB_IMAGE", "Process")
+    try {
+        # Compose gives inherited variables precedence over --env-file. Pin the
+        # process values to the updater-generated file for this invocation.
+        [Environment]::SetEnvironmentVariable("RECANTOR_API_IMAGE", $refs.RECANTOR_API_IMAGE, "Process")
+        [Environment]::SetEnvironmentVariable("RECANTOR_WEB_IMAGE", $refs.RECANTOR_WEB_IMAGE, "Process")
+        Invoke-Docker $all
+    } finally {
+        [Environment]::SetEnvironmentVariable("RECANTOR_API_IMAGE", $oldApi, "Process")
+        [Environment]::SetEnvironmentVariable("RECANTOR_WEB_IMAGE", $oldWeb, "Process")
+    }
+}
+
+function Assert-RenderedComposeImages {
+    param([string]$ImageEnv, $Manifest, [string]$OverrideFile)
+    $rendered = @(Invoke-Compose -ImageEnv $ImageEnv -Arguments @("config", "--format", "json") -OverrideFile $OverrideFile) -join "`n"
+    $config = $rendered | ConvertFrom-Json
+    $expected = @{
+        migrate = [string]$Manifest.images.api.reference
+        api = [string]$Manifest.images.api.reference
+        "stt-worker" = [string]$Manifest.images.api.reference
+        "stt-upload-worker" = [string]$Manifest.images.api.reference
+        "stt-reconciler" = [string]$Manifest.images.api.reference
+        "media-worker" = [string]$Manifest.images.api.reference
+        "media-reconciler" = [string]$Manifest.images.api.reference
+        web = [string]$Manifest.images.web.reference
+    }
+    foreach ($service in $expected.Keys) {
+        $entry = $config.services.PSObject.Properties[$service]
+        if ($null -eq $entry -or [string]$entry.Value.image -cne $expected[$service]) {
+            throw "Rendered Compose image for $service does not match the selected immutable release manifest."
+        }
+    }
 }
 
 function Assert-LocalPreflight {
@@ -386,6 +434,7 @@ function Apply-Release {
 
     Write-ImageEnv -Path $PendingEnvPath -Manifest $Candidate
     Assert-LocalPreflight -ImageEnv $PendingEnvPath
+    Assert-RenderedComposeImages -ImageEnv $PendingEnvPath -Manifest $Candidate -OverrideFile $TestCandidateComposeOverride
     Set-PendingState -State $State -Candidate $Candidate -Phase "pulling" -Message $null
     Write-AtomicJson -Path $StatePath -Object $State
     Invoke-TestInterruption -Phase "pulling"
@@ -397,6 +446,7 @@ function Apply-Release {
     Write-AtomicJson -Path $StatePath -Object $State
     Invoke-TestInterruption -Phase "migrating"
     Start-ReleaseInfrastructure -ImageEnv $PendingEnvPath
+    Assert-RenderedComposeImages -ImageEnv $PendingEnvPath -Manifest $Candidate
 
     try {
         Invoke-CandidateMigration -ImageEnv $PendingEnvPath
@@ -417,6 +467,7 @@ function Apply-Release {
     Invoke-TestInterruption -Phase "activating"
 
     try {
+        Assert-RenderedComposeImages -ImageEnv $PendingEnvPath -Manifest $Candidate -OverrideFile $TestCandidateComposeOverride
         Start-ApplicationServices -ImageEnv $PendingEnvPath -OverrideFile $TestCandidateComposeOverride
         Wait-ReleaseHealthy
     } catch {
@@ -439,6 +490,7 @@ function Apply-Release {
 
         Write-ImageEnv -Path $ActiveEnvPath -Manifest $State.current
         try {
+            Assert-RenderedComposeImages -ImageEnv $ActiveEnvPath -Manifest $State.current
             Start-ApplicationServices -ImageEnv $ActiveEnvPath
             Wait-ReleaseHealthy
         } catch {
@@ -478,12 +530,14 @@ function Invoke-ManualRollback {
     $target = $State.previous
     Write-ImageEnv -Path $ActiveEnvPath -Manifest $target
     try {
+        Assert-RenderedComposeImages -ImageEnv $ActiveEnvPath -Manifest $target
         Start-ApplicationServices -ImageEnv $ActiveEnvPath
         Wait-ReleaseHealthy
     } catch {
         $targetError = $_.Exception.Message
         Write-ImageEnv -Path $ActiveEnvPath -Manifest $oldCurrent
         try {
+            Assert-RenderedComposeImages -ImageEnv $ActiveEnvPath -Manifest $oldCurrent
             Start-ApplicationServices -ImageEnv $ActiveEnvPath
             Wait-ReleaseHealthy
         } catch {

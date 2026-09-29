@@ -127,6 +127,37 @@ try {
     Assert-True ($envText -match "RECANTOR_WEB_IMAGE=ghcr.io/bohanyt/recantor-web@sha256:") "active env stores exact Web digest"
     Assert-True ($envText -notmatch "GROQ") "active image env stores no provider secret"
 
+    # Compose config is daemon-free. Inherited values must not supersede the
+    # updater's immutable refs, including the API image shared by all workers.
+    $composeEnv = Join-Path $tmp "compose.env"
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "../.env.example") -Destination $composeEnv
+    $savedEnvFile = $EnvFile
+    $EnvFile = $composeEnv
+    $savedApiImage = [Environment]::GetEnvironmentVariable("RECANTOR_API_IMAGE", "Process")
+    $savedWebImage = [Environment]::GetEnvironmentVariable("RECANTOR_WEB_IMAGE", "Process")
+    try {
+        $env:RECANTOR_API_IMAGE = "ghcr.io/bohanyt/recantor-api:stale"
+        $env:RECANTOR_WEB_IMAGE = "ghcr.io/bohanyt/recantor-web:stale"
+        Assert-RenderedComposeImages -ImageEnv $envPath -Manifest $v1
+        $rendered = (@(Invoke-Compose -ImageEnv $envPath -Arguments @("config", "--format", "json")) -join "`n") | ConvertFrom-Json
+        foreach ($service in @("migrate", "api", "stt-worker", "stt-upload-worker", "stt-reconciler", "media-worker", "media-reconciler")) {
+            Assert-Equal $rendered.services.PSObject.Properties[$service].Value.image $v1.images.api.reference "$service uses exact API digest"
+        }
+        Assert-Equal $rendered.services.web.image $v1.images.web.reference "web uses exact Web digest"
+        Assert-Equal $env:RECANTOR_API_IMAGE "ghcr.io/bohanyt/recantor-api:stale" "inherited API value restored after Compose"
+        Assert-Equal $env:RECANTOR_WEB_IMAGE "ghcr.io/bohanyt/recantor-web:stale" "inherited Web value restored after Compose"
+
+        $override = Join-Path $tmp "stale-web.yaml"
+        Set-Content -LiteralPath $override -Value "services:`n  web:`n    image: ghcr.io/bohanyt/recantor-web:stale`n"
+        Assert-Throws {
+            Assert-RenderedComposeImages -ImageEnv $envPath -Manifest $v1 -OverrideFile $override
+        } "Rendered Compose image for web" "mutable override is rejected before activation"
+    } finally {
+        $EnvFile = $savedEnvFile
+        [Environment]::SetEnvironmentVariable("RECANTOR_API_IMAGE", $savedApiImage, "Process")
+        [Environment]::SetEnvironmentVariable("RECANTOR_WEB_IMAGE", $savedWebImage, "Process")
+    }
+
     Set-PendingState -State $state -Candidate $v2 -Phase "pulling" -Message $null
     Write-AtomicJson -Path $statePath -Object $state
     $pendingIdentityBefore = Get-ReleaseIdentity (Read-ReleaseState $statePath).pending.candidate
@@ -179,6 +210,7 @@ Remove-Item Env:RECANTOR_UPDATER_TEST_MODE -ErrorAction SilentlyContinue
 
 # Focused fail-closed rollback-attempt regression with Docker boundaries stubbed.
 function Assert-LocalPreflight { param([string]$ImageEnv) }
+function Assert-RenderedComposeImages { param([string]$ImageEnv, $Manifest, [string]$OverrideFile) }
 function Invoke-Docker { param([string[]]$Arguments) }
 function Start-ReleaseInfrastructure { param([string]$ImageEnv) }
 function Invoke-CandidateMigration { param([string]$ImageEnv) }
