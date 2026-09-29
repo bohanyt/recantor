@@ -201,21 +201,84 @@ $rollbackFailPersisted = Read-ReleaseState $rollbackFailStatePath
 Assert-Equal $rollbackFailPersisted.pending.phase "manual_recovery_required" "failed rollback enters manual recovery"
 Assert-Equal $rollbackFailPersisted.last_attempt.result "rollback_failed_manual_recovery" "failed rollback result is truthful"
 Assert-Equal $rollbackFailPersisted.current.version "v0.1.0-alpha.2" "failed rollback never advances current identity"
+Assert-Equal $rollbackFailPersisted.schema_authority.version "v0.1.0-alpha.3" "migration authority survives failed activation"
 
-# Manual rollback target health failure must leave current state truthful and restore active env.
+# Manual rollback refuses unresolved work and legacy state before touching services.
 $manualState = New-ReleaseState
 $manualState.current = $v2
 $manualState.previous = $v1
+$manualState.schema_authority = $v2
 $manualStatePath = Join-Path $tmp "manual-rollback-state.json"
 $manualEnvPath = Join-Path $tmp "manual-rollback-active.env"
 Write-AtomicJson -Path $manualStatePath -Object $manualState
-function Wait-ReleaseHealthy { throw "synthetic manual rollback target health failure" }
+$manualState.pending = [pscustomobject]@{ candidate_version = "v0.1.0-alpha.4" }
 Assert-Throws {
     Invoke-ManualRollback -State $manualState -StatePath $manualStatePath -ActiveEnvPath $manualEnvPath
-} "active image state was restored" "manual rollback health failure restores truthful image state"
+} "candidate is pending" "manual rollback refuses unresolved pending candidate"
+Assert-True (-not (Test-Path $manualEnvPath)) "pending refusal does not rewrite active env"
+$manualState.pending = $null
+$manualState.schema_authority = $null
+Assert-Throws {
+    Invoke-ManualRollback -State $manualState -StatePath $manualStatePath -ActiveEnvPath $manualEnvPath
+} "legacy state" "missing schema authority fails closed"
+$manualState.schema_authority = $v2
+
+# The first health check fails for the target, then restoration succeeds.
+$script:ManualHealthCalls = 0
+function Wait-ReleaseHealthy {
+    $script:ManualHealthCalls += 1
+    if ($script:ManualHealthCalls -eq 1) { throw "synthetic manual rollback target health failure" }
+}
+Assert-Throws {
+    Invoke-ManualRollback -State $manualState -StatePath $manualStatePath -ActiveEnvPath $manualEnvPath
+} "was restored" "manual rollback target failure restores running current release"
 Assert-Equal $manualState.current.version "v0.1.0-alpha.3" "manual rollback failure leaves current unchanged"
 $manualEnvText = Get-Content -LiteralPath $manualEnvPath -Raw
 Assert-True ($manualEnvText -match "RECANTOR_RELEASE_VERSION=v0.1.0-alpha.3") "manual rollback failure restores current active env"
+Assert-Equal (Read-ReleaseState $manualStatePath).last_attempt.result "manual_rollback_failed_restored" "restored failure is persisted"
+Assert-Equal $script:ManualHealthCalls 2 "restoration is health verified"
+
+# If restoring the current release fails, the state must demand manual recovery.
+function Wait-ReleaseHealthy { throw "synthetic restoration failure" }
+Assert-Throws {
+    Invoke-ManualRollback -State $manualState -StatePath $manualStatePath -ActiveEnvPath $manualEnvPath
+} "manual recovery is required" "restoration failure is surfaced"
+$manualFailed = Read-ReleaseState $manualStatePath
+Assert-Equal $manualFailed.pending.phase "manual_recovery_required" "restoration failure persists manual recovery"
+Assert-Equal $manualFailed.last_attempt.result "manual_rollback_failed_manual_recovery" "restoration failure result persists"
+Assert-Equal $manualFailed.current.version "v0.1.0-alpha.3" "unverified restoration does not change known-good identity"
+
+# Failed N+2 activation can restore N+1, but N+2's applied schema still governs
+# any subsequent N+1 -> N manual rollback.
+$nPlusOne = New-TestManifest -Version "v0.1.0-alpha.3" -SafeTo @("v0.1.0-alpha.2")
+$unsafeChain = New-TestManifest -Version "v0.1.0-alpha.4" -SafeTo @("v0.1.0-alpha.3")
+$chainState = New-ReleaseState
+$chainState.current = $nPlusOne
+$chainState.previous = $v1
+$script:ChainHealthCalls = 0
+function Wait-ReleaseHealthy {
+    $script:ChainHealthCalls += 1
+    if ($script:ChainHealthCalls -eq 1) { throw "synthetic N+2 activation failure" }
+}
+$chainPath = Join-Path $tmp "chain-state.json"
+Assert-Throws {
+    Apply-Release -Mode update -State $chainState -Candidate $unsafeChain -SelectedChannel alpha -StatePath $chainPath -ActiveEnvPath (Join-Path $tmp "chain-active.env") -PendingEnvPath (Join-Path $tmp "chain-pending.env")
+} "rolled back" "N+2 activation failure restores N+1"
+$chainPersisted = Read-ReleaseState $chainPath
+Assert-Equal $chainPersisted.schema_authority.version "v0.1.0-alpha.4" "N+2 schema authority survives auto rollback"
+Assert-Equal $chainPersisted.pending $null "successful auto rollback clears pending"
+Assert-Throws {
+    Invoke-ManualRollback -State $chainPersisted -StatePath $chainPath -ActiveEnvPath (Join-Path $tmp "chain-active.env")
+} "schema authority" "N+2 schema disallows unsafe chained rollback to N"
+Assert-Equal (Read-ReleaseState $chainPath).current.version "v0.1.0-alpha.3" "unsafe chain does not change current"
+
+$safeChain = New-TestManifest -Version "v0.1.0-alpha.4" -SafeTo @("v0.1.0-alpha.3", "v0.1.0-alpha.2")
+$chainPersisted.schema_authority = $safeChain
+Write-AtomicJson -Path $chainPath -Object $chainPersisted
+function Wait-ReleaseHealthy { }
+Invoke-ManualRollback -State $chainPersisted -StatePath $chainPath -ActiveEnvPath (Join-Path $tmp "chain-active.env")
+Assert-Equal (Read-ReleaseState $chainPath).current.version "v0.1.0-alpha.2" "explicitly safe chained rollback succeeds"
+Assert-Equal (Read-ReleaseState $chainPath).schema_authority.version "v0.1.0-alpha.4" "manual rollback retains applied schema authority"
 
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot "recantor.ps1") -Raw
 Assert-True ($source -notmatch 'alembic\s+downgrade') "updater contains no automatic Alembic downgrade"

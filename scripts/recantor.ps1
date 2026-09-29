@@ -175,11 +175,12 @@ function Write-AtomicJson {
 
 function New-ReleaseState {
     return [pscustomobject]@{
-        format_version = 1
+        format_version = 2
         channel = $null
         current = $null
         previous = $null
         pending = $null
+        schema_authority = $null
         last_attempt = $null
     }
 }
@@ -188,7 +189,7 @@ function Read-ReleaseState {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return New-ReleaseState }
     $state = Read-JsonFile $Path
-    foreach ($name in @("channel", "current", "previous", "pending", "last_attempt")) {
+    foreach ($name in @("channel", "current", "previous", "pending", "schema_authority", "last_attempt")) {
         if (-not (Test-HasProperty $state $name)) { Add-Member -InputObject $state -NotePropertyName $name -NotePropertyValue $null }
     }
     return $state
@@ -406,6 +407,11 @@ function Apply-Release {
         throw
     }
 
+    # Migration can advance the database even if application activation fails.
+    # Keep the applied manifest as durable authority across automatic rollback.
+    $State.schema_authority = $Candidate
+    Write-AtomicJson -Path $StatePath -Object $State
+
     Set-PendingState -State $State -Candidate $Candidate -Phase "activating" -Message $null
     Write-AtomicJson -Path $StatePath -Object $State
     Invoke-TestInterruption -Phase "activating"
@@ -459,10 +465,14 @@ function Apply-Release {
 
 function Invoke-ManualRollback {
     param($State, [string]$StatePath, [string]$ActiveEnvPath)
+    if ($null -ne $State.pending) { throw "Manual rollback is refused while a candidate is pending or manual recovery is required." }
     if ($null -eq $State.current -or $null -eq $State.previous) { throw "Manual rollback requires current and previous known-good releases." }
     $currentVersion = [string]$State.current.version
     $previousVersion = [string]$State.previous.version
+    if ($null -eq $State.schema_authority) { throw "Manual rollback requires persisted schema authority; legacy state cannot prove compatibility." }
+    Assert-ReleaseManifest $State.schema_authority
     if (-not (Test-ApplicationRollbackSafe -CandidateManifest $State.current -PreviousVersion $previousVersion)) { throw "Current release does not explicitly declare application rollback to $previousVersion as safe." }
+    if (-not (Test-ApplicationRollbackSafe -CandidateManifest $State.schema_authority -PreviousVersion $previousVersion)) { throw "Applied schema authority does not explicitly declare application rollback to $previousVersion as safe." }
 
     $oldCurrent = $State.current
     $target = $State.previous
@@ -471,8 +481,20 @@ function Invoke-ManualRollback {
         Start-ApplicationServices -ImageEnv $ActiveEnvPath
         Wait-ReleaseHealthy
     } catch {
+        $targetError = $_.Exception.Message
         Write-ImageEnv -Path $ActiveEnvPath -Manifest $oldCurrent
-        throw "Manual rollback target failed health verification; active image state was restored to $currentVersion."
+        try {
+            Start-ApplicationServices -ImageEnv $ActiveEnvPath
+            Wait-ReleaseHealthy
+        } catch {
+            Set-PendingState -State $State -Candidate $target -Phase "manual_recovery_required" -Message "Manual rollback target failed and restoration of $currentVersion failed."
+            Set-LastAttempt -State $State -CandidateVersion $previousVersion -Result "manual_rollback_failed_manual_recovery" -Message "Target: $targetError; restoration: $($_.Exception.Message)"
+            Write-AtomicJson -Path $StatePath -Object $State
+            throw "Manual rollback target and restoration failed; manual recovery is required."
+        }
+        Set-LastAttempt -State $State -CandidateVersion $previousVersion -Result "manual_rollback_failed_restored" -Message $targetError
+        Write-AtomicJson -Path $StatePath -Object $State
+        throw "Manual rollback target failed health verification; $currentVersion was restored."
     }
     $State.current = $target
     $State.previous = $oldCurrent
