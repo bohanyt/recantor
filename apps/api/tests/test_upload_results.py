@@ -225,6 +225,26 @@ async def test_result_surfaces_enforce_capability_expiry_and_cross_session_isola
 
 
 @pytest.mark.asyncio
+async def test_upload_transcript_cannot_be_read_through_live_session_route(clean_recording_state):
+    del clean_recording_state
+    session_id = await _completed_upload(
+        processing_state=UploadProcessingState.SUCCEEDED.value,
+        segment_count=1,
+    )
+    async with _client() as client:
+        protected = await client.get(f"/api/v1/uploads/{session_id}/transcript", headers=_headers())
+        assert protected.status_code == 200
+        assert [segment["text"] for segment in protected.json()["segments"]] == ["segment 1"]
+
+        generic = await client.get(f"/api/v1/sessions/{session_id}/transcript")
+        assert generic.status_code == 404
+        assert generic.json()["detail"] == "recording session not found"
+
+        no_capability = await client.get(f"/api/v1/uploads/{session_id}/transcript")
+        assert no_capability.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_result_status_is_postgres_derived_and_failure_is_safe(clean_recording_state):
     del clean_recording_state
     session_id = await _completed_upload()
