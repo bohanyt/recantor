@@ -34,15 +34,11 @@ def channel_for_version(version: str) -> str:
     )
 
 
-def validate_manifest(data: dict[str, Any]) -> None:
-    if data.get("format_version") != 1:
-        raise ValueError("format_version must be 1")
-
+def _validate_common(data: dict[str, Any]) -> dict[str, Any]:
     version = data.get("version")
     if not isinstance(version, str):
         raise ValueError("version must be a string")
     expected_channel = channel_for_version(version)
-
     channel = data.get("channel")
     if channel not in CHANNELS:
         raise ValueError(f"channel must be one of {sorted(CHANNELS)}")
@@ -90,11 +86,51 @@ def validate_manifest(data: dict[str, Any]) -> None:
         raise ValueError("automatic_database_downgrade must be false")
     if data.get("compose_file") != "infra/compose.release.yaml":
         raise ValueError("compose_file must identify the supported pull-only Compose file")
+    return compatibility
+
+
+def validate_manifest(data: dict[str, Any]) -> None:
+    format_version = data.get("format_version")
+    if format_version not in {1, 2}:
+        raise ValueError("format_version must be 1 or 2")
+    compatibility = _validate_common(data)
+    if format_version == 1:
+        return
+    rollback_versions = compatibility.get("application_rollback_safe_to_versions")
+    if not isinstance(rollback_versions, list) or not all(
+        isinstance(item, str) for item in rollback_versions
+    ):
+        raise ValueError(
+            "compatibility.application_rollback_safe_to_versions must be a string list"
+        )
+    if len(set(rollback_versions)) != len(rollback_versions):
+        raise ValueError("application rollback safe-version list must not contain duplicates")
+    for version in rollback_versions:
+        channel_for_version(version)
+    if not isinstance(compatibility.get("backup_required"), bool):
+        raise ValueError("compatibility.backup_required must be boolean")
+
+
+def load_policy(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("release policy root must be an object")
+    rollback_versions = data.get("application_rollback_safe_to_versions")
+    if not isinstance(rollback_versions, list) or not all(
+        isinstance(item, str) for item in rollback_versions
+    ):
+        raise ValueError("release policy rollback-safe versions must be a string list")
+    for version in rollback_versions:
+        channel_for_version(version)
+    if not isinstance(data.get("backup_required"), bool):
+        raise ValueError("release policy backup_required must be boolean")
+    return data
 
 
 def render_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    release_policy = load_policy(args.policy)
     manifest = {
-        "format_version": 1,
+        "format_version": 2,
         "version": args.version,
         "channel": args.channel,
         "source": {
@@ -113,6 +149,10 @@ def render_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "platforms": args.platform,
             "schema_head": args.schema_head,
             "automatic_database_downgrade": False,
+            "application_rollback_safe_to_versions": release_policy[
+                "application_rollback_safe_to_versions"
+            ],
+            "backup_required": release_policy["backup_required"],
         },
         "compose_file": "infra/compose.release.yaml",
     }
@@ -121,12 +161,12 @@ def render_manifest(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render, classify, or validate a Recantor release manifest")
+    parser = argparse.ArgumentParser(
+        description="Render, classify, or validate a Recantor release manifest"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
-
     classify = sub.add_parser("channel")
     classify.add_argument("version")
-
     render = sub.add_parser("render")
     render.add_argument("--version", required=True)
     render.add_argument("--channel", choices=sorted(CHANNELS), required=True)
@@ -135,8 +175,8 @@ def parse_args() -> argparse.Namespace:
     render.add_argument("--web-digest", required=True)
     render.add_argument("--schema-head", required=True)
     render.add_argument("--platform", action="append", required=True)
+    render.add_argument("--policy", type=Path, required=True)
     render.add_argument("--output", type=Path, required=True)
-
     validate = sub.add_parser("validate")
     validate.add_argument("manifest", type=Path)
     return parser.parse_args()
@@ -147,12 +187,12 @@ def main() -> None:
     if args.command == "channel":
         print(channel_for_version(args.version))
         return
-
     if args.command == "render":
-        manifest = render_manifest(args)
-        args.output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        rendered = render_manifest(args)
+        args.output.write_text(
+            json.dumps(rendered, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         return
-
     data = json.loads(args.manifest.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("manifest root must be an object")

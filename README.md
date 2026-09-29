@@ -100,7 +100,29 @@ docker compose --env-file .env -f infra/compose.release.yaml up -d
 
 The release path preserves the PostgreSQL and audio named volumes and never uses `down -v` as a normal update operation. The same API image is reused by migration, API, STT worker/reconciler, and media worker/reconciler services; the web image contains prebuilt static assets and does not run Vite development mode.
 
-Exact image digests, source revision, release channel, platform, and database schema compatibility identity are recorded in the machine-readable release manifest. Issue #63 owns the updater/known-good/rollback state machine that will consume this contract. Until #62 and #63 are accepted, this remains release-engineering work rather than a stable-product claim.
+Exact image digests, source revision, release channel, platform, and database schema compatibility identity are recorded in the machine-readable release manifest.
+
+Issue #63 now has an updater candidate in DRAFT PR #65. The intended Windows release-bundle flow is:
+
+```powershell
+# From the extracted release bundle directory:
+Copy-Item .env.example .env
+# Edit .env and set GROQ_API_KEY.
+
+.\recantor.ps1 install -ManifestPath .\release-manifest.json -Channel alpha
+.\recantor.ps1 status
+
+# Later, when a newer release exists in the selected channel:
+.\recantor.ps1 update -Channel alpha
+
+# Explicit rollback to previous known-good, only when the current
+# manifest declares that application rollback schema-safe:
+.\recantor.ps1 rollback
+```
+
+The updater keeps release state outside application images under `.recantor/`, activates exact GHCR digest references, preserves PostgreSQL/audio volumes and local `.env`, and never treats automatic database downgrade or `down -v` as recovery. A candidate is marked known-good only after health/readiness/Web checks pass. If activation fails, application-only rollback is attempted only when the candidate manifest explicitly says the previous version is schema-safe; otherwise the updater fails closed and requires manual recovery.
+
+This updater path is still **review-pending** until Issue #63 is independently accepted and the final bounded Windows updater witness is complete. It is not yet a stable-product claim.
 
 ## What works on the current integration line
 
