@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 36548105107
+snapshot_seq: 37275616578
 
-collected_at: 2026-09-29T09:16:42.230458Z
+collected_at: 2026-10-05T07:03:42.994657Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,8 +19,8 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: ea489862fab994eaa8d4520cdcf280ea37a14e11
-canonical_commit_message: docs(current): record accepted cloud release foundation
+canonical_head: f3fe627805134f1cd52291cafcc4192828cdc72f
+canonical_commit_message: docs: accept alpha.3 remote distribution and Windows updater proof
 
 SECTION trusted_governance
 source: AGENTS.md
@@ -182,9 +182,31 @@ SECTION trusted_operational_current
 source: docs/CURRENT.md
 # Current
 
-Last updated: 2026-09-21
+Last updated: 2026-10-05
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
+
+## Latest release checkpoint — 2026-10-05
+
+Published prerelease `v0.1.0-alpha.3` is bound to source `64a6e2235af75f4d9652f488d0fc650f0531961a`, pushed normally to `integration/cloud-alpha-2026-09-11`. CI `37270291070`, Upload foundation CI `37270291050`, Media processing CI `37270291109`, and Release images `37270796641` all completed **SUCCESS**. Fresh remote `main` remains `59ff57502a9a1d84ad332cab106c46c256482d23`; PR #53 stays OPEN/DRAFT/unmerged. GitHub automatically marked PR #65 merged when its accepted source became reachable from the integration branch; no main merge was performed.
+
+The release includes the accepted #61/#63 repair candidate `2d95c4d499824d0b508997d2642283bde7432f6e` and a small release-context correction at `5932df62844e19058763a69af11519059b055c77`: repair the malformed `.recantor/` Git ignore rule and exclude local state, environment files, recordings, dependencies, and test artifacts from the root Web release Docker build context. The release source adds the local proof handoff as documentation only. Later status documentation may advance integration without moving the immutable release tag.
+
+Local verification is complete for the previously outstanding environment-dependent repair checks:
+
+- full Linux backend suite against isolated real PostgreSQL 17/Redis 8 and FFmpeg: **160 passed**;
+- frontend lint/typecheck/format/build and unit tests: **62 passed**;
+- selected Windows Edge recovery, Live/finalization, layout, and API-connectivity suites: **44 passed, 2 skipped**; the skips were a fixture-dependent real Upload scenario and a CI-only environment-loader scenario;
+- Windows updater unit contracts and release-manifest tests: **PASS**;
+- API and Web release image builds at `5932df6`: **PASS**, with matching OCI source revision labels;
+- isolated Windows Docker updater runtime proof: **PASS**, covering fresh-process retry after persisted `pulling`, inherited image-variable isolation, migration/activation, exact previous digest restoration after failed activation, retained applied-schema authority, refusal of an unsafe chained rollback, PostgreSQL/audio persistence, and synthetic-secret/config preservation.
+
+The earlier updater runtime proof used a local registry; its simulated versions are separate from the actual published release. Bohan explicitly lifted the Actions hold in this chat on October 5, authorizing the integration push, alpha.3 publication, and final Windows distribution witness. Real publication, release bundle/manifest hash verification, and the final pull-only Windows distribution witness are **PASS**. The Windows proof used the published bundle and anonymous GHCR pulls with zero application-source builds. It covers safe failed-activation recovery, exact digest restoration, fresh-process retry, application rollback/reactivation, refusal of an unsafe policy fixture, actual Recantor session/PostgreSQL/audio persistence, secret/config preservation, and the user-facing `update -Channel alpha` release-feed path. The published Web image also passed a real Edge shell/API/readiness smoke. Current acceptance details are in [the release handoff](handoff/2026-10-05-ALPHA3-DISTRIBUTION-HANDOFF.md); [the earlier handoff](handoff/2026-10-05-LOCAL-CONTROL-TOWER-HANDOFF.md) is historical local evidence.
+
+Published alpha.3 immutable images:
+
+- `ghcr.io/bohanyt/recantor-api@sha256:12de7229cc41466459495a8d5ba685d4876cba431c21572e604c6e988e3d60ad`;
+- `ghcr.io/bohanyt/recantor-web@sha256:9d2f34220c25fa3230fb171bc14294fa367316101abbc3808b2ea6ea5968e970`.
 
 ## Active integration line
 
@@ -208,7 +230,7 @@ Issue #48 is CLOSED / completed. Windows acceptance proved:
 - TXT/JSON/VTT/SRT exports;
 - truthful alpha capability copy at normal desktop viewport.
 
-Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Current alpha recovery after reopen restores saved upload state and may require reselecting the same local file; true browser-reopen automatic resume is tracked in #61.
+Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Alpha.3 includes #61 browser-reopen recovery: automatic same-upload resume when persisted-handle permission remains granted, one truthful permission action when required, and a same-file reselect fallback on unsupported browsers.
 
 Post-acceptance housekeeping reconciles the `main`-only agent-context compiler commit `59ff57502a9a1d84ad332cab106c46c256482d23` into the integration lineage without changing accepted product behavior.
 
@@ -291,79 +313,8 @@ Current scheduler properties include:
 - terminal `no_speech` for valid blank provider results, without creating blank transcript rows;
 - separate workload classes and worker/queue capacity for Live (`stt-live`) and Upload (`stt-upload`).
 
-Upload backlog therefore does not consume the reserved Live STT frontier. Ordinary CI does not require a real Groq secret or provider network call; focused proof exercises the real `GroqSTTProvider` against a deterministic local compatible endpoint.
-
-## #42 canonical Live transcript UI — integrated
-
-The web transcript surface preserves these semantics:
-
-- canonical HTTP cursor reads are truth;
-- WebSocket delivery is an ephemeral wake hint, not persistence;
-- duplicate/out-of-order wake hints converge through canonical reads;
-- reconnect/degraded delivery can catch up without changing archive recording safety;
-- transcript presentation does not own recorder lifecycle or archive durability.
-
-## #44 resumable existing-recording upload foundation — integrated
-
-The durable transfer path is:
-
-```text
-Browser file
-  -> Uppy + tus
-  -> tusd
-  -> shared durable audio storage
-  -> Recantor tusd completion hook
-  -> PostgreSQL upload completion evidence
-```
-
-Current transfer properties:
-
-- WAV/MP3/M4A/OGG/WebM/MP4 source admission;
-- pause/retry/reload/reselection resumes the same tus upload when recovery evidence matches;
-- capability-token protected upload-session reads/hooks;
-- durable completion records internal storage identity, exact byte length, and SHA-256;
-- whole-file completion hashing runs outside the asyncio event loop and outside a long upload-row lock, then revalidates authoritative binding before publish;
-- UI may claim **durably uploaded** only after Recantor confirms durable completion.
-
-## #45 uploaded-media processing — integrated
-
-After immutable #44 completion, the backend path is:
-
-```text
-durable completed upload
-  -> PostgreSQL UploadMediaProcessing
-  -> bounded ffprobe
-  -> bounded FFmpeg normalize to mono signed 16-bit PCM / 16 kHz
-  -> claim-fenced atomic first-wins normalized evidence
-  -> deterministic upload-energy-vad-180s-v1 segmentation
-  -> existing commit_utterance_work
-  -> existing STTJob / STTProvider
-  -> canonical TranscriptSegment
-```
-
-Important properties:
-
-- one PostgreSQL processing identity per immutable completed upload;
-- PostgreSQL remains durable authority; media Redis/Celery messages are wake mechanisms only;
-- dedicated `media-upload` worker has RW audio access, while live/upload STT workers keep audio storage RO;
-- normalized publication does heavy digest/fsync work while private, then performs the bounded final first-wins install under the current PostgreSQL claim fence;
-- stale/reclaimed workers cannot publish authoritative normalized identity;
-- deterministic D3-A retry starts from normalized sample 0 and reproduces utterance/timeline identity or fails loudly;
-- partial EOF timing preserves coverage with floor(start)/ceil(end);
-- long silence creates no fake utterance work;
-- valid blank provider text becomes terminal `no_speech`, not failure and not a blank `TranscriptSegment`;
-- migration 0009 backfills completed #44 uploads exactly once and has a behavioral downgrade/re-upgrade proof.
-
-Residual alpha boundaries remain documented: the atomic first-wins filesystem proof targets the Linux/local-filesystem Compose deployment shape; a crash before manifest commit can leave a non-authoritative orphan content object; out-of-band storage mutation is detected rather than repaired automatically.
-
-## #43 product shell — integrated
-
-The desktop productization pass provides:
-
-- obvious `Live` / `Upload recording` top-level workflow shell;
-- active microphone `requesting` or `recording` capture cannot be hidden behind Upload navigation;
-- Live prioritizes lifecycle + elapsed time, one primary action, audio safety, transcription state, recovery
-...[CURRENT_TRUNCATED chars=6333]
+Upload backlog therefore does not consum
+...[CURRENT_TRUNCATED chars=14987]
 
 SECTION authority_issue
 issue_number: 41
@@ -672,20 +623,16 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+PR #53 state=open updated=2026-10-05T06:59:20Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #58 state=open updated=2026-09-29T09:16:29Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
-ISSUE #63 state=open updated=2026-09-29T05:47:35Z title=58B — Updater, known-good activation, and rollback safety
-ISSUE #61 state=open updated=2026-09-29T05:47:33Z title=Upload recovery: automatic resume after browser reopen with persisted file handle
-PR #65 state=open updated=2026-09-23T07:45:42Z title=58B: updater, known-good activation, and rollback safety
 PR #66 state=open updated=2026-09-22T08:38:55Z title=docs: record future local MCP agent integration
-PR #53 state=open updated=2026-09-21T07:48:53Z title=Integration checkpoint: cloud alpha 2026-09-12
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
-PR #65 draft=True updated=2026-09-23T07:45:42Z base=integration/cloud-alpha-2026-09-11 head=agent-release/issue-63-updater-rollback title=58B: updater, known-good activation, and rollback safety
+PR #53 draft=True updated=2026-10-05T06:59:20Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #66 draft=True updated=2026-09-22T08:38:55Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
-PR #53 draft=True updated=2026-09-21T07:48:53Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=36548105107 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=37275616578 sections=6
