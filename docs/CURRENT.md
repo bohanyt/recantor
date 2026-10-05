@@ -1,8 +1,25 @@
 # Current
 
-Last updated: 2026-09-21
+Last updated: 2026-10-05
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
+
+## Latest local checkpoint — 2026-10-05
+
+Fresh-fetched remote `main` remains `59ff57502a9a1d84ad332cab106c46c256482d23`; remote integration remains `ea489862fab994eaa8d4520cdcf280ea37a14e11`. PR #53 and #65 remain draft/unmerged. No remote push, release publication, or workflow dispatch was performed in this local control-tower run.
+
+The accepted local #61/#63 repair candidate `2d95c4d499824d0b508997d2642283bde7432f6e` has a small release-context correction at `5932df62844e19058763a69af11519059b055c77`: repair the malformed `.recantor/` Git ignore rule and exclude local state, environment files, recordings, dependencies, and test artifacts from the root Web release Docker build context. The source is on local branch `local-core-repair-0929` in `recantor-core-repair-0929`, ahead of the remote integration line; descriptions of local integration below do not imply a remote push.
+
+Local verification is complete for the previously outstanding environment-dependent repair checks:
+
+- full Linux backend suite against isolated real PostgreSQL 17/Redis 8 and FFmpeg: **160 passed**;
+- frontend lint/typecheck/format/build and unit tests: **62 passed**;
+- selected Windows Edge recovery, Live/finalization, layout, and API-connectivity suites: **44 passed, 2 skipped**; the skips were a fixture-dependent real Upload scenario and a CI-only environment-loader scenario;
+- Windows updater unit contracts and release-manifest tests: **PASS**;
+- API and Web release image builds at `5932df6`: **PASS**, with matching OCI source revision labels;
+- isolated Windows Docker updater runtime proof: **PASS**, covering fresh-process retry after persisted `pulling`, inherited image-variable isolation, migration/activation, exact previous digest restoration after failed activation, retained applied-schema authority, refusal of an unsafe chained rollback, PostgreSQL/audio persistence, and synthetic-secret/config preservation.
+
+The updater runtime proof used a local registry and is explicitly **not** the final #63 remote-distribution acceptance. Its simulated `alpha.3`/`alpha.4` manifests are local test identities, not published releases. Latest published release remains `v0.1.0-alpha.2`. A real GHCR publication and final bounded pull-only Windows distribution witness remain required. The Actions hold remains active pending explicit authorization to lift it. Details and limitations are in [the dated handoff](handoff/2026-10-05-LOCAL-CONTROL-TOWER-HANDOFF.md).
 
 ## Active integration line
 
@@ -233,7 +250,7 @@ Before Recantor may be described as stable:
 
 ## Stable-release engineering — #58 / #62 / #63
 
-The first installable alpha remains frozen at `v0.1.0-alpha.1`.
+The first accepted product alpha was `v0.1.0-alpha.1`; the latest published artifact proof is the prerelease `v0.1.0-alpha.2` described below.
 
 Issue #62 / 58A is **accepted and integrated**. The supported release-artifact path is now cloud-built rather than client-built:
 
