@@ -68,4 +68,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
-\n# Local release updater state\n.recantor/\n
+
+# Local release updater state
+.recantor/
