@@ -6,7 +6,7 @@ This file is the short operational source of truth for Recantor. Fresh GitHub st
 
 ## Latest release checkpoint — 2026-10-05
 
-Published prerelease `v0.1.0-alpha.3` is bound to source `64a6e2235af75f4d9652f488d0fc650f0531961a`, pushed normally to `integration/cloud-alpha-2026-09-11`. CI `37270291070`, Upload foundation CI `37270291050`, Media processing CI `37270291109`, and Release images `37270796641` all completed **SUCCESS**. Fresh remote `main` remains `59ff57502a9a1d84ad332cab106c46c256482d23`; PR #53 stays OPEN/DRAFT/unmerged. GitHub automatically marked PR #65 merged when its accepted source became reachable from the integration branch; no main merge was performed.
+Published prerelease `v0.1.0-alpha.3` is bound to source `64a6e2235af75f4d9652f488d0fc650f0531961a`, pushed normally to `integration/cloud-alpha-2026-09-11`. CI `37270291070`, Upload foundation CI `37270291050`, Media processing CI `37270291109`, and Release images `37270796641` all completed **SUCCESS**. Bohan subsequently authorized main merge with "merge gapapa" on October 5. [PR #53](https://github.com/bohanyt/recantor/pull/53) is **MERGED**, preserving exact reviewed head `f3fe627805134f1cd52291cafcc4192828cdc72f` through merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4` at 14:19 Bangkok time. GitHub had already automatically marked PR #65 merged when its accepted source became reachable from the integration branch. The immutable alpha.3 tag, images, and release assets are unchanged by main integration.
 
 The release includes the accepted #61/#63 repair candidate `2d95c4d499824d0b508997d2642283bde7432f6e` and a small release-context correction at `5932df62844e19058763a69af11519059b055c77`: repair the malformed `.recantor/` Git ignore rule and exclude local state, environment files, recordings, dependencies, and test artifacts from the root Web release Docker build context. The release source adds the local proof handoff as documentation only. Later status documentation may advance integration without moving the immutable release tag.
 
@@ -27,6 +27,8 @@ Published alpha.3 immutable images:
 - `ghcr.io/bohanyt/recantor-web@sha256:9d2f34220c25fa3230fb171bc14294fa367316101abbc3808b2ea6ea5968e970`.
 
 ## Active integration line
+
+Main merge validation: [CI 37277090061](https://github.com/bohanyt/recantor/actions/runs/37277090061) completed **SUCCESS** at exact merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4`. Backend, frontend, E2E, and Compose smoke passed; optional alpha-cloud-proof was skipped by its gate. Subsequent status corrections are documentation only.
 
 Canonical cloud-alpha integration branch:
 
@@ -52,7 +54,7 @@ Manual clicking of the Upload Pause button is not an alpha acceptance requiremen
 
 Post-acceptance housekeeping reconciles the `main`-only agent-context compiler commit `59ff57502a9a1d84ad332cab106c46c256482d23` into the integration lineage without changing accepted product behavior.
 
-PR #53 remains the integration checkpoint vehicle. No merge to `main` is authorized unless Bohan explicitly says to merge.
+PR #53 completed the integration checkpoint after explicit Bohan authorization. Main now contains the accepted alpha.3 work. The integration branch remains available as historical lineage; fresh main is the baseline for subsequent work.
 
 ## Product truth on the integration line
 
@@ -275,7 +277,7 @@ Published proof images:
 
 Release workflow `35573744267` pulled those exact registry digest references back, verified OCI identity, started them through the pull-only release Compose stack, passed API health/readiness + Web shell smoke, rendered the exact release manifest, and created a GitHub **prerelease**. This is release-path proof, not a stable-product claim.
 
-Issue #63 / 58B implementation from PR #65 (source head `2a4aa7f4`, independent review R63-C2 CLEAN) and its accepted `2d95c4d` safety corrections are remotely integrated and published in alpha.3. Its earlier unpublished PR artifact digests are historical candidates, not the supported alpha.3 identity. The actual alpha.3 GHCR publication and final bounded Windows distribution witness are **accepted/PASS**, satisfying the previously non-substitutable distribution gate. Local registry evidence remains separately classified. Parent #58's bounded release lifecycle and #61's accepted recovery behavior are complete on the integration/release line; this does not authorize a main merge or a stable-product claim.
+Issue #63 / 58B implementation from PR #65 (source head `2a4aa7f4`, independent review R63-C2 CLEAN) and its accepted `2d95c4d` safety corrections are remotely integrated and published in alpha.3. Its earlier unpublished PR artifact digests are historical candidates, not the supported alpha.3 identity. The actual alpha.3 GHCR publication and final bounded Windows distribution witness are **accepted/PASS**, satisfying the previously non-substitutable distribution gate. Local registry evidence remains separately classified. Parent #58's bounded release lifecycle and #61's accepted recovery behavior are complete and included on main through the separately authorized PR #53 merge. Alpha.3 remains a prerelease.
 
 The candidate introduces:
 
@@ -335,7 +337,7 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization. The Actions hold was explicitly lifted on October 5 for integration/publication/Windows acceptance; current cloud runs are green. The earlier local-CI substitution authority remains historical evidence, not a current push prohibition.
+1. PR #53 is merged after explicit Bohan authorization on October 5; use fresh main for subsequent work. The Actions hold was explicitly lifted for integration/publication/Windows acceptance. The earlier local-CI substitution authority and draft/main gate are historical, not current prohibitions.
 2. Treat #62 / 58A as complete after its accepted cloud build/publish proof; do not reopen it unless a concrete release-artifact regression appears.
 3. Accepted release-engineering status:
    - #63 / 58B — updater/previous-known-good/rollback source is integrated (PR #65 is merged), published alpha.3 artifacts are verified, and final Windows distribution acceptance is PASS;

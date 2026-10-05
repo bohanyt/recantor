@@ -1,10 +1,10 @@
 # Recantor Alpha.3 Distribution Handoff — 2026-10-05
 
-Result: the approved integration push, cloud prerelease publication, and final bounded Windows release-distribution witness are complete/PASS. The bounded #58/#63 release lifecycle and accepted #61 recovery behavior are shipped on the integration/release line. This is a prerelease acceptance, not a stable-product declaration or authorization to merge main.
+Result: the approved integration push, cloud prerelease publication, and final bounded Windows release-distribution witness are complete/PASS. The bounded #58/#63 release lifecycle and accepted #61 recovery behavior are shipped in alpha.3 and now included on main through the separately authorized PR #53 merge. Alpha.3 remains a prerelease.
 
 ## Authority and immutable identity
 
-Bohan explicitly lifted the earlier Actions hold in this chat: "hold aku cabut, silakan". The approved plan covered pushing the tested candidate, publishing alpha.3, and completing the Windows distribution witness. No main merge, force push, new PR, or optional #47 work was performed.
+Bohan explicitly lifted the earlier Actions hold in this chat: "hold aku cabut, silakan". That approval covered pushing the tested candidate, publishing alpha.3, and completing the Windows distribution witness. Bohan subsequently said "merge gapapa", separately authorizing PR #53 to merge to main. PR #53 merged exact reviewed head `f3fe627805134f1cd52291cafcc4192828cdc72f` with merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4` on October 5 at 14:19 Bangkok time. No force push or optional #47 work was performed.
 
 - Published tag: [`v0.1.0-alpha.3`](https://github.com/bohanyt/recantor/releases/tag/v0.1.0-alpha.3), a GitHub prerelease.
 - Exact release source: `64a6e2235af75f4d9652f488d0fc650f0531961a`.
@@ -18,6 +18,8 @@ Bohan explicitly lifted the earlier Actions hold in this chat: "hold aku cabut, 
 The source includes accepted #63 `2a4aa7f4`, accepted #61 `4d2fe9ae`, reviewed core safety repairs at `2d95c4d`, release-context correction `5932df6`, and the earlier local proof documentation. Later status documentation may advance integration without moving this release tag or substituting its images.
 
 ## Cloud evidence
+
+After explicit main authorization, [main CI 37277090061](https://github.com/bohanyt/recantor/actions/runs/37277090061) completed **SUCCESS** at merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4`: backend, frontend, E2E, and Compose smoke passed; the optional alpha-cloud-proof gate skipped as expected. This verifies the accepted integration on main without replacing the release-specific evidence below.
 
 | Run | Result | Scope |
 | --- | --- | --- |
@@ -58,6 +60,6 @@ Public compact results: [Windows distribution](evidence/2026-10-05-alpha3-distri
 
 Raw logs, manifests, bundle, state, proof scripts, screenshots, and synthetic `.env` remain under ignored `runtime/ct-20261005/` in `recantor-core-repair-0929`. Sanitized selected evidence and a verified Git bundle are preserved in the workspace's `checkpoints/` directory. Do not publish `.env` or raw state as release assets.
 
-Fresh inspection after integration push showed PR #65 automatically marked merged because its accepted source was included in the pushed integration history. No separate merge API call was made. PR #53 remains OPEN/DRAFT/unmerged, and main remains `59ff57502a9a1d84ad332cab106c46c256482d23`.
+Inspection after integration push showed PR #65 automatically marked merged because its accepted source was included in the pushed integration history. No separate PR #65 merge API call was made. After the later explicit main authorization, [PR #53](https://github.com/bohanyt/recantor/pull/53) was marked ready and merged normally, preserving the accepted integration ancestry. Main includes merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4`; later documentation checkpoints may advance main without altering the release source or artifacts.
 
-The earlier Actions hold and missing-GHCR comments are historical and superseded by this authorized publication and its actual evidence. Do not retag alpha.3, rebuild client application source as release proof, repeat earned witnesses without a concrete regression, or delete persistent volumes. Main merge still requires explicit Bohan authorization. Optional #47 remains parked; production auth, retention/deletion UX, deployment hardening, diarization, summaries, and native clients remain separate work.
+The earlier Actions hold, missing-GHCR comments, and draft/main gate are historical and superseded by authorized publication, its actual evidence, and the separately authorized main merge. Do not retag alpha.3, rebuild client application source as release proof, repeat earned witnesses without a concrete regression, or delete persistent volumes. Optional #47 remains parked; production auth, retention/deletion UX, deployment hardening, diarization, summaries, and native clients remain separate work.
