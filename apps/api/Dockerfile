@@ -1,9 +1,29 @@
 FROM python:3.13-slim
 
+ARG RECANTOR_VERSION=dev
+ARG RECANTOR_REVISION=unknown
+
+LABEL org.opencontainers.image.title="Recantor API" \
+      org.opencontainers.image.description="Recantor API and worker runtime" \
+      org.opencontainers.image.source="https://github.com/bohanyt/recantor" \
+      org.opencontainers.image.version="$RECANTOR_VERSION" \
+      org.opencontainers.image.revision="$RECANTOR_REVISION"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir uv==0.10.0
+RUN set -eux; \
+    for sources_file in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do \
+        if [ -f "$sources_file" ]; then \
+            sed -i 's|http://deb\.debian\.org|https://deb.debian.org|g' "$sources_file"; \
+        fi; \
+    done; \
+    apt-get -o Acquire::Retries=3 update; \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends ffmpeg; \
+    ffmpeg -version >/dev/null; \
+    ffprobe -version >/dev/null; \
+    rm -rf /var/lib/apt/lists/*; \
+    pip install --no-cache-dir uv==0.10.0
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./

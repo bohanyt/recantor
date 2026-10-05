@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recantor.models import RecordingSession, TranscriptSegment
+from recantor.transcript_realtime import enqueue_transcript_available
+
+TranscriptCommitGuard = Callable[[AsyncSession], Awaitable[bool]]
+logger = logging.getLogger(__name__)
 
 
 class TranscriptError(RuntimeError):
@@ -17,6 +23,10 @@ class TranscriptNotFound(TranscriptError):
 
 
 class TranscriptConflict(TranscriptError):
+    pass
+
+
+class TranscriptCommitRejected(TranscriptError):
     pass
 
 
@@ -57,6 +67,20 @@ def _retry_matches(
     )
 
 
+def _notify_realtime_best_effort(segment: TranscriptSegment) -> None:
+    try:
+        enqueue_transcript_available(
+            session_id=segment.session_id,
+            sequence=segment.sequence,
+        )
+    except Exception:  # Delivery bugs must never roll back committed transcript or capture state.
+        logger.exception(
+            "unexpected transcript realtime enqueue failure for session %s sequence %s",
+            segment.session_id,
+            segment.sequence,
+        )
+
+
 async def commit_transcript_segment(
     db: AsyncSession,
     *,
@@ -66,6 +90,7 @@ async def commit_transcript_segment(
     end_ms: int,
     text: str,
     language: str | None = None,
+    commit_guard: TranscriptCommitGuard | None = None,
 ) -> tuple[TranscriptSegment, bool]:
     key, start, end, canonical_text, canonical_language = _canonical_payload(
         producer_key=producer_key,
@@ -81,6 +106,9 @@ async def commit_transcript_segment(
         )
         if session is None:
             raise TranscriptNotFound("recording session not found")
+
+        if commit_guard is not None and not await commit_guard(db):
+            raise TranscriptCommitRejected("canonical transcript commit guard rejected mutation")
 
         existing = await db.scalar(
             select(TranscriptSegment).where(
@@ -117,6 +145,10 @@ async def commit_transcript_segment(
         )
         db.add(segment)
         await db.flush()
+
+    # Queue only after the transaction commits. Redis delivery is an ephemeral wake-up hint,
+    # and the bounded notifier never delays canonical/STT completion.
+    _notify_realtime_best_effort(segment)
     return segment, False
 
 
