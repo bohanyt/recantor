@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "automatic_alpha_channel_resolution": "PASS",
+  "api": "ghcr.io/bohanyt/recantor-api@sha256:12de7229cc41466459495a8d5ba685d4876cba431c21572e604c6e988e3d60ad",
+  "actual_recantor_session_persistence": "PASS",
+  "web": "ghcr.io/bohanyt/recantor-web@sha256:9d2f34220c25fa3230fb171bc14294fa367316101abbc3808b2ea6ea5968e970",
+  "source": "64a6e2235af75f4d9652f488d0fc650f0531961a",
+  "supported_status": "PASS",
+  "current": "v0.1.0-alpha.3",
+  "config_preservation": "PASS"
+}

@@ -102,7 +102,7 @@ The release path preserves the PostgreSQL and audio named volumes and never uses
 
 Exact image digests, source revision, release channel, platform, and database schema compatibility identity are recorded in the machine-readable release manifest.
 
-Issue #63 now has an updater candidate in DRAFT PR #65. The intended Windows release-bundle flow is:
+The supported Windows updater is shipped in `v0.1.0-alpha.3`. Download and extract the release bundle; the normal client pulls immutable cloud-built images. The Windows release-bundle flow is:
 
 ```powershell
 # From the extracted release bundle directory:
@@ -122,7 +122,7 @@ Copy-Item .env.example .env
 
 The updater keeps release state outside application images under `.recantor/`, activates exact GHCR digest references, preserves PostgreSQL/audio volumes and local `.env`, and never treats automatic database downgrade or `down -v` as recovery. A candidate is marked known-good only after health/readiness/Web checks pass. If activation fails, application-only rollback is attempted only when the candidate manifest explicitly says the previous version is schema-safe; otherwise the updater fails closed and requires manual recovery.
 
-This updater path is still **review-pending** until Issue #63 is independently accepted and the final bounded Windows updater witness is complete. It is not yet a stable-product claim.
+The updater source reviews, cloud publication, and final pull-only Windows distribution witness are accepted/PASS. The witness also exercised automatic alpha-channel selection, exact previous digest restoration after failed activation, unsafe rollback refusal, persistent session/audio data, and secret/config preservation. See [the alpha.3 distribution handoff](docs/handoff/2026-10-05-ALPHA3-DISTRIBUTION-HANDOFF.md). Recantor remains a prerelease for trusted development use.
 
 ## What works on the current integration line
 

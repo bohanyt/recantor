@@ -4,11 +4,11 @@ Last updated: 2026-10-05
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
-## Latest local checkpoint — 2026-10-05
+## Latest release checkpoint — 2026-10-05
 
-Fresh-fetched remote `main` remains `59ff57502a9a1d84ad332cab106c46c256482d23`; remote integration remains `ea489862fab994eaa8d4520cdcf280ea37a14e11`. PR #53 and #65 remain draft/unmerged. No remote push, release publication, or workflow dispatch was performed in this local control-tower run.
+Published prerelease `v0.1.0-alpha.3` is bound to source `64a6e2235af75f4d9652f488d0fc650f0531961a`, pushed normally to `integration/cloud-alpha-2026-09-11`. CI `37270291070`, Upload foundation CI `37270291050`, Media processing CI `37270291109`, and Release images `37270796641` all completed **SUCCESS**. Fresh remote `main` remains `59ff57502a9a1d84ad332cab106c46c256482d23`; PR #53 stays OPEN/DRAFT/unmerged. GitHub automatically marked PR #65 merged when its accepted source became reachable from the integration branch; no main merge was performed.
 
-The accepted local #61/#63 repair candidate `2d95c4d499824d0b508997d2642283bde7432f6e` has a small release-context correction at `5932df62844e19058763a69af11519059b055c77`: repair the malformed `.recantor/` Git ignore rule and exclude local state, environment files, recordings, dependencies, and test artifacts from the root Web release Docker build context. The source is on local branch `local-core-repair-0929` in `recantor-core-repair-0929`, ahead of the remote integration line; descriptions of local integration below do not imply a remote push.
+The release includes the accepted #61/#63 repair candidate `2d95c4d499824d0b508997d2642283bde7432f6e` and a small release-context correction at `5932df62844e19058763a69af11519059b055c77`: repair the malformed `.recantor/` Git ignore rule and exclude local state, environment files, recordings, dependencies, and test artifacts from the root Web release Docker build context. The release source adds the local proof handoff as documentation only. Later status documentation may advance integration without moving the immutable release tag.
 
 Local verification is complete for the previously outstanding environment-dependent repair checks:
 
@@ -19,7 +19,12 @@ Local verification is complete for the previously outstanding environment-depend
 - API and Web release image builds at `5932df6`: **PASS**, with matching OCI source revision labels;
 - isolated Windows Docker updater runtime proof: **PASS**, covering fresh-process retry after persisted `pulling`, inherited image-variable isolation, migration/activation, exact previous digest restoration after failed activation, retained applied-schema authority, refusal of an unsafe chained rollback, PostgreSQL/audio persistence, and synthetic-secret/config preservation.
 
-The updater runtime proof used a local registry and is explicitly **not** the final #63 remote-distribution acceptance. Its simulated `alpha.3`/`alpha.4` manifests are local test identities, not published releases. Latest published release remains `v0.1.0-alpha.2`. A real GHCR publication and final bounded pull-only Windows distribution witness remain required. The Actions hold remains active pending explicit authorization to lift it. Details and limitations are in [the dated handoff](handoff/2026-10-05-LOCAL-CONTROL-TOWER-HANDOFF.md).
+The earlier updater runtime proof used a local registry; its simulated versions are separate from the actual published release. Bohan explicitly lifted the Actions hold in this chat on October 5, authorizing the integration push, alpha.3 publication, and final Windows distribution witness. Real publication, release bundle/manifest hash verification, and the final pull-only Windows distribution witness are **PASS**. The Windows proof used the published bundle and anonymous GHCR pulls with zero application-source builds. It covers safe failed-activation recovery, exact digest restoration, fresh-process retry, application rollback/reactivation, refusal of an unsafe policy fixture, actual Recantor session/PostgreSQL/audio persistence, secret/config preservation, and the user-facing `update -Channel alpha` release-feed path. The published Web image also passed a real Edge shell/API/readiness smoke. Current acceptance details are in [the release handoff](handoff/2026-10-05-ALPHA3-DISTRIBUTION-HANDOFF.md); [the earlier handoff](handoff/2026-10-05-LOCAL-CONTROL-TOWER-HANDOFF.md) is historical local evidence.
+
+Published alpha.3 immutable images:
+
+- `ghcr.io/bohanyt/recantor-api@sha256:12de7229cc41466459495a8d5ba685d4876cba431c21572e604c6e988e3d60ad`;
+- `ghcr.io/bohanyt/recantor-web@sha256:9d2f34220c25fa3230fb171bc14294fa367316101abbc3808b2ea6ea5968e970`.
 
 ## Active integration line
 
@@ -43,7 +48,7 @@ Issue #48 is CLOSED / completed. Windows acceptance proved:
 - TXT/JSON/VTT/SRT exports;
 - truthful alpha capability copy at normal desktop viewport.
 
-Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Current alpha recovery after reopen restores saved upload state and may require reselecting the same local file; true browser-reopen automatic resume is tracked in #61.
+Manual clicking of the Upload Pause button is not an alpha acceptance requirement. The durable resumability contract is already proven by #44 persisted non-zero tus offset/restart evidence. Alpha.3 includes #61 browser-reopen recovery: automatic same-upload resume when persisted-handle permission remains granted, one truthful permission action when required, and a same-file reselect fallback on unsupported browsers.
 
 Post-acceptance housekeeping reconciles the `main`-only agent-context compiler commit `59ff57502a9a1d84ad332cab106c46c256482d23` into the integration lineage without changing accepted product behavior.
 
@@ -240,17 +245,17 @@ Cloud evidence remains authoritative for deterministic restart/recovery invarian
 
 The current alpha is still trusted-development software, not a stable or production-ready release.
 
-Before Recantor may be described as stable:
+The bounded release-engineering gates have now passed; the product remains a prerelease:
 
 - #62 / 58A cloud-built release artifacts are accepted and integrated;
-- #63 / 58B must still provide the supported updater / previous-known-good / rollback / migration-safety lifecycle;
-- #61 must provide product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not. A draft implementation persists the picker's `FileSystemFileHandle` in IndexedDB, resumes automatically only when read permission is already granted, shows one `Allow access and resume` action when the browser needs a gesture, and otherwise falls back to `Choose the same file to resume`. Resume is resume-only (it never creates a second upload) and re-validates the reopened file against the saved metadata fingerprint plus a bounded SHA-256 of its size and first/last 256 KiB; bytes between the samples are not covered. Status: implementation (`4d2fe9ae`), independent review (R61-R1 CLEAN) and a real Windows Edge disk-file reopen witness (PASS: the browser returned `prompt`, one `Allow access and resume` action resumed the same upload from the non-zero offset) are accepted and locally integrated under the temporary local-CI authority below. The fully automatic already-`granted` branch is covered by deterministic browser regression only, not by that real-browser run. It cannot be promised on browsers without persistent file handles.
+- #63 / 58B provides the supported updater / previous-known-good / rollback / migration-safety lifecycle, with actual remote distribution and Windows acceptance PASS at alpha.3;
+- #61 provides product-quality browser-reopen upload recovery, preferring automatic resume through a persisted file handle where browser permissions allow it and falling back honestly when they do not. The implementation persists the picker's `FileSystemFileHandle` in IndexedDB, resumes automatically only when read permission is already granted, shows one `Allow access and resume` action when the browser needs a gesture, and otherwise falls back to `Choose the same file to resume`. Resume is resume-only (it never creates a second upload) and re-validates the reopened file against the saved metadata fingerprint plus a bounded SHA-256 of its size and first/last 256 KiB; bytes between the samples are not covered. Status: implementation (`4d2fe9ae`), independent review (R61-R1 CLEAN) and a real Windows Edge disk-file reopen witness (PASS: the browser returned `prompt`, one `Allow access and resume` action resumed the same upload from the non-zero offset) are accepted, remotely integrated, and shipped in alpha.3. The fully automatic already-`granted` branch is covered by deterministic browser regression only, not by that real-browser run. It cannot be promised on browsers without persistent file handles.
 
 #47 remains optional and is not a dependency of the first installable alpha.
 
 ## Stable-release engineering — #58 / #62 / #63
 
-The first accepted product alpha was `v0.1.0-alpha.1`; the latest published artifact proof is the prerelease `v0.1.0-alpha.2` described below.
+The first accepted product alpha was `v0.1.0-alpha.1`; the latest published release is `v0.1.0-alpha.3`. Alpha.2 remains the accepted format-1 update/rollback baseline described below.
 
 Issue #62 / 58A is **accepted and integrated**. The supported release-artifact path is now cloud-built rather than client-built:
 
@@ -270,7 +275,7 @@ Published proof images:
 
 Release workflow `35573744267` pulled those exact registry digest references back, verified OCI identity, started them through the pull-only release Compose stack, passed API health/readiness + Web shell smoke, rendered the exact release manifest, and created a GitHub **prerelease**. This is release-path proof, not a stable-product claim.
 
-Issue #63 / 58B has an implementation candidate in DRAFT PR #65 (source head `2a4aa7f4`, independent review R63-C2 CLEAN, local Windows updater pre-witness PASS against a local registry). Its source is now integrated on this line under the temporary local-CI authority below, but #63 is **not accepted**: pull-only remote GHCR publication of the exact candidate digests and ONE final bounded Windows release-distribution witness remain required. The candidate digests were not remotely pullable at the last anonymous probe, and local-registry or locally built images do not substitute for that gate.
+Issue #63 / 58B implementation from PR #65 (source head `2a4aa7f4`, independent review R63-C2 CLEAN) and its accepted `2d95c4d` safety corrections are remotely integrated and published in alpha.3. Its earlier unpublished PR artifact digests are historical candidates, not the supported alpha.3 identity. The actual alpha.3 GHCR publication and final bounded Windows distribution witness are **accepted/PASS**, satisfying the previously non-substitutable distribution gate. Local registry evidence remains separately classified. Parent #58's bounded release lifecycle and #61's accepted recovery behavior are complete on the integration/release line; this does not authorize a main merge or a stable-product claim.
 
 The candidate introduces:
 
@@ -288,7 +293,7 @@ The candidate introduces:
 
 The first independent review found the updater core safety semantics coherent but required stronger acceptance evidence before a Windows witness. The bounded correction closes those proof gaps.
 
-Current correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` is green:
+Historical correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` was green:
 
 - Updater CI `35584723718` SUCCESS:
   - Windows PowerShell unit/contract tests PASS, including backup-required pre-apply gating, rollback-attempt health failure -> `rollback_failed_manual_recovery`, and manual rollback target health failure truth;
@@ -306,7 +311,7 @@ Current correction source/proof head `06e0b81cf2483babadf886edaa19b878ec84674a` 
   - release bundle creation remains green.
 - normal CI `35584723690` SUCCESS.
 
-These are historical correction proofs only; the later fence for exact pending candidate identity (`2a4aa7f4`) was reviewed CLEAN. The final remote GHCR distribution witness still remains before #63 acceptance.
+These are historical correction proofs only; the later pending-identity fence (`2a4aa7f4`) and safety repairs (`2d95c4d`) were reviewed CLEAN. Current release and Windows distribution evidence are tracked in the latest checkpoint above.
 
 Initial release proof targets `linux/amd64`, matching the accepted Windows Docker Desktop runtime, while leaving multi-arch extension for later work.
 
@@ -330,10 +335,10 @@ The current alpha remains trusted-development software. Authentication, authoriz
 
 ## Immediate coordination rule
 
-1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization. The GitHub Actions quota hold remains active: Bohan has temporarily authorized deterministic local tests to substitute for GitHub-hosted CI when integrating #61 and #63 (parent #58 comment 5884462317). This changes the CI gate only; it does not waive the #63 remote GHCR distribution requirement.
+1. Keep PR #53 DRAFT and do not merge the integration line to `main` without explicit Bohan authorization. The Actions hold was explicitly lifted on October 5 for integration/publication/Windows acceptance; current cloud runs are green. The earlier local-CI substitution authority remains historical evidence, not a current push prohibition.
 2. Treat #62 / 58A as complete after its accepted cloud build/publish proof; do not reopen it unless a concrete release-artifact regression appears.
-3. Active stable-path engineering is now:
-   - #63 / 58B — updater/previous-known-good/rollback source is integrated (from DRAFT PR #65) but stays OPEN until pull-only remote GHCR publication and ONE final bounded Windows release-distribution witness pass;
-   - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported: implementation, review and real Windows witness accepted and locally integrated.
+3. Accepted release-engineering status:
+   - #63 / 58B — updater/previous-known-good/rollback source is integrated (PR #65 is merged), published alpha.3 artifacts are verified, and final Windows distribution acceptance is PASS;
+   - #61 — automatic Upload recovery after browser reopen with a persisted file handle where supported: implementation, review and real Windows witness accepted, remotely integrated, and shipped in alpha.3.
 4. #47 remains optional/parked and must not block #63 or #61.
-5. Do not describe Recantor as stable until the remaining stable-path gates are accepted.
+5. Keep alpha.3 categorized as a prerelease. Production exposure and optional feature work remain separate scope.

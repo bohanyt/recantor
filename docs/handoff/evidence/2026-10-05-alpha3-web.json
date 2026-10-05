@@ -1,0 +1,9 @@
+{
+  "result": "PASS",
+  "browser": "Microsoft Edge",
+  "artifact": "published alpha.3 Web image",
+  "api_liveness": "Online",
+  "postgres_readiness": "Online",
+  "live_upload_workflows": "PASS",
+  "page_errors": 0
+}
