@@ -153,6 +153,12 @@ Recantor is not designed for covert recording. Active recording state must be ob
 
 ## Public upstream boundary
 
+### Public commit identity
+
+For new project-owned commits, use `bohan <136550677+bohanyt@users.noreply.github.com>` as the configured author/committer identity. Keep personal names and workplace email addresses out of public commit metadata. Do not append automatic tool co-author trailers or tool attribution to commit messages and PR descriptions. Preserve genuine third-party authorship when adopting external work.
+
+Active main and integration history received a metadata-only identity correction on 2026-10-05. Start new work from fresh remote main; do not merge an old local checkpoint branch back into active history. Immutable release tags remain historical build evidence.
+
 This repository is public and reusable.
 
 Do not commit:
