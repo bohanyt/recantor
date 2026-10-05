@@ -1,5 +1,7 @@
 # Recantor Local Control Tower Handoff — 2026-10-05
 
+Historical prepublication checkpoint. Bohan subsequently lifted the Actions hold; the source was pushed, alpha.3 was published, and the remote Windows distribution witness passed. Use [the later release handoff](2026-10-05-ALPHA3-DISTRIBUTION-HANDOFF.md) and fresh GitHub state for current coordination. The hold and PR state below describe the earlier local-only checkpoint.
+
 GitHub is the technical authority. Fresh-fetch refs and re-read issue/PR comments before continuing. This records local implementation and verification; it does not claim remote integration or stable acceptance.
 
 ## Checkpoint and authorization
