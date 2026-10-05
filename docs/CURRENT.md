@@ -4,6 +4,12 @@ Last updated: 2026-10-05
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
+## Public identity metadata checkpoint — 2026-10-05
+
+Active `main`, `integration/cloud-alpha-2026-09-11`, and `agent-u/issue-61-upload-handle-recovery` history received an explicitly requested metadata-only cleanup. Twelve commit IDs changed while every corresponding Git tree remained identical. Main's cleaned acceptance head is `49cff34e46fcc1bf6f0fb246fe1ca4b30b1b2be6`; [CI 37278919987](https://github.com/bohanyt/recantor/actions/runs/37278919987) passed backend, frontend, E2E, and Compose smoke. The cleaned integration and Upload heads are `5ae5646962551b61cfc9c0f43d0f0df306c81801` and `881e3e842c13276f0cc42f0148cee976edf2b43d`.
+
+New project-owned commits use the public repository account's no-reply identity and omit automatic tool attribution, as specified in `AGENTS.md`. Start work from fresh remote main; do not merge stale local checkpoint history back into active branches. Original reviewed SHAs and CI links below remain historical evidence, and immutable alpha.3 tags/assets are preserved. Hosted contributor statistics may remain stale after a history replacement; branch metadata verification and visible contributor refresh are separate checks.
+
 ## Latest release checkpoint — 2026-10-05
 
 Published prerelease `v0.1.0-alpha.3` is bound to source `64a6e2235af75f4d9652f488d0fc650f0531961a`, pushed normally to `integration/cloud-alpha-2026-09-11`. CI `37270291070`, Upload foundation CI `37270291050`, Media processing CI `37270291109`, and Release images `37270796641` all completed **SUCCESS**. Bohan subsequently authorized main merge with "merge gapapa" on October 5. [PR #53](https://github.com/bohanyt/recantor/pull/53) is **MERGED**, preserving exact reviewed head `f3fe627805134f1cd52291cafcc4192828cdc72f` through merge commit `d99a426bb308239020d37df7d1086df9bccbe6c4` at 14:19 Bangkok time. GitHub had already automatically marked PR #65 merged when its accepted source became reachable from the integration branch. The immutable alpha.3 tag, images, and release assets are unchanged by main integration.
