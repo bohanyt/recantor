@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 37275616578
+snapshot_seq: 37275634738
 
-collected_at: 2026-10-05T07:03:42.994657Z
+collected_at: 2026-10-05T07:03:55.820110Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,16 +623,15 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-PR #53 state=open updated=2026-10-05T06:59:20Z title=Integration checkpoint: cloud alpha 2026-09-12
-ISSUE #58 state=open updated=2026-09-29T09:16:29Z title=Stable release lifecycle: versioning, updater, rollback, and known-good recovery
+PR #53 state=open updated=2026-10-05T07:03:45Z title=Integration checkpoint: alpha.3 updater and upload recovery
 PR #66 state=open updated=2026-09-22T08:38:55Z title=docs: record future local MCP agent integration
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
-PR #53 draft=True updated=2026-10-05T06:59:20Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: cloud alpha 2026-09-12
+PR #53 draft=True updated=2026-10-05T07:03:45Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: alpha.3 updater and upload recovery
 PR #66 draft=True updated=2026-09-22T08:38:55Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
 PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=37275616578 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=37275634738 sections=6
