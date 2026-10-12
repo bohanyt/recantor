@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38262080536
+snapshot_seq: 38267257840
 
-collected_at: 2026-10-12T14:19:45.602076Z
+collected_at: 2026-10-12T15:02:15.004967Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,6 +623,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #69 state=open updated=2026-10-12T15:02:02Z title=Meeting essence v1: reusable SOP, granular summaries, and long-transcript pipeline
 ISSUE #67 state=open updated=2026-10-12T14:19:32Z title=Personal dev acceptance: Groq transcript → existing Codex account
 PR #68 state=open updated=2026-10-12T14:19:30Z title=feat: add dev Codex bridge with fail-closed Windows execution
 PR #66 state=open updated=2026-10-05T07:38:59Z title=docs: record future local MCP agent integration
@@ -635,4 +636,4 @@ PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38262080536 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38267257840 sections=6
