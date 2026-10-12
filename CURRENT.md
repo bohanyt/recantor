@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38230935063
+snapshot_seq: 38262080536
 
-collected_at: 2026-10-12T09:36:12.853983Z
+collected_at: 2026-10-12T14:19:45.602076Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,14 +623,16 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #67 state=open updated=2026-10-12T09:35:56Z title=Personal dev acceptance: Groq transcript → existing Codex account
+ISSUE #67 state=open updated=2026-10-12T14:19:32Z title=Personal dev acceptance: Groq transcript → existing Codex account
+PR #68 state=open updated=2026-10-12T14:19:30Z title=feat: add dev Codex bridge with fail-closed Windows execution
 PR #66 state=open updated=2026-10-05T07:38:59Z title=docs: record future local MCP agent integration
 PR #50 state=open updated=2026-10-05T07:38:59Z title=feat: add development-only Codex subscription LLM bridge
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 
 OPEN_PRS
+PR #68 draft=True updated=2026-10-12T14:19:30Z base=main head=docs/issue-67-personal-groq-codex-test title=feat: add dev Codex bridge with fail-closed Windows execution
 PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38230935063 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38262080536 sections=6
