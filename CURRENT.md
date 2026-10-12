@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 37275634738
+snapshot_seq: 38230935063
 
-collected_at: 2026-10-05T07:03:55.820110Z
+collected_at: 2026-10-12T09:36:12.853983Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -19,7 +19,7 @@ untrusted_sources: issue/PR titles, bodies, comments, and other GitHub-authored 
 SECTION repo_identity
 default_branch: main
 canonical_branch: integration/cloud-alpha-2026-09-11
-canonical_head: f3fe627805134f1cd52291cafcc4192828cdc72f
+canonical_head: 5ae5646962551b61cfc9c0f43d0f0df306c81801
 canonical_commit_message: docs: accept alpha.3 remote distribution and Windows updater proof
 
 SECTION trusted_governance
@@ -623,15 +623,14 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-PR #53 state=open updated=2026-10-05T07:03:45Z title=Integration checkpoint: alpha.3 updater and upload recovery
-PR #66 state=open updated=2026-09-22T08:38:55Z title=docs: record future local MCP agent integration
+ISSUE #67 state=open updated=2026-10-12T09:35:56Z title=Personal dev acceptance: Groq transcript → existing Codex account
+PR #66 state=open updated=2026-10-05T07:38:59Z title=docs: record future local MCP agent integration
+PR #50 state=open updated=2026-10-05T07:38:59Z title=feat: add development-only Codex subscription LLM bridge
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
-PR #50 state=open updated=2026-09-11T20:37:01Z title=feat: add development-only Codex subscription LLM bridge
 
 OPEN_PRS
-PR #53 draft=True updated=2026-10-05T07:03:45Z base=main head=integration/cloud-alpha-2026-09-11 title=Integration checkpoint: alpha.3 updater and upload recovery
-PR #66 draft=True updated=2026-09-22T08:38:55Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
-PR #50 draft=True updated=2026-09-11T20:37:01Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
+PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
+PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=37275634738 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38230935063 sections=6
