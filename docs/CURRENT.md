@@ -337,6 +337,10 @@ The following must not be described as working current capabilities:
 
 Optional Issue #47 / PR #50 remains parked and is not required for the first installable alpha.
 
+## Development-only Codex bridge checkpoint — 2026-10-12
+
+Draft PR [#68](https://github.com/bohanyt/recantor/pull/68) on branch `docs/issue-67-personal-groq-codex-test` reconciles the Issue #47 subscription bridge helper from PR #50 onto `main` baseline `655a421d45444795a8d71e6140f522a3bcc3763e` for personal Groq→Codex acceptance work ([#67](https://github.com/bohanyt/recantor/issues/67)). This helper is **not on `main`** until that PR merges. POSIX offline tests prove strict root-deny/minimal-read/workspace-read/network-false argv shaping; unelevated Windows `analyze` is intentionally fail-closed (`containment` before model exec). Evidence and limits are recorded under `docs/development/PERSONAL_GROQ_CODEX_*` and `docs/development/CODEX_SUBSCRIPTION_BRIDGE.md`.
+
 ## Production exposure boundary
 
 The current alpha remains trusted-development software. Authentication, authorization, retention/deletion behavior, abuse controls, and production deployment hardening are required before exposing sensitive recordings/transcripts to untrusted users.

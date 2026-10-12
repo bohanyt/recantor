@@ -1,0 +1,115 @@
+{
+  "evidence_generated_at_utc": "2026-10-12T14:15:08Z",
+  "original_runtime_observed_at_utc": "unknown (prior worker summary only; no retained public-safe Codex stdout capture)",
+  "environment": "windows-native-powershell",
+  "worktree_path": "C:\\Users\\ADMIN\\Documents\\recantor dev\\worktrees\\issue-67-personal-codex",
+  "tested_tree_commit": {
+    "sha": "6437de65cad623ba9d2fe3dc2a8a0ccf169d89ee",
+    "scope": "LOCAL-only implementation checkpoint; publication is a separate GitHub commit with matching code content hashes."
+  },
+  "repo_main_sha": "655a421d45444795a8d71e6140f522a3bcc3763e",
+  "pr68_base_sha": "26d23e2dc23e4ace6df086518b20d3c37c6e7b2e",
+  "pr50_adopted_pin_sha": "652581b62c6f7ca392a5e235f3a5231f25370709",
+  "prior_local_commit_before_this_run": "8591e93b08f6e6e9d82cdf0ac9e311886117f130",
+  "verifiable_content_sha256": {
+    "apps/api/src/recantor/codex_process.py": "37558e615ca544a428dfec706bd199344825167def3596d29cf4af4616fa9292",
+    "apps/api/src/recantor/meeting_intelligence.py": "fe3a59e6761d23bea067eb492f5a5ff350fd2e29b5b19b43b0a7ea979fb663a7",
+    "apps/api/tests/test_meeting_intelligence.py": "31fa7880cacdff1aeb5a20fa45217d0eb3b321043997dcbc78d355a8e5a81c0e",
+    "apps/api/tests/test_codex_process.py": "8091dd7587cc16eb68e407e67d46c3cb753f2dc23f5d2d8638b2dfc223f0905f",
+    "tools/codex_subscription_bridge.py": "059a716015b721bca957bf7ec60771fb87c6bf4cc3374170ccab97e8af09502c"
+  },
+  "tooling": {
+    "git": {
+      "version": "2.51.0.windows.1",
+      "source": "MinGit portable from https://github.com/git-for-windows/git/releases/tag/v2.51.0.windows.1",
+      "local_exe_sha256": "34A408843194BE320D8A87A3C12CD5C7D2E08D03B24567A41DB32E21D12569D2",
+      "published_release_sha256_verified": false
+    },
+    "uv": {
+      "version": "0.9.5",
+      "source": "https://github.com/astral-sh/uv/releases/tag/0.9.5",
+      "local_exe_sha256": "456EE3B3B9A30CF647A2B36AD3E2FFE6261485414E9978DAEC0CE3A049AFC0AF",
+      "published_release_sha256_verified": false
+    },
+    "python": "3.13.9 (uv-managed cache under .recantor/tooling)"
+  },
+  "codex_cli_version": "0.162.1",
+  "delegation_evidence": {
+    "provider": "cursor",
+    "model": "composer-2.5",
+    "round1": {
+      "task_id": "node:delegated-task:command%3Amcp%3Aca5dd050-3517-4d6d-a540-ffba4ac92149%3Adelegate-task%3Arecantor-issue67-execute-d340146d-round1",
+      "parent_observed_status": "completed (prior rounds)"
+    },
+    "round2": {
+      "task_id": "node:delegated-task:command%3Amcp%3Aca5dd050-3517-4d6d-a540-ffba4ac92149%3Adelegate-task%3Arecantor-issue67-execute-d340146d-round2",
+      "parent_observed_status": "completed"
+    },
+    "round3": {
+      "task_id": "node:delegated-task:command%3Amcp%3Aca5dd050-3517-4d6d-a540-ffba4ac92149%3Adelegate-task%3Arecantor-issue67-execute-d340146d-round3",
+      "worker_report_status": "completed-turn-awaiting-parent-check",
+      "parent_verified": true,
+      "parent_observed_status": "completed"
+    }
+  },
+  "bridge_check_auth_exit": 0,
+  "bridge_check_auth_stdout_exact": "{\"status\":\"available\",\"auth_mode\":\"chatgpt\",\"requested_model\":null,\"requested_reasoning_effort\":\"high\",\"model_availability\":\"unprobed\"}",
+  "auth_mode_safe_summary": "chatgpt (check-auth 2026-10-12 worker run; analyze not re-run for auth delta)",
+  "requested_model": "gpt-6.1-sol",
+  "requested_reasoning_effort": "high",
+  "actual_model_observed": "UNKNOWN",
+  "analyze_status": "containment",
+  "analyze_stdout_exact": "{\"status\":\"containment\",\"detail\":\"Strict root-deny filesystem containment is not supported on unelevated Windows hosts; analyze is unavailable\",\"requested_model\":\"gpt-6.1-sol\",\"requested_reasoning_effort\":\"high\"}",
+  "analyze_exit_code": 3,
+  "synthetic_fixture_sha256": "464b1d6785d810c7229186a495576c640b971aaa578021da0723b26b61739ef5",
+  "offline_pytest_result": "18 passed, 2 skipped (linux-only inherited-pipe descendant witnesses)",
+  "offline_pytest_junit": "docs/development/PERSONAL_GROQ_CODEX_OFFLINE_TESTS.xml",
+  "offline_pytest_junit_summary": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "time_seconds": 2.37
+  },
+  "windows_containment_witness": "Windows timeout/cancel/successful-parent-exit tests prove descendant OpenProcess handle sees WAIT_TIMEOUT before Job terminate, then WAIT_OBJECT_0 after; Linux grandchild inherits stdout/stderr for bounded pipe drain",
+  "windows_analyze_containment": "fail-closed before codex exec; strict profile not applied via read-only fallback",
+  "historical_analyze_candidate": {
+    "status": "rejected_not_accepted",
+    "note": "Prior local run succeeded only under default_permissions=\":read-only\" Windows fallback; parent rejected that weaker boundary as acceptance evidence.",
+    "actual_model_observed_if_any": "UNKNOWN (no retained exact stdout; prior summary claimed gpt-6.1-sol without banner proof)"
+  },
+  "intelligence_summary": {
+    "source": "worker_reported_summary_from_prior_round_not_retained_stdout",
+    "key_points": [
+      "STT Groq berjalan di dev; transcript canonical disimpan di PostgreSQL.",
+      "Bridge Codex lokal dicoba menggunakan login ChatGPT yang sudah ada, tanpa API key terpisah."
+    ],
+    "decisions": [
+      "Lanjutkan pilot personal pipeline untuk eksperimen dev.",
+      "Kegagalan summary tidak boleh memblokir capture."
+    ],
+    "action_items": [
+      "Andi: siapkan fixture sintetis dan runbook Windows sebelum uji analyze nyata.",
+      "Konfirmasi jadwal review vendor; pemilik tugas belum jelas."
+    ],
+    "open_questions": [
+      "Apakah model yang diminta dapat dipilih di akun ChatGPT ini?",
+      "Siapa owner resmi tindak lanjut vendor?"
+    ]
+  },
+  "privacy_gate": "real_sensitive_transcripts_blocked_pending_no_training_source",
+  "groq_e2e": "out_of_scope",
+  "acceptance_state": "not_fully_passed_windows_analyze_unavailable_posix_boundary_proven_offline_only",
+  "implementation_notes": [
+    "Removed automatic Windows read-only fallback; analyze requires strict recantor_meeting_intelligence profile.",
+    "POSIX profile uses :root deny, :minimal read, absolute temp workspace read, network.enabled false.",
+    "Fake-process tests monkeypatch strict containment support on Windows to prove argv/env shape without live Codex.",
+    "Round3 restores Linux inherited stdout/stderr grandchild scripts; Windows uses DEVNULL plus pre-terminate alive handle witness."
+  ],
+  "parent_review": {
+    "code_content_sha256": "all five worker-reported hashes match reviewed local files",
+    "junit": "20 tests, 18 passed, 2 skipped, 0 failures, 0 errors",
+    "scope": "draft code review and artifact verification; no new live model invocation",
+    "publication_artifact_processing": "Removed JUnit hostname and absolute local path; code files unchanged."
+  }
+}
