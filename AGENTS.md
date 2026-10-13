@@ -12,6 +12,8 @@ Before changing code or architecture, read:
 4. relevant ADRs under `docs/decisions/`
 5. the issue or task being implemented
 
+For **meeting essence / meeting intelligence** work (#69 and children), also read `docs/meeting-intelligence/SOP.md` and `docs/meeting-intelligence/README.md` before changing contracts, prompts, or validation.
+
 GitHub is the technical source of truth. Do not rely on stale chat history, screenshots, local notes, or an old handoff when repository state disagrees.
 
 ## Product invariants

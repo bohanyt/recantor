@@ -160,6 +160,19 @@ Recantor should use a server-side provider adapter and never expose API credenti
 
 Operational behavior such as model names, pricing, request limits, and rate limits can change and must be checked against current provider documentation at implementation/deployment time rather than hard-coded into architecture documentation.
 
+## Meeting essence v1 research (#69 / #70)
+
+Design context only — not evidence that Recantor has achieved meeting-summary quality targets.
+
+- Otter — custom meeting-type templates: https://help.otter.ai/hc/en-us/articles/360045825033-Create-and-use-meeting-type-templates
+- Fathom — custom summary guidance: https://help.fathom.video/hc/en-us/articles/4412478356503-Customize-your-meeting-summaries
+- Fireflies — custom summary templates: https://guide.fireflies.ai/articles/5733458732-learn-about-custom-summaries-and-how-to-create-them
+- QMSum (NAACL 2021): https://aclanthology.org/2021.naacl-main.477/
+- ExplainMeetSum (ACL 2023): https://aclanthology.org/2023.acl-long.234/
+- EMNLP 2024 meeting summarization metrics study: https://aclanthology.org/2024.findings-emnlp.393/
+
+Recantor encodes its own SOP, prompts, and Pydantic contracts under `docs/meeting-intelligence/` and `recantor.meeting_essence`; no proprietary templates were copied. Legacy four-array helper wire keys (`key_points`, `decisions`, `action_items`, `open_questions`) remain owned by `#68` / `#74`; `#70` does not ship a layered→v1 adapter.
+
 ## Adoption rule
 
 A reference becomes a dependency only when the repository explicitly adds it.
