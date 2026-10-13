@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38329715749
+snapshot_seq: 38329722143
 
-collected_at: 2026-10-13T00:56:40.721441Z
+collected_at: 2026-10-13T00:56:52.397841Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,6 +623,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #76 state=open updated=2026-10-13T00:56:35Z title=69G — Adversarial corpus, semantic quality gates, and latency benchmark
 ISSUE #75 state=open updated=2026-10-13T00:56:34Z title=69F — Concise meeting results with topic detail and source navigation
 ISSUE #74 state=open updated=2026-10-13T00:56:33Z title=69E — Structured provider adapter and session-bound intelligence API
 ISSUE #73 state=open updated=2026-10-13T00:56:32Z title=69D — Fair summary jobs, host-wide invocation limits, and live updates
@@ -642,4 +643,4 @@ PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38329715749 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38329722143 sections=6
