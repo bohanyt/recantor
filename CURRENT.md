@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38329831006
+snapshot_seq: 38349620613
 
-collected_at: 2026-10-13T00:58:13.543585Z
+collected_at: 2026-10-13T05:05:25.763251Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,7 +623,7 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #69 state=open updated=2026-10-13T00:57:58Z title=Meeting essence v1: reusable SOP, granular summaries, and long-transcript pipeline
+ISSUE #69 state=open updated=2026-10-13T05:05:13Z title=Meeting essence v1: reusable SOP, granular summaries, and long-transcript pipeline
 ISSUE #75 state=open updated=2026-10-13T00:57:55Z title=69F — Concise meeting results with topic detail and source navigation
 ISSUE #74 state=open updated=2026-10-13T00:57:54Z title=69E — Structured provider adapter and session-bound intelligence API
 ISSUE #73 state=open updated=2026-10-13T00:57:53Z title=69D — Fair summary jobs, host-wide invocation limits, and live updates
@@ -643,4 +643,4 @@ PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38329831006 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38349620613 sections=6
