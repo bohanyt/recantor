@@ -1,0 +1,186 @@
+{
+  "generated_at_utc": "2026-10-13T05:26:01Z",
+  "issue": 70,
+  "round": "70-correction-4",
+  "acceptance_kind": "structural_contracts_and_package_assets",
+  "live_model_quality": "NOT_ESTABLISHED",
+  "remaining_work_issues": [
+    "71",
+    "72",
+    "73",
+    "74",
+    "75",
+    "76"
+  ],
+  "local_checkpoint": {
+    "kind": "LOCAL_TESTED",
+    "note": "Local reviewed implementation checkpoint; the GitHub publication commit is separate. Code/fixture/prompt identity is verified by the normalized content hashes below.",
+    "worktree": "C:\\Users\\ADMIN\\Documents\\recantor dev\\worktrees\\issue-70-meeting-contracts",
+    "branch": "feat/issue-70-meeting-contracts",
+    "base_sha": "655a421d45444795a8d71e6140f522a3bcc3763e",
+    "pre_commit_head_sha": "3881317d15aaee5957bd5b725009de83a571e278",
+    "tested_implementation_head_sha": "353dd7d5e8974534c4671d16a11f8a71a8b70194"
+  },
+  "parent_observed_review": {
+    "pytest": {
+      "passed": 31,
+      "failed": 0,
+      "duration_seconds": 2.38,
+      "command": "apps/api/.venv/Scripts/python.exe -m pytest apps/api/tests/test_meeting_essence_contracts.py -q"
+    },
+    "ruff_check": {
+      "scope": "apps/api",
+      "result": "PASS",
+      "command": "apps/api/.venv/Scripts/ruff.exe check apps/api"
+    },
+    "ruff_format": {
+      "files_checked": 82,
+      "result": "PASS",
+      "command": "apps/api/.venv/Scripts/ruff.exe format --check apps/api"
+    },
+    "note": "Parent independently reran on the current tree before round-4 docs/evidence; this round did not re-run pytest or Ruff.",
+    "commands_working_directory": "repository root (Windows); equivalent uv commands in README work in the normal project environment."
+  },
+  "delegation": {
+    "round3": {
+      "provider": "cursor",
+      "model": "composer-2.5",
+      "taskId": "node:delegated-task:command%3Amcp%3A74ed0a3d-5d49-412c-86e5-ba8d858106cf%3Adelegate-task%3Arecantor-goal69-issue70-20261013-round3",
+      "status": "completed",
+      "parent_verified": true
+    },
+    "round4": {
+      "provider": "cursor",
+      "model": "composer-2.5",
+      "taskId": "node:delegated-task:command%3Amcp%3A74ed0a3d-5d49-412c-86e5-ba8d858106cf%3Adelegate-task%3Arecantor-goal69-issue70-20261013-round4",
+      "status": "completed",
+      "parent_verified": true
+    }
+  },
+  "identities": {
+    "package_id": "recantor-meeting-essence-v1",
+    "schema_identity": "meeting-essence.contracts/2026-10-13.3",
+    "algorithm_identity": "meeting-essence.pipeline/serial-v1",
+    "prompts": [
+      {
+        "name": "extract",
+        "version": "1.0.0",
+        "sha256": "fa40ba81361f07ca33423448fde82673b4b12bcecf25f1ba4daa1e9f0907d462",
+        "asset_path": "prompts/extract_v1.txt"
+      },
+      {
+        "name": "reconcile",
+        "version": "1.0.0",
+        "sha256": "322fe53e445e2abc053a76e6ebd0ca422ac1cc272e07b5e4fd5093afe86b3a07",
+        "asset_path": "prompts/reconcile_v1.txt"
+      },
+      {
+        "name": "check",
+        "version": "1.0.0",
+        "sha256": "588a6869823295148952a7b64d7db673fa38fe98fc16dbb5c891de52d6631970",
+        "asset_path": "prompts/check_v1.txt"
+      },
+      {
+        "name": "render",
+        "version": "1.0.0",
+        "sha256": "7eeba30e86358dbb528dc3c3ce284b70c6fd745287d000554584c4907757455e",
+        "asset_path": "prompts/render_v1.txt"
+      }
+    ],
+    "prompt_cache_key": "ef4c41c371f0261cbd38d71bd0e8cdd7c9649431aa55cc8378d9392938237d40"
+  },
+  "content_sha256": {
+    "normalization": "git_normalized_lf",
+    "note": "Each path is read as UTF-8 text; CRLF bytes are converted to LF before SHA-256 for portable publishing verification.",
+    "artifacts": [
+      {
+        "path": "apps/api/src/recantor/meeting_essence/__init__.py",
+        "sha256": "7ee52d7550730ff7f8bc1c067de47e5455a12992490ba95b1ff9c1fc77e7dc17"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/__main__.py",
+        "sha256": "acb2f91be7b8198dbff58b7ae5bee4c6517b161e43de573640d15368a137e98e"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/contracts.py",
+        "sha256": "cb62e89686d59cacecbe040afd3f57abcebd8c9013c9b7aa5b9fd9a3e077a354"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/identities.py",
+        "sha256": "bcae6ef50a1ee0dd765afc10d2c5d5a866e25a139d27882acbe736a57782a7c4"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/identity.py",
+        "sha256": "b7bd08b059aaa5283efbeb2d3d362bf46e600c4298dc96135c322bb0fb46c5ae"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/prompt_loader.py",
+        "sha256": "2082441820969af4ed8c77aaa8b073add9d9458d9a5a289da620252cd881f443"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/provider.py",
+        "sha256": "39d5702384e91eb10819b01c897188d80059bb0fa03c29feb4550bf30cb1892c"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/stage_contracts.py",
+        "sha256": "86987c51d7d169bf9e9ae6ae8d935524fde1aa49793b0eae3451635284f78ffe"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/strict.py",
+        "sha256": "457d3c12be50df19a0561e4e180dd08c98ed7850a4ec78814b36da4f353c7353"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/validate_cli.py",
+        "sha256": "b53a3b39fd0ea4fd6379e401ebefdf8130d790041e66c02bb98bd266c5ba205c"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/validation.py",
+        "sha256": "94d7d42db5f8ec80f160130b0a49981fd16f3dcef63f2ecb6b4e6c95f1381499"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/assets/prompts/check_v1.txt",
+        "sha256": "588a6869823295148952a7b64d7db673fa38fe98fc16dbb5c891de52d6631970"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/assets/prompts/extract_v1.txt",
+        "sha256": "fa40ba81361f07ca33423448fde82673b4b12bcecf25f1ba4daa1e9f0907d462"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/assets/prompts/reconcile_v1.txt",
+        "sha256": "322fe53e445e2abc053a76e6ebd0ca422ac1cc272e07b5e4fd5093afe86b3a07"
+      },
+      {
+        "path": "apps/api/src/recantor/meeting_essence/assets/prompts/render_v1.txt",
+        "sha256": "7eeba30e86358dbb528dc3c3ce284b70c6fd745287d000554584c4907757455e"
+      },
+      {
+        "path": "apps/api/tests/fixtures/meeting_intelligence/informational_example.json",
+        "sha256": "6bed0d0f00607252514fce8c394be73264f8a142953e64594def2a3bf510eaf8"
+      },
+      {
+        "path": "apps/api/tests/fixtures/meeting_intelligence/s01_s06_example.json",
+        "sha256": "f1105fe5efc4c617b1c2784fe980c2fefbb2e43d79282d77227efb6ed927abd6"
+      },
+      {
+        "path": "apps/api/tests/meeting_intelligence_fixtures.py",
+        "sha256": "0f723d91c91de08e76eafcf8573d4e113eea712197fd2b1e16e9b41c386af41b"
+      },
+      {
+        "path": "apps/api/tests/test_meeting_essence_contracts.py",
+        "sha256": "890f53d2614972b89fb429ec4021e238b3177f90328138a7ef3db15c5228a1f1"
+      }
+    ]
+  },
+  "wheel_witness": {
+    "test": "test_wheel_install_exposes_prompt_assets",
+    "method": "uv pip install --no-deps --target + load_prompt_bundle from installed tree"
+  },
+  "engine_storage_api_ui": "deferred_to_issues_71_through_76",
+  "parent_publication_verification": {
+    "code_fixture_prompt_hashes_checked": 19,
+    "all_hashes_match": true,
+    "source_normalization": "git_normalized_lf",
+    "unrelated_untracked_file_excluded": "PROGRESS.md",
+    "acceptance_scope": "local structural/package checks; repository CI and full product acceptance remain pending"
+  }
+}

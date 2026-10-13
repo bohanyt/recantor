@@ -1,0 +1,504 @@
+{
+  "manifest": {
+    "contract_version": "meeting-intelligence.snapshot.v1",
+    "session_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "snapshot_id": "snap_976b0c9fe5d11eff64abdacd",
+    "snapshot_content_hash": "3dc286bd86e78702f979e4174caf18a0e83ad44cdb1651a49538f7d54ade36cf",
+    "publication_boundary_sequence": 6,
+    "captured_at": "2026-10-13T04:00:00Z",
+    "meeting_metadata": {},
+    "segments": [
+      {
+        "id": "11111111-1111-4111-8111-111111111101",
+        "sequence": 1,
+        "start_ms": 12000,
+        "end_ms": 15000,
+        "text": "Rencana awal kita rilis Jumat.",
+        "language": null,
+        "content_hash": "ef420a1fa46cb45a18e7598764b582d47da925f3d3fb10fa0d201aea9510184e",
+        "created_at": null
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111102",
+        "sequence": 2,
+        "start_ms": 48000,
+        "end_ms": 52000,
+        "text": "Jangan rilis sebelum tes pembayaran lulus.",
+        "language": null,
+        "content_hash": "c3d4dd85ccfffe8881380de24e3fc476d8cf142586f00c967ed17e9143548d71",
+        "created_at": null
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111103",
+        "sequence": 3,
+        "start_ms": 96000,
+        "end_ms": 102000,
+        "text": "Tes pembayaran belum lulus. Kita putuskan rilis Selasa; tetap hanya kalau tes pembayaran sudah lulus.",
+        "language": null,
+        "content_hash": "736fb720caa91ba9601a076ee5e537066577e5162627a373df26271273b57dad",
+        "created_at": null
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111104",
+        "sequence": 4,
+        "start_ms": 97000,
+        "end_ms": 98000,
+        "text": "Dini, tolong kabari pelanggan soal perubahan jadwal.",
+        "language": null,
+        "content_hash": "fc6822cfc47ff2a311dde5fa09f1df23f409c04e73c849d3c31ba1649594fc0e",
+        "created_at": null
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111105",
+        "sequence": 5,
+        "start_ms": 98000,
+        "end_ms": 99000,
+        "text": "Dini menyetujui tugas mengabari pelanggan dan menyatakan akan melakukannya besok pukul 12.00.",
+        "language": null,
+        "content_hash": "ec6ea698c98735980e324b346c93d3df7b0f5563ae8f9526cdb4eedd081c28c7",
+        "created_at": null
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111106",
+        "sequence": 6,
+        "start_ms": 100000,
+        "end_ms": 101000,
+        "text": "Invoice vendor perlu diperiksa. Belum ditentukan siapa yang menangani.",
+        "language": null,
+        "content_hash": "9ddc0789bd1ee36cd4b53aa72739403ca7a0246f13ae12f1ef49e978ff044352",
+        "created_at": null
+      }
+    ],
+    "coverage": {
+      "transcript_publication_complete": true,
+      "recording_audio_complete": null,
+      "stt_backlog_pending": false,
+      "source_pending": false,
+      "explicit_gaps": []
+    }
+  },
+  "result": {
+    "contract_version": "meeting-intelligence.result.v1",
+    "snapshot_id": "snap_976b0c9fe5d11eff64abdacd",
+    "overview_bullets": [
+      {
+        "text": "Rilis dipindah dari Jumat ke Selasa karena tes pembayaran belum lulus, dengan syarat tes tersebut lulus sebelum rilis.",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111101",
+            "start_ms": 12000,
+            "end_ms": 15000,
+            "text_span": null
+          },
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111103",
+            "start_ms": 96000,
+            "end_ms": 102000,
+            "text_span": null
+          }
+        ]
+      },
+      {
+        "text": "Dini menerima tugas mengabari pelanggan tentang perubahan jadwal; tenggat relatif 'besok pukul 12.00' disimpan mentah tanpa normalisasi kalender.",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111104",
+            "start_ms": 97000,
+            "end_ms": 98000,
+            "text_span": null
+          },
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111105",
+            "start_ms": 98000,
+            "end_ms": 99000,
+            "text_span": null
+          }
+        ]
+      },
+      {
+        "text": "Pemeriksaan invoice vendor masih perlu dilakukan; PIC belum ditentukan dan tenggat belum disebutkan dalam sumber.",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111106",
+            "start_ms": 100000,
+            "end_ms": 101000,
+            "text_span": null
+          }
+        ]
+      }
+    ],
+    "topics": [
+      {
+        "topic": "Keputusan rilis",
+        "points": [
+          {
+            "text": "Rencana awal rilis Jumat digantikan keputusan rilis Selasa dengan syarat tes pembayaran lulus.",
+            "evidence": [
+              {
+                "segment_id": "11111111-1111-4111-8111-111111111101",
+                "start_ms": 12000,
+                "end_ms": 15000,
+                "text_span": null
+              },
+              {
+                "segment_id": "11111111-1111-4111-8111-111111111103",
+                "start_ms": 96000,
+                "end_ms": 102000,
+                "text_span": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "topic": "Komunikasi pelanggan",
+        "points": [
+          {
+            "text": "Dini menerima tugas mengabari pelanggan; pekerjaan diterima tetapi belum dilaporkan selesai.",
+            "evidence": [
+              {
+                "segment_id": "11111111-1111-4111-8111-111111111104",
+                "start_ms": 97000,
+                "end_ms": 98000,
+                "text_span": null
+              },
+              {
+                "segment_id": "11111111-1111-4111-8111-111111111105",
+                "start_ms": 98000,
+                "end_ms": 99000,
+                "text_span": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "topic": "Invoice vendor",
+        "points": [
+          {
+            "text": "Invoice vendor perlu diperiksa tanpa PIC yang ditetapkan.",
+            "evidence": [
+              {
+                "segment_id": "11111111-1111-4111-8111-111111111106",
+                "start_ms": 100000,
+                "end_ms": 101000,
+                "text_span": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "task": "Kabari pelanggan soal perubahan jadwal",
+        "assignee": "Dini",
+        "assignee_explicitly_undetermined": false,
+        "deadline_raw": "besok pukul 12.00",
+        "deadline_normalized": null,
+        "deadline_unmentioned": false,
+        "deadline_normalization_basis": "none",
+        "content_status": "acceptance",
+        "condition_text": null,
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111104",
+            "start_ms": 97000,
+            "end_ms": 98000,
+            "text_span": null
+          },
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111105",
+            "start_ms": 98000,
+            "end_ms": 99000,
+            "text_span": null
+          }
+        ]
+      },
+      {
+        "task": "Periksa invoice vendor",
+        "assignee": null,
+        "assignee_explicitly_undetermined": true,
+        "deadline_raw": null,
+        "deadline_normalized": null,
+        "deadline_unmentioned": true,
+        "deadline_normalization_basis": "none",
+        "content_status": "request",
+        "condition_text": null,
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111106",
+            "start_ms": 100000,
+            "end_ms": 101000,
+            "text_span": null
+          }
+        ]
+      }
+    ],
+    "open_items": [],
+    "atomic_records": [
+      {
+        "record_id": "rec_b7f156fd1d6d9dbdffdb",
+        "topic": "Rilis produk",
+        "kind": "proposal",
+        "claim_text": "Rencana awal rilis Jumat.",
+        "content_status": "proposal",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111101",
+            "start_ms": 12000,
+            "end_ms": 15000,
+            "text_span": null
+          }
+        ],
+        "assignee": null,
+        "assignee_explicitly_undetermined": false,
+        "deadline_raw": null,
+        "deadline_normalized": null,
+        "deadline_unmentioned": false,
+        "deadline_normalization_basis": "none",
+        "condition_text": null,
+        "rationale": null,
+        "uncertainty": null
+      },
+      {
+        "record_id": "rec_75575b39ebe1d59c2e89",
+        "topic": "Rilis produk",
+        "kind": "decision",
+        "claim_text": "Rilis dipindah ke Selasa dan tetap mensyaratkan tes pembayaran lulus.",
+        "content_status": "decision",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111102",
+            "start_ms": 48000,
+            "end_ms": 52000,
+            "text_span": null
+          },
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111103",
+            "start_ms": 96000,
+            "end_ms": 102000,
+            "text_span": null
+          }
+        ],
+        "assignee": null,
+        "assignee_explicitly_undetermined": false,
+        "deadline_raw": null,
+        "deadline_normalized": null,
+        "deadline_unmentioned": false,
+        "deadline_normalization_basis": "none",
+        "condition_text": "Hanya jika tes pembayaran sudah lulus.",
+        "rationale": null,
+        "uncertainty": null
+      },
+      {
+        "record_id": "rec_9d3e9ce567b44697ff5c",
+        "topic": "Komunikasi pelanggan",
+        "kind": "action",
+        "claim_text": "Dini menerima tugas mengabari pelanggan tentang perubahan jadwal.",
+        "content_status": "acceptance",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111104",
+            "start_ms": 97000,
+            "end_ms": 98000,
+            "text_span": null
+          },
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111105",
+            "start_ms": 98000,
+            "end_ms": 99000,
+            "text_span": null
+          }
+        ],
+        "assignee": "Dini",
+        "assignee_explicitly_undetermined": false,
+        "deadline_raw": "besok pukul 12.00",
+        "deadline_normalized": null,
+        "deadline_unmentioned": false,
+        "deadline_normalization_basis": "none",
+        "condition_text": null,
+        "rationale": null,
+        "uncertainty": null
+      },
+      {
+        "record_id": "rec_0588955f33f5b293014c",
+        "topic": "Invoice vendor",
+        "kind": "action",
+        "claim_text": "Invoice vendor perlu diperiksa; PIC belum ditentukan.",
+        "content_status": "request",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111106",
+            "start_ms": 100000,
+            "end_ms": 101000,
+            "text_span": null
+          }
+        ],
+        "assignee": null,
+        "assignee_explicitly_undetermined": true,
+        "deadline_raw": null,
+        "deadline_normalized": null,
+        "deadline_unmentioned": true,
+        "deadline_normalization_basis": "none",
+        "condition_text": null,
+        "rationale": null,
+        "uncertainty": null
+      }
+    ],
+    "relations": [
+      {
+        "relation_type": "supersedes",
+        "from_record_id": "rec_75575b39ebe1d59c2e89",
+        "to_record_id": "rec_b7f156fd1d6d9dbdffdb",
+        "evidence": [
+          {
+            "segment_id": "11111111-1111-4111-8111-111111111103",
+            "start_ms": 96000,
+            "end_ms": 102000,
+            "text_span": null
+          }
+        ]
+      }
+    ],
+    "coverage": {
+      "snapshot_id": "snap_976b0c9fe5d11eff64abdacd",
+      "source_segments_enumerated": 6,
+      "source_segments_referenced": 6,
+      "processing_job_status": "succeeded",
+      "structural_check_status": "completed",
+      "forward_semantic_check_status": "not_started",
+      "backward_semantic_check_status": "not_started",
+      "semantic_check_method": null,
+      "limitations": [],
+      "overview_word_count_target": 180,
+      "overview_bullet_target_min": 3,
+      "overview_bullet_target_max": 7
+    }
+  },
+  "records": [
+    {
+      "record_id": "rec_b7f156fd1d6d9dbdffdb",
+      "topic": "Rilis produk",
+      "kind": "proposal",
+      "claim_text": "Rencana awal rilis Jumat.",
+      "content_status": "proposal",
+      "evidence": [
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111101",
+          "start_ms": 12000,
+          "end_ms": 15000,
+          "text_span": null
+        }
+      ],
+      "assignee": null,
+      "assignee_explicitly_undetermined": false,
+      "deadline_raw": null,
+      "deadline_normalized": null,
+      "deadline_unmentioned": false,
+      "deadline_normalization_basis": "none",
+      "condition_text": null,
+      "rationale": null,
+      "uncertainty": null
+    },
+    {
+      "record_id": "rec_75575b39ebe1d59c2e89",
+      "topic": "Rilis produk",
+      "kind": "decision",
+      "claim_text": "Rilis dipindah ke Selasa dan tetap mensyaratkan tes pembayaran lulus.",
+      "content_status": "decision",
+      "evidence": [
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111102",
+          "start_ms": 48000,
+          "end_ms": 52000,
+          "text_span": null
+        },
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111103",
+          "start_ms": 96000,
+          "end_ms": 102000,
+          "text_span": null
+        }
+      ],
+      "assignee": null,
+      "assignee_explicitly_undetermined": false,
+      "deadline_raw": null,
+      "deadline_normalized": null,
+      "deadline_unmentioned": false,
+      "deadline_normalization_basis": "none",
+      "condition_text": "Hanya jika tes pembayaran sudah lulus.",
+      "rationale": null,
+      "uncertainty": null
+    },
+    {
+      "record_id": "rec_9d3e9ce567b44697ff5c",
+      "topic": "Komunikasi pelanggan",
+      "kind": "action",
+      "claim_text": "Dini menerima tugas mengabari pelanggan tentang perubahan jadwal.",
+      "content_status": "acceptance",
+      "evidence": [
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111104",
+          "start_ms": 97000,
+          "end_ms": 98000,
+          "text_span": null
+        },
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111105",
+          "start_ms": 98000,
+          "end_ms": 99000,
+          "text_span": null
+        }
+      ],
+      "assignee": "Dini",
+      "assignee_explicitly_undetermined": false,
+      "deadline_raw": "besok pukul 12.00",
+      "deadline_normalized": null,
+      "deadline_unmentioned": false,
+      "deadline_normalization_basis": "none",
+      "condition_text": null,
+      "rationale": null,
+      "uncertainty": null
+    },
+    {
+      "record_id": "rec_0588955f33f5b293014c",
+      "topic": "Invoice vendor",
+      "kind": "action",
+      "claim_text": "Invoice vendor perlu diperiksa; PIC belum ditentukan.",
+      "content_status": "request",
+      "evidence": [
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111106",
+          "start_ms": 100000,
+          "end_ms": 101000,
+          "text_span": null
+        }
+      ],
+      "assignee": null,
+      "assignee_explicitly_undetermined": true,
+      "deadline_raw": null,
+      "deadline_normalized": null,
+      "deadline_unmentioned": true,
+      "deadline_normalization_basis": "none",
+      "condition_text": null,
+      "rationale": null,
+      "uncertainty": null
+    }
+  ],
+  "relations": [
+    {
+      "relation_type": "supersedes",
+      "from_record_id": "rec_75575b39ebe1d59c2e89",
+      "to_record_id": "rec_b7f156fd1d6d9dbdffdb",
+      "evidence": [
+        {
+          "segment_id": "11111111-1111-4111-8111-111111111103",
+          "start_ms": 96000,
+          "end_ms": 102000,
+          "text_span": null
+        }
+      ]
+    }
+  ]
+}

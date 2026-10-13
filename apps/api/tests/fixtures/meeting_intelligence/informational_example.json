@@ -1,0 +1,128 @@
+{
+  "manifest": {
+    "contract_version": "meeting-intelligence.snapshot.v1",
+    "session_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "snapshot_id": "snap_ae5c2ebd64707cf5c15f7ca6",
+    "snapshot_content_hash": "5d366384a335aefb33c56b835dc20ce17a16564f1f4453df5bc8d01e8949efd4",
+    "publication_boundary_sequence": 2,
+    "captured_at": null,
+    "meeting_metadata": {},
+    "segments": [
+      {
+        "id": "22222222-2222-4222-8222-222222222201",
+        "sequence": 1,
+        "start_ms": 5000,
+        "end_ms": 20000,
+        "text": "Tim riset mempresentasikan temuan adopsi fitur onboarding naik 12% setelah tutorial interaktif.",
+        "language": null,
+        "content_hash": "5967275e79dd81aa5154c2c448a1f8167883e9c76c5b16ca0d7c5440cc5e81f2",
+        "created_at": null
+      },
+      {
+        "id": "22222222-2222-4222-8222-222222222202",
+        "sequence": 2,
+        "start_ms": 25000,
+        "end_ms": 45000,
+        "text": "Diskusi menilai opsi A (hemat biaya) dan opsi B (lebih cepat); belum ada keputusan akhir.",
+        "language": null,
+        "content_hash": "c8588ad05c7a919fb9544c0e651cf14e11d7c40863d8770ddd5486ab2ba0b7c9",
+        "created_at": null
+      }
+    ],
+    "coverage": {
+      "transcript_publication_complete": true,
+      "recording_audio_complete": null,
+      "stt_backlog_pending": false,
+      "source_pending": false,
+      "explicit_gaps": []
+    }
+  },
+  "result": {
+    "contract_version": "meeting-intelligence.result.v1",
+    "snapshot_id": "snap_ae5c2ebd64707cf5c15f7ca6",
+    "overview_bullets": [
+      {
+        "text": "Tim riset melaporkan adopsi fitur onboarding naik 12% setelah tutorial interaktif.",
+        "evidence": [
+          {
+            "segment_id": "22222222-2222-4222-8222-222222222201",
+            "start_ms": 5000,
+            "end_ms": 20000,
+            "text_span": null
+          }
+        ]
+      },
+      {
+        "text": "Peserta membandingkan opsi A (hemat biaya) dan opsi B (lebih cepat) tanpa keputusan final.",
+        "evidence": [
+          {
+            "segment_id": "22222222-2222-4222-8222-222222222202",
+            "start_ms": 25000,
+            "end_ms": 45000,
+            "text_span": null
+          }
+        ]
+      }
+    ],
+    "topics": [
+      {
+        "topic": "Temuan riset",
+        "points": [
+          {
+            "text": "Adopsi onboarding naik 12% setelah tutorial interaktif.",
+            "evidence": [
+              {
+                "segment_id": "22222222-2222-4222-8222-222222222201",
+                "start_ms": 5000,
+                "end_ms": 20000,
+                "text_span": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "topic": "Opsi lanjutan",
+        "points": [
+          {
+            "text": "Opsi A menekankan efisiensi biaya; opsi B menekankan kecepatan implementasi.",
+            "evidence": [
+              {
+                "segment_id": "22222222-2222-4222-8222-222222222202",
+                "start_ms": 25000,
+                "end_ms": 45000,
+                "text_span": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "actions": [],
+    "open_items": [],
+    "atomic_records": [],
+    "relations": [],
+    "coverage": {
+      "snapshot_id": "snap_ae5c2ebd64707cf5c15f7ca6",
+      "source_segments_enumerated": 2,
+      "source_segments_referenced": 2,
+      "processing_job_status": "succeeded",
+      "structural_check_status": "completed",
+      "forward_semantic_check_status": "not_started",
+      "backward_semantic_check_status": "not_started",
+      "semantic_check_method": null,
+      "limitations": [
+        {
+          "code": "informational_no_actions",
+          "message": "Tidak ada tindak lanjut atau keputusan yang diekstrak karena sumber hanya berisi temuan dan opsi.",
+          "evidence_segment_ids": []
+        }
+      ],
+      "overview_word_count_target": 180,
+      "overview_bullet_target_min": 3,
+      "overview_bullet_target_max": 7
+    }
+  },
+  "records": [],
+  "relations": []
+}

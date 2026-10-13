@@ -1,6 +1,14 @@
 # Current
 
-Last updated: 2026-10-05
+Last updated: 2026-10-13
+
+## Meeting intelligence contracts — CANDIDATE (#70, local)
+
+Engineering slice on branch `feat/issue-70-meeting-contracts` adds versioned meeting-essence SOP/docs, committed prompt assets under `recantor.meeting_essence`, strict Pydantic snapshot/evidence/record/result contracts, structural validation (exact evidence timestamps, manifest/segment hashes, coverage counts, ledger coherence), bounded stage provider contracts, and public-safe S01–S06 plus informational fixtures. **Not** product-complete: no engine (#71), persistence (#72), jobs (#73), provider/API (#74), UI (#75), or live semantic acceptance (#76). Validate with `docs/meeting-intelligence/README.md` commands; structural checks do not prove live extraction quality.
+
+---
+
+Last updated (alpha baseline detail): 2026-10-05
 
 This file is the short operational source of truth for Recantor. Fresh GitHub state outranks this summary if a branch, PR, issue, or CI run has moved.
 
