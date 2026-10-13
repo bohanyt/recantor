@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38349995203
+snapshot_seq: 38351707453
 
-collected_at: 2026-10-13T05:09:56.984679Z
+collected_at: 2026-10-13T05:30:18.419943Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,7 +623,8 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
-ISSUE #70 state=open updated=2026-10-13T05:09:46Z title=69A — Versioned meeting SOP, prompts, and evidence/result contracts
+ISSUE #70 state=open updated=2026-10-13T05:30:07Z title=69A — Versioned meeting SOP, prompts, and evidence/result contracts
+PR #77 state=open updated=2026-10-13T05:28:43Z title=feat: add versioned meeting essence contracts and SOP
 ISSUE #69 state=open updated=2026-10-13T05:05:13Z title=Meeting essence v1: reusable SOP, granular summaries, and long-transcript pipeline
 ISSUE #75 state=open updated=2026-10-13T00:57:55Z title=69F — Concise meeting results with topic detail and source navigation
 ISSUE #74 state=open updated=2026-10-13T00:57:54Z title=69E — Structured provider adapter and session-bound intelligence API
@@ -638,9 +639,10 @@ PR #50 state=open updated=2026-10-05T07:38:59Z title=feat: add development-only 
 ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 
 OPEN_PRS
+PR #77 draft=True updated=2026-10-13T05:28:43Z base=main head=feat/issue-70-meeting-contracts title=feat: add versioned meeting essence contracts and SOP
 PR #68 draft=True updated=2026-10-12T14:19:30Z base=main head=docs/issue-67-personal-groq-codex-test title=feat: add dev Codex bridge with fail-closed Windows execution
 PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38349995203 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38351707453 sections=6
