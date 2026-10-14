@@ -5,6 +5,7 @@ from uuid import UUID
 
 from recantor.meeting_essence.contracts import (
     AtomicRecord,
+    DeadlineNormalizationBasis,
     EvidenceReference,
     SourceSnapshotManifest,
 )
@@ -221,14 +222,32 @@ def validate_extracted_records_for_request(
                 record_id=record.record_id,
             )
         if record.deadline_normalized is not None:
-            iso_date = record.deadline_normalized.date().isoformat()
-            if iso_date not in support:
-                report.reject(
-                    "unsupported_normalized_date",
-                    "normalized deadline is not anchored in supporting source text",
-                    record_id=record.record_id,
-                )
+            basis = record.deadline_normalization_basis
+            if basis == DeadlineNormalizationBasis.MEETING_DATE_TIMEZONE:
+                meeting_date = manifest.meeting_metadata.get("meeting_date")
+                timezone = manifest.meeting_metadata.get("timezone")
+                if not meeting_date or not timezone:
+                    report.reject(
+                        "deadline_anchor_missing",
+                        "meeting_date_timezone basis requires manifest meeting_date and timezone",
+                        record_id=record.record_id,
+                    )
+            else:
+                iso_date = record.deadline_normalized.date().isoformat()
+                if iso_date not in support:
+                    report.reject(
+                        "unsupported_normalized_date",
+                        "normalized deadline is not anchored in supporting source text",
+                        record_id=record.record_id,
+                    )
     return report
+
+
+def _evidence_merge_key(ref: EvidenceReference) -> tuple[object, ...]:
+    span = None
+    if ref.text_span is not None:
+        span = (ref.text_span.start_cp, ref.text_span.end_cp)
+    return (ref.segment_id, ref.start_ms, ref.end_ms, span)
 
 
 def merge_atomic_records(
@@ -248,23 +267,10 @@ def merge_atomic_records(
             or prior.kind != record.kind
         ):
             continue
-        evidence_keys = {
-            (
-                ref.segment_id,
-                ref.start_ms,
-                ref.end_ms,
-                ref.text_span.model_dump() if ref.text_span else None,
-            )
-            for ref in prior.evidence
-        }
+        evidence_keys = {_evidence_merge_key(ref) for ref in prior.evidence}
         combined = list(prior.evidence)
         for ref in record.evidence:
-            key = (
-                ref.segment_id,
-                ref.start_ms,
-                ref.end_ms,
-                ref.text_span.model_dump() if ref.text_span else None,
-            )
+            key = _evidence_merge_key(ref)
             if key in evidence_keys:
                 continue
             evidence_keys.add(key)

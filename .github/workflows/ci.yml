@@ -115,6 +115,94 @@ jobs:
           cat /tmp/recantor-unready.json
           test "$code" = "503"
 
+  meeting-ledger-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install API dependencies
+        run: uv sync --project apps/api --frozen --dev
+      - name: Install PostgreSQL 17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-17
+      - name: Start a disposable cluster
+        run: |
+          set -euo pipefail
+          BIN=/usr/lib/postgresql/17/bin
+          DATA="${{ runner.temp }}/mi-pg"
+          SOCKET="${{ runner.temp }}/mi-pg-socket"
+          LOG="${{ runner.temp }}/mi-pg-server.log"
+          mkdir -p "$SOCKET" .ci-diagnostics
+          chmod 700 "$SOCKET"
+          "$BIN/initdb" -D "$DATA" --username=recantor_test --auth=trust --encoding=UTF8 --locale=C
+          START_OPTS="-h 127.0.0.1 -p 55473 -k ${SOCKET} -c shared_buffers=32MB -c max_connections=16 -c max_worker_processes=2"
+          set +e
+          "$BIN/pg_ctl" -D "$DATA" -l "$LOG" -w -t 60 -o "$START_OPTS" start
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "pg_ctl start failed with exit ${status}"
+            echo "---- pg_ctl status ----"
+            "$BIN/pg_ctl" -D "$DATA" status || true
+            echo "---- server log (${LOG}) ----"
+            if [ -s "$LOG" ]; then
+              cp "$LOG" .ci-diagnostics/mi-pg-server.log
+              cat "$LOG"
+            elif [ -f "$LOG" ]; then
+              echo "server log exists but is empty" | tee .ci-diagnostics/mi-pg-server.log
+            else
+              echo "server log was not created at ${LOG}" | tee .ci-diagnostics/mi-pg-server.log
+            fi
+            echo "---- data directory ----"
+            ls -la "$DATA" || true
+            echo "---- socket directory ----"
+            ls -ld "$SOCKET" || true
+            id || true
+            exit 1
+          fi
+          "$BIN/createdb" -h 127.0.0.1 -p 55473 -U recantor_test recantor_test
+      - name: Ledger durability tests including process and database restart
+        env:
+          DATABASE_URL: postgresql+psycopg://recantor_test@127.0.0.1:55473/recantor_test
+          RECANTOR_PG_DATA: ${{ runner.temp }}/mi-pg
+          RECANTOR_PG_BIN: /usr/lib/postgresql/17/bin
+          RECANTOR_PG_PORT: "55473"
+          RECANTOR_PG_OWNED: "1"
+          RECANTOR_PG_SOCKET_DIR: ${{ runner.temp }}/mi-pg-socket
+          RECANTOR_PG_LOG: ${{ runner.temp }}/mi-pg-server.log
+        run: uv run --project apps/api pytest apps/api/tests/test_meeting_intelligence_persistence.py
+      - name: Preserve PostgreSQL server log
+        if: always()
+        run: |
+          mkdir -p .ci-diagnostics
+          LOG="${{ runner.temp }}/mi-pg-server.log"
+          if [ -s "$LOG" ]; then
+            cp "$LOG" .ci-diagnostics/mi-pg-server.log
+          elif [ -f "$LOG" ]; then
+            echo "server log exists but is empty" > .ci-diagnostics/mi-pg-server.log
+          elif [ ! -f .ci-diagnostics/mi-pg-server.log ]; then
+            echo "server log was not created at ${LOG}" > .ci-diagnostics/mi-pg-server.log
+          fi
+      - name: Upload disposable PostgreSQL diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meeting-ledger-postgres-diagnostics
+          path: .ci-diagnostics/mi-pg-server.log
+          if-no-files-found: warn
+      - name: Stop the disposable cluster
+        if: always()
+        run: /usr/lib/postgresql/17/bin/pg_ctl -D "${{ runner.temp }}/mi-pg" stop -m fast || true
+
   frontend:
     runs-on: ubuntu-latest
     steps:

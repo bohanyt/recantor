@@ -681,6 +681,25 @@ def test_unknown_job_schema_identity_rejected() -> None:
         )
 
 
+def test_merge_atomic_records_accepts_codepoint_spans() -> None:
+    from recantor.meeting_essence.extract_validation import merge_atomic_records
+
+    record = build_s01_s06_bundle().records[0]
+    evidence = record.evidence[0]
+    left_span = evidence.model_copy(update={"text_span": UnicodeTextSpan(start_cp=0, end_cp=1)})
+    right_span = evidence.model_copy(update={"text_span": UnicodeTextSpan(start_cp=1, end_cp=2)})
+    left = record.model_copy(update={"evidence": [left_span]})
+    right = record.model_copy(update={"evidence": [right_span]})
+    merged = merge_atomic_records([left], [right])
+    assert len(merged) == 1
+    assert {(item.text_span.start_cp, item.text_span.end_cp) for item in merged[0].evidence} == {
+        (0, 1),
+        (1, 2),
+    }
+    again = merge_atomic_records(merged, [right])
+    assert len(again[0].evidence) == 2
+
+
 def test_strict_int_rejects_bool_sequence_coercion() -> None:
     with pytest.raises(ValueError):
         ManifestSegmentEntry.model_validate(

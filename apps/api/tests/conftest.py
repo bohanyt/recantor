@@ -1,10 +1,15 @@
+import asyncio
 import shutil
+import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from recantor.db import Base, get_engine, get_sessionmaker
 from recantor.models import RecordingChunk, RecordingGap, RecordingSession
@@ -46,3 +51,22 @@ async def clean_recording_state(tmp_path: Path) -> AsyncIterator[None]:
 
     async with get_engine().begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
+        # Application tables and the Alembic stamp have to disappear together.
+        # A later upgrade must not observe head after drop_all has removed the schema.
+        await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    await get_engine().dispose()
+    get_engine.cache_clear()
+    get_sessionmaker.cache_clear()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    del session, exitstatus
+    try:
+        asyncio.get_running_loop()
+        loop_running = True
+    except RuntimeError:
+        loop_running = False
+    if get_engine.cache_info().currsize and not loop_running:
+        get_engine().sync_engine.dispose()
+    get_engine.cache_clear()
+    get_sessionmaker.cache_clear()
