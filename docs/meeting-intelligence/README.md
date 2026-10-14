@@ -1,6 +1,6 @@
 # Meeting essence contracts (#70)
 
-Python package: `recantor.meeting_essence` (Pydantic contracts, validation, prompt loader, bounded stage provider protocol).
+Python package: `recantor.meeting_essence` (Pydantic contracts, validation, prompt loader, serial offline engine, bounded stage provider protocol).
 
 Legacy Codex helper module `#68` remains `recantor.meeting_intelligence` (single `.py` module). `#74` owns any layered→v1 adapter using exact helper wire keys.
 
@@ -33,7 +33,13 @@ Successful runs print `schema_identity`, prompt SHA-256 values, `prompt_cache_ke
 uv run pytest tests/test_meeting_essence_contracts.py -q
 ```
 
-Structural / schema validation does **not** claim live model extraction accuracy. Gold fixtures mark `structural_check_status=completed` only; semantic forward/backward checks default to `not_started` until `#71+` runs them with an explicit `semantic_check_method`.
+Structural / schema validation does **not** claim live model extraction accuracy. The offline engine (`recantor-meeting-engine-run`) uses a **deterministic fixture provider**. With independent annotations it checks each page as `offline-fixture-annotation-v1`. Without them it stays structural and partial. A custom provider may instead complete `source-aware-binding-v1` from the source text and claims on the request; that is still behavioral evidence, not live model accuracy. Overview text is checked and does not replace topic, action, or open-item detail. Relationship checks require both endpoint records and the cited source span, hash, and time; a matching type/from/to triple with different evidence does not pass.
+
+```powershell
+uv run recantor-meeting-engine-run tests/fixtures/meeting_intelligence/s01_s06_example.json
+```
+
+Engine runs print `schema_identity`, `prompt_cache_key`, `snapshot_content_hash`, and a JSON trace of stage wire audits (requested/observed model remain null on deterministic runs).
 
 ### Snapshot hashing
 

@@ -1,11 +1,16 @@
-You perform bidirectional checks between layered output and the frozen snapshot.
+You perform bidirectional checks between accessible output and frozen source fragments on this request.
 
-Checks:
-1. Output → source: every material claim, status, identity, number, date, condition, and supersession is supported by cited evidence that resolves in the manifest.
-2. Source → output: consequential information in the covered snapshot appears in accessible topic detail (overview length is not a detail cap).
+The request carries one check pass, one direction, and one page cursor:
+- source_coverage / source_to_output: read every supplied source fragment, including fragments with no extracted records. Judge whether the bounded candidate records and output claims on this request account for that fragment.
+- output_coverage / output_to_source: read every supplied output claim on this request. Claims may be overview bullets, topic points, actions, or open items. Judge whether the supplied original source fragments support that claim's text, status, owner, dates, conditions, rationale, and evidence.
+- relation_context / output_to_source: the request carries one relationship, both endpoint records, and one bounded citation excerpt. Judge that relationship from the excerpt's original segment id, time, content hash, and Unicode codepoint span, together with both endpoints' status, time, and provenance. A type/from/to triple without that cited source is not support. A companion page covers one slice of a long or distant citation; do not require the rest of the segment when this span is enough, and do not mark the relationship complete from a slice that omits the citation or either endpoint.
 
-Structural reference validation does NOT prove semantic correctness. Record check status separately from content statuses.
-If checks are incomplete, emit processing limitations without rewriting accepted decisions as undecided.
+Use only the source fragment text, times, content hash, and codepoint spans on this request, plus the records, relations, and claims on this request. A segment id without the cited excerpt is not support. An overview bullet is an output claim and needs source support. An overview bullet or a raw ledger row does not replace topic, action, or open-item detail.
+
+Acknowledge only this pass and this cursor. Return the same pass, direction, and fingerprints. covered_fragment_keys, covered_claim_ids, covered_record_ids, and covered_relation_keys must list exactly the items on this request when the page is complete. An empty acknowledgement does not cover a later page, and a source pass does not cover an output pass or a relation-context slice.
+
+Admitted methods are source-aware-binding-v1 for provider-owned semantic checking and offline-fixture-annotation-v1 for an offline comparison against independent fixture annotations. Structural reference checks, mock completion, confidence scores, and unregistered method names are not semantic checks. If this page is incomplete, say so. Do not rewrite decided claims into a different status.
+
 Do not output chain-of-thought.
 
-Output must conform to schema identity meeting-intelligence.contracts/2026-10-13.1.
+Output must conform to schema identity meeting-essence.contracts/2026-10-14.1.
