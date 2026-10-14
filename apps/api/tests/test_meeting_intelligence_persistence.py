@@ -15,6 +15,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import pytest
+import pytest_asyncio
 from alembic.config import Config
 from meeting_intelligence_fixtures import (
     FIXTURE_SESSION_ID,
@@ -26,7 +27,7 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine.url import make_url
 
 from alembic import command
-from recantor.db import Base, get_engine, get_sessionmaker
+from recantor.db import get_engine, get_sessionmaker
 from recantor.meeting_essence.budget import EngineLimits
 from recantor.meeting_essence.checkpoint_binding import CHECKPOINT_BINDING_VERSION
 from recantor.meeting_essence.contracts import (
@@ -125,13 +126,58 @@ def _pg_executable(name: str) -> Path:
     return Path(found)
 
 
+def _pg_log_path() -> Path:
+    override = os.environ.get("RECANTOR_PG_LOG")
+    if override:
+        return Path(override)
+    return _pg_data().parent / "postgresql-owned.log"
+
+
+def _pg_socket_dir() -> Path | None:
+    if os.name == "nt":
+        return None
+    override = os.environ.get("RECANTOR_PG_SOCKET_DIR")
+    path = Path(override) if override else _pg_data().parent / "pg-socket"
+    if " " in str(path):
+        pytest.fail(f"PostgreSQL socket directory must not contain spaces: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
+    return path
+
+
+def _postgres_start_options() -> str:
+    options = (
+        f"-h 127.0.0.1 -p {_pg_port()} -c shared_buffers=32MB "
+        "-c max_connections=16 -c max_worker_processes=2"
+    )
+    socket_dir = _pg_socket_dir()
+    if socket_dir is not None:
+        options = f"{options} -k {socket_dir}"
+    return options
+
+
+def _read_server_log(path: Path) -> str:
+    if not path.is_file():
+        return f"server log was not created at {path}"
+    data = path.read_bytes()
+    if not data:
+        return f"server log at {path} is empty"
+    text_value = data.decode("utf-8", errors="replace")
+    if len(text_value) > 16000:
+        return text_value[-16000:]
+    return text_value
+
+
 def _pg_ctl(*args: str) -> subprocess.CompletedProcess[str]:
+    # Do not capture stdout/stderr. pg_ctl start detaches postgres, and an inherited
+    # pipe keeps the parent waiting after pg_ctl itself has exited.
     return subprocess.run(
         [str(_pg_executable("pg_ctl")), "-D", str(_pg_data()), *args],
         check=False,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        timeout=30,
+        timeout=90,
     )
 
 
@@ -144,17 +190,40 @@ def _start_pg() -> None:
         return
     if _pg_is_running():
         return
-    log_path = _pg_data() / "postgresql-owned.log"
+    log_path = _pg_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     result = _pg_ctl(
         "-l",
         str(log_path),
         "-o",
-        f"-h 127.0.0.1 -p {_pg_port()} -c shared_buffers=32MB "
-        "-c max_connections=16 -c max_worker_processes=2",
+        _postgres_start_options(),
+        "-w",
+        "-t",
+        "60",
         "start",
     )
     if result.returncode != 0 or not _pg_is_running():
-        pytest.fail("failed to start the disposable PostgreSQL cluster this fixture owns")
+        pytest.fail(
+            "failed to start the disposable PostgreSQL cluster this fixture owns\n"
+            f"pg_ctl exit {result.returncode}\n"
+            f"server log:\n{_read_server_log(log_path)}"
+        )
+
+
+def _release_database_caches() -> None:
+    if get_engine.cache_info().currsize:
+        get_engine().sync_engine.dispose()
+    get_engine.cache_clear()
+    get_sessionmaker.cache_clear()
+    get_settings.cache_clear()
+
+
+async def _release_database_caches_async() -> None:
+    if get_engine.cache_info().currsize:
+        await get_engine().dispose()
+    get_engine.cache_clear()
+    get_sessionmaker.cache_clear()
+    get_settings.cache_clear()
 
 
 def _stop_pg() -> None:
@@ -188,6 +257,7 @@ def synthetic_postgresql():
     try:
         yield url
     finally:
+        _release_database_caches()
         if owned:
             _stop_pg()
             assert not _pg_is_running()
@@ -196,38 +266,32 @@ def synthetic_postgresql():
 @pytest.fixture(scope="module")
 def mi_db_migrated(synthetic_postgresql: str):
     os.environ["DATABASE_URL"] = synthetic_postgresql
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-    if _cluster_owned():
-        command.upgrade(_alembic_config(), "head")
+    _release_database_caches()
+    command.upgrade(_alembic_config(), "head")
     yield
+    _release_database_caches()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mi_db(mi_db_migrated: None, synthetic_postgresql: str, monkeypatch: pytest.MonkeyPatch):
     del mi_db_migrated
     monkeypatch.setenv("DATABASE_URL", synthetic_postgresql)
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
-    if not _cluster_owned():
-        async with get_engine().begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
-    async with get_sessionmaker()() as db:
-        await _ensure_session(db, FIXTURE_SESSION_ID)
-        await _ensure_session(db, SESSION_B)
-        await _ensure_segments(db, FIXTURE_SESSION_ID, SEGMENT_SPECS)
-        await _ensure_segments(db, SESSION_B, _shifted_specs())
-        await db.commit()
-    yield
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
-    async with get_sessionmaker()() as db:
-        repo = MeetingIntelligenceRepository(db)
-        await repo.delete_session_intelligence(FIXTURE_SESSION_ID)
-        await repo.delete_session_intelligence(SESSION_B)
-        await db.commit()
+    await _release_database_caches_async()
+    try:
+        async with get_sessionmaker()() as db:
+            await _ensure_session(db, FIXTURE_SESSION_ID)
+            await _ensure_session(db, SESSION_B)
+            await _ensure_segments(db, FIXTURE_SESSION_ID, SEGMENT_SPECS)
+            await _ensure_segments(db, SESSION_B, _shifted_specs())
+            await db.commit()
+        yield
+        async with get_sessionmaker()() as db:
+            repo = MeetingIntelligenceRepository(db)
+            await repo.delete_session_intelligence(FIXTURE_SESSION_ID)
+            await repo.delete_session_intelligence(SESSION_B)
+            await db.commit()
+    finally:
+        await _release_database_caches_async()
 
 
 async def _ensure_session(db, session_id: UUID) -> None:  # type: ignore[no-untyped-def]
@@ -420,8 +484,7 @@ async def test_migration_0009_to_head_roundtrip(synthetic_postgresql: str) -> No
     _recreate_database(synthetic_postgresql, database)
     previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = side_url
-    get_settings.cache_clear()
-    get_engine.cache_clear()
+    _release_database_caches()
     try:
         config = Config(str(API_ROOT / "alembic.ini"))
         command.upgrade(config, "head")
@@ -461,13 +524,11 @@ async def test_migration_0009_to_head_roundtrip(synthetic_postgresql: str) -> No
             revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
         assert revision == "0011"
     finally:
-        await get_engine().dispose()
         if previous is None:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = previous
-        get_settings.cache_clear()
-        get_engine.cache_clear()
+        _release_database_caches()
         _recreate_database(synthetic_postgresql, database)
         admin = create_engine(synthetic_postgresql, isolation_level="AUTOCOMMIT")
         try:
@@ -986,11 +1047,10 @@ async def test_fresh_process_and_postgres_restart_resumes_without_repeating_extr
     client_request_id = uuid4()
     produced = _run_witness("produce-extract", client_request_id)
     assert produced["extract_complete"] is True
+    await _release_database_caches_async()
     _stop_pg()
     assert not _pg_is_running()
     _start_pg()
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
     consumed = _run_witness("consume", client_request_id)
     assert consumed["status"] == "succeeded"
     assert consumed["extract_provider_calls"] == 0
@@ -1008,10 +1068,9 @@ async def test_restart_after_acked_check_does_not_repeat_that_page(mi_db: None) 
     produced = _run_witness("produce-check", client_request_id)
     assert produced["acked"]
     assert produced["extract_complete"] is True
+    await _release_database_caches_async()
     _stop_pg()
     _start_pg()
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
     consumed = _run_witness("consume-check", client_request_id)
     assert consumed["extract_provider_calls"] == 0
     assert set(produced["acked"]).isdisjoint(consumed["check_invocations"])

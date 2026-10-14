@@ -34,7 +34,9 @@ recantor-meeting-engine-run = "recantor.meeting_essence.engine_cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 target-version = "py313"

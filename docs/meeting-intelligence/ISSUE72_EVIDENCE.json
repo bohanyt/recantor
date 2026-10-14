@@ -13,7 +13,7 @@
     "local_witness_url": "postgresql+psycopg://recantor_test@127.0.0.1:55472/recantor_test",
     "ownership": "Tests start and stop PostgreSQL only when RECANTOR_PG_OWNED=1, and only the cluster named by RECANTOR_PG_DATA. An external DATABASE_URL is used as-is. No username, home directory, or port is hardcoded in the test module.",
     "restart_proof": "persistence_restart_witness.py produce-extract in one process, pg_ctl stop, pg_ctl start, a new Python process consume with recover=true. A second witness stops after the first acked check page and proves that page is not invoked again.",
-    "ci": "Backend CI keeps the postgres:17-alpine service and does not manage it. Job meeting-ledger-restart in .github/workflows/ci.yml initializes a disposable PostgreSQL 17 cluster and runs the persistence module with RECANTOR_PG_OWNED=1. That job was not executed on this host.",
+    "ci": "Backend CI keeps the postgres:17-alpine service and does not manage it. Root uv run --project apps/api pytest reads pytest.ini (asyncio auto). Ledger tests migrate that DATABASE_URL with Alembic. clean_recording_state drops application tables and alembic_version together, then disposes the engine. Job meeting-ledger-restart starts PostgreSQL with a private socket directory, writes the server log outside the data directory, prints that log when start fails, and uploads it. The same socket directory and log are used when the owned fixture restarts the cluster. Hosted run 38590842208 was not re-executed here. Its restart log was not in the job output, so the start failure cause is not asserted.",
     "windows_async": "tests/conftest.py selects WindowsSelectorEventLoopPolicy so psycopg async tests are not started on the Proactor loop."
   },
   "fixture_identities": {
@@ -89,6 +89,18 @@
     "run_fingerprint": "source_content_hash + prompt_cache_key + schema + algorithm + limits_fingerprint + provider_adapter_id",
     "validated_extraction_key": "fragment and context identities, meeting metadata, omitted record ids, request budget, prompt cache key, schema, algorithm, limits fingerprint, model, effort, provider adapter. Publication boundary is not part of this key.",
     "completed_run": "served only from a current non-stale artifact whose stored checkpoint passes checkpoint_accepts_success (recognized binding version, complete stages, both directions, admitted method, acked receipts) and whose source hash still matches the session fence; provider_calls 0"
+  },
+  "linux_ci_repair": {
+    "worktree": "fix/issue-72-linux-ci",
+    "base": "548a1d7e5e506c1d03b1cf6c7844ec5b9adc2e1d",
+    "database": "recantor_issue72_ci on the owned cluster port 55472. Shared recantor_test stayed at Alembic 0013 and was not downgraded, reinitialized, or dropped.",
+    "root_pytest": "rootdir is the worktree, configfile pytest.ini, asyncio mode AUTO. uv run --project apps/api pytest -q --tb=line: 252 passed, 3 failed, 14 skipped in 143.28s. The 3 failures are test_transcript_realtime.py connecting to localhost:6379; Redis is not installed on this host. CI provides Redis. The 14 skips are the existing ffmpeg-gated media file and the two restart tests, which skip unless RECANTOR_PG_OWNED=1.",
+    "strict_persistence": "The same root command with -o asyncio_mode=strict on test_meeting_intelligence_persistence.py: 28 passed, 2 skipped in 37.45s. mi_db is a pytest_asyncio fixture, so strict mode still runs it.",
+    "api_cwd_pytest": "apps/api uv run pytest, rootdir apps/api, configfile pyproject.toml, asyncio mode AUTO: 246 passed, 3 failed, 14 skipped in 142.96s. The 3 failures are the same local Redis refusals. This collection omits scripts/test_release_manifest.py, which the root testpaths include.",
+    "alembic_after_suite": "After the root suite the disposable database had no application tables and no alembic_version. alembic upgrade head reached 0011. The Phase 2E constraint names and transcript_segments, mi_session_source_fences, mi_record_relations, and recording_sessions were present.",
+    "owned_restart": "RECANTOR_PG_OWNED=1 pytest test_meeting_intelligence_persistence.py: 30 passed in 45.93s, including both process and database restarts. pg_ctl start is not captured, so the detached server cannot hold the parent pipe. pg_ctl status afterward exited 3.",
+    "ruff": "ruff check apps/api and ruff format --check apps/api passed, 112 files.",
+    "not_executed": "Hosted GitHub Actions, Linux pg_ctl, ffmpeg media proofs, and a local Redis server."
   },
   "not_claimed": [
     "#73 scheduler and shared invocation permit",
