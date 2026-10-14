@@ -46,7 +46,8 @@ SEGMENT_SPECS: list[tuple[str, int, int, int, str]] = [
         3,
         96_000,
         102_000,
-        "Tes pembayaran belum lulus. Kita putuskan rilis Selasa; tetap hanya kalau tes pembayaran sudah lulus.",
+        "Tes pembayaran belum lulus. Kita putuskan rilis Selasa; "
+        "tetap hanya kalau tes pembayaran sudah lulus.",
     ),
     (
         "11111111-1111-4111-8111-111111111104",
@@ -60,7 +61,8 @@ SEGMENT_SPECS: list[tuple[str, int, int, int, str]] = [
         5,
         98_000,
         99_000,
-        "Dini menyetujui tugas mengabari pelanggan dan menyatakan akan melakukannya besok pukul 12.00.",
+        "Dini menyetujui tugas mengabari pelanggan dan menyatakan akan "
+        "melakukannya besok pukul 12.00.",
     ),
     (
         "11111111-1111-4111-8111-111111111106",
@@ -205,7 +207,8 @@ def build_s01_s06_bundle() -> MeetingIntelligenceExampleBundle:
             OverviewBullet(
                 text=(
                     "Dini menerima tugas mengabari pelanggan tentang perubahan jadwal; "
-                    "tenggat relatif 'besok pukul 12.00' disimpan mentah tanpa normalisasi kalender."
+                    "tenggat relatif 'besok pukul 12.00' disimpan mentah "
+                    "tanpa normalisasi kalender."
                 ),
                 evidence=[
                     _evidence("11111111-1111-4111-8111-111111111104", 97_000, 98_000),
@@ -225,7 +228,10 @@ def build_s01_s06_bundle() -> MeetingIntelligenceExampleBundle:
                 topic="Keputusan rilis",
                 points=[
                     TopicDetailPoint(
-                        text="Rencana awal rilis Jumat digantikan keputusan rilis Selasa dengan syarat tes pembayaran lulus.",
+                        text=(
+                            "Rencana awal rilis Jumat digantikan keputusan rilis Selasa "
+                            "dengan syarat tes pembayaran lulus."
+                        ),
                         evidence=[
                             _evidence("11111111-1111-4111-8111-111111111101", 12_000, 15_000),
                             _evidence("11111111-1111-4111-8111-111111111103", 96_000, 102_000),
@@ -237,7 +243,10 @@ def build_s01_s06_bundle() -> MeetingIntelligenceExampleBundle:
                 topic="Komunikasi pelanggan",
                 points=[
                     TopicDetailPoint(
-                        text="Dini menerima tugas mengabari pelanggan; pekerjaan diterima tetapi belum dilaporkan selesai.",
+                        text=(
+                            "Dini menerima tugas mengabari pelanggan; pekerjaan diterima "
+                            "tetapi belum dilaporkan selesai."
+                        ),
                         evidence=[
                             _evidence("11111111-1111-4111-8111-111111111104", 97_000, 98_000),
                             _evidence("11111111-1111-4111-8111-111111111105", 98_000, 99_000),
@@ -301,7 +310,10 @@ def build_s01_s06_bundle() -> MeetingIntelligenceExampleBundle:
 
 
 def build_informational_bundle() -> MeetingIntelligenceExampleBundle:
-    text_a = "Tim riset mempresentasikan temuan adopsi fitur onboarding naik 12% setelah tutorial interaktif."
+    text_a = (
+        "Tim riset mempresentasikan temuan adopsi fitur onboarding naik 12% "
+        "setelah tutorial interaktif."
+    )
     text_b = (
         "Diskusi menilai opsi A (hemat biaya) dan opsi B (lebih cepat); belum ada keputusan akhir."
     )
@@ -368,7 +380,10 @@ def build_informational_bundle() -> MeetingIntelligenceExampleBundle:
                 topic="Opsi lanjutan",
                 points=[
                     TopicDetailPoint(
-                        text="Opsi A menekankan efisiensi biaya; opsi B menekankan kecepatan implementasi.",
+                        text=(
+                            "Opsi A menekankan efisiensi biaya; "
+                            "opsi B menekankan kecepatan implementasi."
+                        ),
                         evidence=[
                             _evidence("22222222-2222-4222-8222-222222222202", 25_000, 45_000),
                         ],
@@ -389,7 +404,10 @@ def build_informational_bundle() -> MeetingIntelligenceExampleBundle:
             limitations=[
                 CoverageLimitation(
                     code="informational_no_actions",
-                    message="Tidak ada tindak lanjut atau keputusan yang diekstrak karena sumber hanya berisi temuan dan opsi.",
+                    message=(
+                        "Tidak ada tindak lanjut atau keputusan yang diekstrak "
+                        "karena sumber hanya berisi temuan dan opsi."
+                    ),
                 )
             ],
         ),

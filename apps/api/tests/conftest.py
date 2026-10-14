@@ -1,6 +1,11 @@
+import asyncio
 import shutil
+import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import pytest
 import pytest_asyncio

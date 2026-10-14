@@ -1,0 +1,101 @@
+{
+  "tracking_key": "RECANTOR-69-STORAGE-20261013",
+  "issue": 72,
+  "round": 4,
+  "branch": "feat/issue-72-meeting-ledger",
+  "parent": "ed226f33d987b89b0ba258d3cd05b64731dc735c",
+  "base_head": "1395a0ef0a8e7ad70d44898d92c3d8f8f43cea72",
+  "package": "recantor.meeting_essence.persistence",
+  "reserved_bridge_module": "recantor.meeting_intelligence is not created on this branch",
+  "migration_revision": "0011",
+  "migration_proof": "test_migration_0009_to_head_roundtrip creates database recantor_ledger_migration, upgrades to head (0011), downgrades to 0009 (no mi_* tables), and upgrades to 0011 again. It does not use the shared create_all fixture.",
+  "database": {
+    "local_witness_url": "postgresql+psycopg://recantor_test@127.0.0.1:55472/recantor_test",
+    "ownership": "Tests start and stop PostgreSQL only when RECANTOR_PG_OWNED=1, and only the cluster named by RECANTOR_PG_DATA. An external DATABASE_URL is used as-is. No username, home directory, or port is hardcoded in the test module.",
+    "restart_proof": "persistence_restart_witness.py produce-extract in one process, pg_ctl stop, pg_ctl start, a new Python process consume with recover=true. A second witness stops after the first acked check page and proves that page is not invoked again.",
+    "ci": "Backend CI keeps the postgres:17-alpine service and does not manage it. Job meeting-ledger-restart in .github/workflows/ci.yml initializes a disposable PostgreSQL 17 cluster and runs the persistence module with RECANTOR_PG_OWNED=1. That job was not executed on this host.",
+    "windows_async": "tests/conftest.py selects WindowsSelectorEventLoopPolicy so psycopg async tests are not started on the Proactor loop."
+  },
+  "fixture_identities": {
+    "session_a": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "session_b": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "snapshot_id": "snap_976b0c9fe5d11eff64abdacd",
+    "snapshot_content_hash": "3dc286bd86e78702f979e4174caf18a0e83ad44cdb1651a49538f7d54ade36cf",
+    "provider_adapter_id": "deterministic-v1",
+    "example": "tests/meeting_intelligence_fixtures.py s01_s06"
+  },
+  "restart_witness_2026_10_14_round3": {
+    "client_request_id": "29c06497-fb14-4c84-8b4a-da8a84213362",
+    "job_id": "86951243-1fbd-4ace-8654-8706ebfcb806",
+    "superseded_attempt_id": "d4b43c35-e674-4e20-a75d-3261d378dc87",
+    "superseded_attempt_generation": 1,
+    "recovered_attempt_id": "6a015901-a033-4ae2-a76a-757734dab36a",
+    "recovered_attempt_generation": 2,
+    "job_status": "succeeded",
+    "active_generation": 2,
+    "extract_complete_before_restart": true,
+    "reconcile_complete_before_restart": false,
+    "extract_provider_calls_after_restart": 0,
+    "provider_calls_after_restart": 16,
+    "cache_hits_after_restart": 0,
+    "served_from_completed_cache": false,
+    "prompt_cache_key": "609709e07b30de3101038b537584c2f9657046c455f9e612145aff276b914d51",
+    "note": "Recovery does not reuse the live attempt id. The prior attempt is superseded. The copied checkpoint already had extract_complete, so extract was not entered again and cache_hits stayed 0. Remaining stages ran."
+  },
+  "durable_rules_witnessed": [
+    "Replaying a known older snapshot after a later publication does not change current_source_hash and does not publish current_artifact_id.",
+    "Two transactions can interleave on the session fence; the older snapshot does not win after the newer one commits.",
+    "A second begin_attempt while one is running raises AttemptBusyError with the live attempt id and does not return that attempt as a new executable identity.",
+    "recover=true allocates the next generation, copies the checkpoint, and a write with the old generation raises StaleGenerationError.",
+    "cancel_attempt sets the job status to cancelled in the same transaction. list_unresolved_work omits it. begin_attempt without retry is rejected. retry=true starts a new generation.",
+    "A checkpoint transaction that holds the attempt lock cannot be overtaken by cancel until it commits; after cancel, finalize of that attempt is rejected.",
+    "save_checkpoint rejects an unbound checkpoint, a different model, a different limits fingerprint, and a checkpoint that drops an acked check fingerprint.",
+    "Meeting metadata 2026-10-14 Asia/Bangkok and 2026-10-21 Asia/Bangkok produce deadline_normalized 2026-10-15T12:00+07:00 and 2026-10-22T12:00+07:00. The second run's extract_provider_calls is greater than 0 and cache_hits is 0. The same unchanged metadata still reuses extraction on a later segment.",
+    "A check page acked before pg_ctl stop is not present in the post-restart check invocations. extract_provider_calls stays 0 and the recovered generation is at least 2.",
+    "A relation whose evidence segment belongs to the other session is rejected. A ledger record that was not persisted is rejected.",
+    "The same content hash with a different captured_at is accepted. The same hash with different meeting metadata is rejected. A second client request id for the same fingerprint is reserved; reusing it with a different fingerprint conflicts.",
+    "Lock order for acquire, checkpoint, cancel, and finalize is session fence, then job, then attempt. Provider calls run after commit.",
+    "A later checkpoint on the same attempt cannot lower source_check_cursor, an inner cursor while its outer cursor is unchanged, output_check_cursor, output_support_cursor, relation_context_cursor, or drop an accepted atomic record. Advancing the outer cursor may reset that stage's inner cursor. After commit and a new session, the advanced cursors and the original record remain.",
+    "SUCCEEDED and publish_current require a recognized complete checkpoint: all four stages, both directions completed, an admitted check method, acked receipts, and layered claims that match the checkpoint ledger and relations and resolve to canonical segments in the frozen manifest. Foreign snapshot ids, cross-session evidence, an empty ledger, an incomplete checkpoint, a failed backward check, and structural-only completion are refused. An altered overview after a checked checkpoint is refused and the prior current artifact stays current.",
+    "A duplicate finalize of the same accepted result returns the existing artifact id.",
+    "upsert_snapshot rejects a self-hashed manifest whose segment id, session, text, or timing does not match canonical transcript_segments. A frozen prefix and a later published segment remain allowed. Canonical rows are not updated.",
+    "Equal-boundary metadata promotion requires expected_source_epoch equal to the locked fence epoch. A stale epoch captured before a newer metadata commit cannot replace that current snapshot. A higher publication boundary still promotes without that epoch. Spoken time is not an ordering key.",
+    "list_unresolved_work returns a stable page of at most 64 jobs ordered by created_at and id, default 32, and still omits cancelled jobs.",
+    "Checkpoint binding rejects an unknown binding version and an input fingerprint that does not match the stored manifest. Completed-cache reuse uses the same success rule.",
+    "merge_atomic_records keys codepoint spans as tuples, so a repeated atomic record with CP evidence merges instead of raising TypeError."
+  ],
+  "commands": [
+    "apps/api: .venv\\Scripts\\ruff.exe check .",
+    "apps/api: .venv\\Scripts\\ruff.exe format --check .",
+    "apps/api: .venv\\Scripts\\python.exe -m pytest tests/test_meeting_intelligence_persistence.py -q --tb=short",
+    "apps/api: .venv\\Scripts\\python.exe -m pytest tests/test_meeting_essence_engine.py tests/test_meeting_essence_contracts.py tests/test_meeting_essence_engine_behavior.py -q --tb=line",
+    "apps/api: pytest tests/test_migration_0007_backfill.py tests/test_migration_0009.py",
+    "apps/api: pytest tests/test_recording.py on throwaway database recantor_recording_probe, then dropped"
+  ],
+  "tests_passed_local": {
+    "test_meeting_intelligence_persistence.py": "30 passed in 46.99s",
+    "test_meeting_essence_engine_contracts_behavior": "73 passed in 18.08s",
+    "test_migration_0007_backfill.py": "2 passed in 2.35s together with test_migration_0009.py",
+    "test_migration_0009.py": "2 passed in 2.35s together with test_migration_0007_backfill.py",
+    "test_recording.py": "9 passed in 6.25s on recantor_recording_probe, then the database was dropped",
+    "alembic_current": "0011, equal to head, on the synthetic cluster before it was stopped",
+    "ruff_check": "pass, 112 files",
+    "ruff_format_check": "pass, 112 files already formatted",
+    "pg_ctl_status_after_stop": "exit 3, no server running"
+  },
+  "cache_rules": {
+    "source_fingerprint": "snapshot_content_hash; captured_at is excluded; segment text, times, coverage, publication boundary, and meeting metadata are included",
+    "source_authority": "monotonic in publication boundary. At an equal boundary a newly stored metadata identity may become current only when expected_source_epoch matches the locked fence epoch. A previously stored snapshot, a stale epoch, and a historical retry do not promote. Spoken time is not an ordering key.",
+    "run_fingerprint": "source_content_hash + prompt_cache_key + schema + algorithm + limits_fingerprint + provider_adapter_id",
+    "validated_extraction_key": "fragment and context identities, meeting metadata, omitted record ids, request budget, prompt cache key, schema, algorithm, limits fingerprint, model, effort, provider adapter. Publication boundary is not part of this key.",
+    "completed_run": "served only from a current non-stale artifact whose stored checkpoint passes checkpoint_accepts_success (recognized binding version, complete stages, both directions, admitted method, acked receipts) and whose source hash still matches the session fence; provider_calls 0"
+  },
+  "not_claimed": [
+    "#73 scheduler and shared invocation permit",
+    "#74 HTTP routes",
+    "#76 live semantic quality",
+    "#69 overall acceptance",
+    "#67 containment",
+    "GitHub Actions execution of meeting-ledger-restart or the rest of hosted CI"
+  ]
+}

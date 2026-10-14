@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 from uuid import UUID, uuid4
@@ -118,6 +119,10 @@ class EngineRunConfig:
     max_attempts_per_stage: int = 3
     requested_model: str | None = None
     requested_reasoning_effort: str | None = None
+    on_checkpoint_committed: Callable[[EngineCheckpoint], Awaitable[None]] | None = None
+    on_validated_stage: Callable[[StageOperation, BaseModel, BaseModel], Awaitable[None]] | None = (
+        None
+    )
 
 
 @dataclass
@@ -152,6 +157,19 @@ class MeetingEssenceEngine:
         self._bundle = prompt_bundle or load_prompt_bundle()
         self._config = config or EngineRunConfig()
         self._check_manifest: SourceSnapshotManifest | None = None
+
+    async def _commit_checkpoint(self, checkpoint: EngineCheckpoint) -> None:
+        checkpoint.touch()
+        callback = self._config.on_checkpoint_committed
+        if callback is not None:
+            await callback(checkpoint)
+
+    async def _note_validated_stage(
+        self, operation: StageOperation, request: BaseModel, response: BaseModel
+    ) -> None:
+        callback = self._config.on_validated_stage
+        if callback is not None:
+            await callback(operation, request, response)
 
     async def run_from_reader(
         self,
@@ -198,7 +216,7 @@ class MeetingEssenceEngine:
                 CoverageLimitation(code="source_coverage_gap", message=coverage_report.message)
             )
             checkpoint.processing_status = ProcessingJobStatus.PARTIAL
-            checkpoint.touch()
+            await self._commit_checkpoint(checkpoint)
             return EngineRunResult(
                 manifest=manifest,
                 layered_result=checkpoint.layered_partial,
@@ -245,7 +263,7 @@ class MeetingEssenceEngine:
                     manifest, plan, job, checkpoint, trace, started_monotonic, limitations
                 )
             if self._deadline_passed(started_monotonic):
-                return self._partial_result(manifest, checkpoint, trace, limitations)
+                return await self._partial_result(manifest, checkpoint, trace, limitations)
             if not checkpoint.extract_complete:
                 limitations.append(
                     CoverageLimitation(
@@ -253,7 +271,7 @@ class MeetingEssenceEngine:
                     )
                 )
                 checkpoint.processing_status = ProcessingJobStatus.PARTIAL
-                checkpoint.touch()
+                await self._commit_checkpoint(checkpoint)
                 return self._result(
                     manifest, checkpoint, trace, limitations, checkpoint.layered_partial
                 )
@@ -263,7 +281,7 @@ class MeetingEssenceEngine:
                     plan, job, checkpoint, trace, started_monotonic, limitations
                 )
             if self._deadline_passed(started_monotonic):
-                return self._partial_result(manifest, checkpoint, trace, limitations)
+                return await self._partial_result(manifest, checkpoint, trace, limitations)
             if not checkpoint.reconcile_complete:
                 limitations.append(
                     CoverageLimitation(
@@ -284,7 +302,7 @@ class MeetingEssenceEngine:
                 checkpoint.render_complete = True
                 layered = None
             if self._deadline_passed(started_monotonic):
-                return self._partial_result(manifest, checkpoint, trace, limitations)
+                return await self._partial_result(manifest, checkpoint, trace, limitations)
             if checkpoint.atomic_records and not checkpoint.render_complete:
                 limitations.append(
                     CoverageLimitation(
@@ -307,7 +325,7 @@ class MeetingEssenceEngine:
                     layered=layered,
                 )
             if self._deadline_passed(started_monotonic):
-                return self._partial_result(manifest, checkpoint, trace, limitations)
+                return await self._partial_result(manifest, checkpoint, trace, limitations)
             if not checkpoint.check_complete:
                 limitations.append(
                     CoverageLimitation(
@@ -326,14 +344,16 @@ class MeetingEssenceEngine:
                 else ProcessingJobStatus.FAILED
             )
             checkpoint.processing_status = status
-            checkpoint.touch()
+            await self._commit_checkpoint(checkpoint)
             return self._result(
                 manifest, checkpoint, trace, limitations, checkpoint.layered_partial
             )
 
-        return self._finalize(
+        result = self._finalize(
             manifest, checkpoint, trace, limitations, layered, plan, started_monotonic
         )
+        await self._commit_checkpoint(checkpoint)
+        return result
 
     def _already_complete(self, checkpoint: EngineCheckpoint) -> bool:
         return bool(
@@ -405,7 +425,7 @@ class MeetingEssenceEngine:
             ],
         }
 
-    def _partial_result(
+    async def _partial_result(
         self,
         manifest: SourceSnapshotManifest,
         checkpoint: EngineCheckpoint,
@@ -416,7 +436,7 @@ class MeetingEssenceEngine:
         limitations.append(
             CoverageLimitation(code="wall_clock_exhausted", message="engine wall clock budget hit")
         )
-        checkpoint.touch()
+        await self._commit_checkpoint(checkpoint)
         return self._result(manifest, checkpoint, trace, limitations, checkpoint.layered_partial)
 
     def _result(
@@ -617,6 +637,8 @@ class MeetingEssenceEngine:
                     )
                     for record in fresh:
                         known[record.record_id] = record
+                await self._note_validated_stage(StageOperation.EXTRACT, request, response)
+                await self._commit_checkpoint(checkpoint)
                 if len(response.extracted_records) < slots or not fresh:
                     break
                 continuations += 1
@@ -639,13 +661,14 @@ class MeetingEssenceEngine:
             page_start += len(page_fragments)
             checkpoint.extract_fragment_cursor = page_start
             checkpoint.processed_fragment_count = page_start
-            checkpoint.touch()
+            await self._commit_checkpoint(checkpoint)
         if not checkpoint.unprocessed_segment_ids and page_start >= len(fragments):
             checkpoint.extract_complete = True
         elif page_start >= len(fragments):
             checkpoint.extract_complete = True
             checkpoint.processing_status = ProcessingJobStatus.PARTIAL
         checkpoint.stage = StageOperation.RECONCILE
+        await self._commit_checkpoint(checkpoint)
 
     def _fit_extract_page(
         self,
@@ -728,6 +751,7 @@ class MeetingEssenceEngine:
         if not records:
             checkpoint.reconcile_complete = True
             checkpoint.stage = StageOperation.CHECK
+            await self._commit_checkpoint(checkpoint)
             return
         limits = self._config.limits
         page_size = limits.max_records_per_reconcile_page
@@ -757,9 +781,10 @@ class MeetingEssenceEngine:
                     window=window,
                 )
             checkpoint.reconcile_page_index = page_index + 1
-            checkpoint.touch()
+            await self._commit_checkpoint(checkpoint)
         checkpoint.reconcile_complete = True
         checkpoint.stage = StageOperation.CHECK
+        await self._commit_checkpoint(checkpoint)
 
     def _windows(
         self,
@@ -881,6 +906,8 @@ class MeetingEssenceEngine:
                     continue
                 seen.add(key)
                 checkpoint.relations.append(relation)
+            await self._note_validated_stage(StageOperation.RECONCILE, request, response)
+            await self._commit_checkpoint(checkpoint)
             sent = len(request.prior_relations)
             if pending and sent == 0:
                 limitations.append(
@@ -973,6 +1000,7 @@ class MeetingEssenceEngine:
             and checkpoint.processing_status != ProcessingJobStatus.PARTIAL
         ):
             checkpoint.check_complete = True
+            await self._commit_checkpoint(checkpoint)
 
     def _refresh_check_aggregate(
         self,
@@ -1560,7 +1588,11 @@ class MeetingEssenceEngine:
             StageOperation.CHECK, request, job, checkpoint, trace, audit, started_monotonic
         )
         assert isinstance(response, CheckStageResponse)
-        return self._absorb_check(checkpoint, request, response)
+        accepted = self._absorb_check(checkpoint, request, response)
+        if accepted:
+            await self._note_validated_stage(StageOperation.CHECK, request, response)
+            await self._commit_checkpoint(checkpoint)
+        return accepted
 
     def _note_check_page(
         self,
@@ -1942,6 +1974,7 @@ class MeetingEssenceEngine:
                     update={"atomic_records": echoed_records, "relations": echoed_rels}
                 )
                 pages.append(page_result)
+                await self._note_validated_stage(StageOperation.RENDER, request, response)
                 sent_rel_count = len(request.relations)
                 if remaining_rels and sent_rel_count == 0:
                     limitations.append(
@@ -1966,7 +1999,7 @@ class MeetingEssenceEngine:
                 backward_check=CheckStatus.NOT_STARTED,
                 semantic_check_method=None,
             )
-            checkpoint.touch()
+            await self._commit_checkpoint(checkpoint)
         if not pages:
             return None
         merged = merge_rendered_pages(
@@ -1980,6 +2013,7 @@ class MeetingEssenceEngine:
         )
         checkpoint.layered_partial = merged
         checkpoint.render_complete = cursor >= len(records)
+        await self._commit_checkpoint(checkpoint)
         return merged
 
     def _finalize(

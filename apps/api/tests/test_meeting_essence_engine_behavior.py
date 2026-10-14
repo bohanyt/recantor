@@ -674,6 +674,32 @@ async def test_dropped_fact_and_changed_status_fail_annotation_check() -> None:
                 )
             return response
 
+    class _NoCache:
+        async def get_validated_extraction(self, **kwargs: object) -> None:
+            del kwargs
+            return None
+
+    from recantor.meeting_essence.persistence.caching_provider import (
+        CachedMeetingEssenceProvider,
+    )
+
+    wrapped = CachedMeetingEssenceProvider(
+        inner=DeterministicMeetingEssenceProvider(
+            gold=bundle, drop_record_ids={bundle.records[-1].record_id}
+        ),
+        repository=_NoCache(),  # type: ignore[arg-type]
+        session_id=str(FIXTURE_SESSION_ID),
+        run_fingerprint="0" * 64,
+        source_content_hash="0" * 64,
+        provider_adapter_id="deterministic-v1",
+        prompt_cache_key="prompt",
+        limits_fingerprint="limits",
+    )
+    wrapped_result = await _run(wrapped, _reader_from_specs(SEGMENT_SPECS), boundary=6)
+    assert wrapped_result.processing_status == ProcessingJobStatus.PARTIAL
+    assert wrapped_result.checkpoint.backward_semantic_check_status == CheckStatus.FAILED
+    assert wrapped.evaluation_records is not None
+
     mutated = await _run(Mutate(gold=bundle), _reader_from_specs(SEGMENT_SPECS), boundary=6)
     assert mutated.processing_status == ProcessingJobStatus.PARTIAL
     assert mutated.checkpoint.forward_semantic_check_status == CheckStatus.FAILED

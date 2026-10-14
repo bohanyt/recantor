@@ -115,6 +115,45 @@ jobs:
           cat /tmp/recantor-unready.json
           test "$code" = "503"
 
+  meeting-ledger-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install API dependencies
+        run: uv sync --project apps/api --frozen --dev
+      - name: Install PostgreSQL 17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-17
+      - name: Start a disposable cluster
+        run: |
+          set -euo pipefail
+          BIN=/usr/lib/postgresql/17/bin
+          DATA="${{ runner.temp }}/mi-pg"
+          "$BIN/initdb" -D "$DATA" --username=recantor_test --auth=trust --encoding=UTF8 --locale=C
+          "$BIN/pg_ctl" -D "$DATA" -l "$DATA/server.log" -o "-h 127.0.0.1 -p 55473 -c shared_buffers=32MB -c max_connections=16 -c max_worker_processes=2" start
+          "$BIN/createdb" -h 127.0.0.1 -p 55473 -U recantor_test recantor_test
+      - name: Ledger durability tests including process and database restart
+        env:
+          DATABASE_URL: postgresql+psycopg://recantor_test@127.0.0.1:55473/recantor_test
+          RECANTOR_PG_DATA: ${{ runner.temp }}/mi-pg
+          RECANTOR_PG_BIN: /usr/lib/postgresql/17/bin
+          RECANTOR_PG_PORT: "55473"
+          RECANTOR_PG_OWNED: "1"
+        run: uv run --project apps/api pytest apps/api/tests/test_meeting_intelligence_persistence.py
+      - name: Stop the disposable cluster
+        if: always()
+        run: /usr/lib/postgresql/17/bin/pg_ctl -D "${{ runner.temp }}/mi-pg" stop -m fast || true
+
   frontend:
     runs-on: ubuntu-latest
     steps:
