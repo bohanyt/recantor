@@ -30,6 +30,7 @@ packages = ["src/recantor"]
 
 [project.scripts]
 recantor-meeting-validate = "recantor.meeting_essence.validate_cli:main"
+recantor-meeting-engine-run = "recantor.meeting_essence.engine_cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

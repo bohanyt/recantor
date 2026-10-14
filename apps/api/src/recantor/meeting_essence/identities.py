@@ -20,12 +20,12 @@ class PackageIdentities:
 
 PACKAGE_IDENTITIES = PackageIdentities(
     package_id="recantor-meeting-essence-v1",
-    schema_identity="meeting-essence.contracts/2026-10-13.3",
+    schema_identity="meeting-essence.contracts/2026-10-14.1",
     algorithm_identity="meeting-essence.pipeline/serial-v1",
     prompts=(
         PromptIdentity("extract", "1.0.0", "prompts/extract_v1.txt"),
         PromptIdentity("reconcile", "1.0.0", "prompts/reconcile_v1.txt"),
-        PromptIdentity("check", "1.0.0", "prompts/check_v1.txt"),
+        PromptIdentity("check", "1.3.0", "prompts/check_v1.txt"),
         PromptIdentity("render", "1.0.0", "prompts/render_v1.txt"),
     ),
 )

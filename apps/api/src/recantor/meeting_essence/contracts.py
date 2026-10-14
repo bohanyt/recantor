@@ -328,8 +328,22 @@ class RecordRelation(StrictModel):
 
 
 class TopicDetailPoint(StrictModel):
+    """Accessible topic detail. Optional fields default so existing fixtures still load."""
+
     text: str = Field(min_length=1)
     evidence: list[EvidenceReference] = Field(min_length=1)
+    kind: RecordKind | None = None
+    content_status: RecordContentStatus | None = None
+    condition_text: str | None = None
+    rationale: str | None = None
+    uncertainty: str | None = None
+    assignee: str | None = None
+    assignee_explicitly_undetermined: bool = False
+    deadline_raw: str | None = None
+    deadline_normalized: datetime | None = None
+    deadline_unmentioned: bool = False
+    deadline_normalization_basis: DeadlineNormalizationBasis = DeadlineNormalizationBasis.NONE
+    superseded: bool = False
 
 
 class TopicDetail(StrictModel):
