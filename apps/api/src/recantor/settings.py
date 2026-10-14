@@ -65,9 +65,30 @@ class Settings(BaseSettings):
     media_subprocess_output_limit_bytes: int = Field(
         default=256 * 1024, ge=4096, le=4 * 1024 * 1024
     )
+    meeting_essence_queue_name: str = "summary-low"
+    meeting_essence_queue_max_depth: int = Field(default=64, ge=1, le=256)
+    meeting_essence_wake_batch_size: int = Field(default=4, ge=1, le=32)
+    meeting_essence_debounce_seconds: float = Field(default=30.0, ge=0.0, le=300.0)
+    meeting_essence_dispatch_lease_seconds: float = Field(default=120.0, ge=5.0, le=3600.0)
+    meeting_essence_host_permit_lease_seconds: float = Field(default=180.0, ge=5.0, le=3600.0)
+    meeting_essence_engine_quantum_seconds: float = Field(default=120.0, ge=0.05, le=3600.0)
+    meeting_essence_fairness_yield_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    meeting_essence_max_attempts: int = Field(default=5, ge=1, le=20)
+    meeting_essence_retry_base_seconds: float = Field(default=2.0, ge=0.1, le=300.0)
+    meeting_essence_retry_max_seconds: float = Field(default=60.0, ge=0.1, le=3600.0)
+    meeting_essence_configuration_retry_seconds: float = Field(default=300.0, ge=1.0, le=86400.0)
+    meeting_essence_requested_model: str = ""
+    meeting_essence_requested_reasoning_effort: str = ""
+    meeting_essence_reconcile_interval_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    meeting_essence_broker_socket_timeout_seconds: float = Field(default=0.2, ge=0.05, le=5.0)
     log_level: str = "INFO"
 
-    @field_validator("stt_queue_name", "stt_upload_queue_name", "media_queue_name")
+    @field_validator(
+        "stt_queue_name",
+        "stt_upload_queue_name",
+        "media_queue_name",
+        "meeting_essence_queue_name",
+    )
     @classmethod
     def validate_queue_name(cls, value: str) -> str:
         normalized = value.strip()
@@ -100,6 +121,8 @@ class Settings(BaseSettings):
     def validate_retry_windows(self) -> "Settings":
         if self.stt_retry_max_seconds < self.stt_retry_base_seconds:
             raise ValueError("STT retry maximum delay must be >= retry base delay")
+        if self.meeting_essence_retry_max_seconds < self.meeting_essence_retry_base_seconds:
+            raise ValueError("meeting essence retry maximum delay must be >= retry base delay")
         return self
 
     @property

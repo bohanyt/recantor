@@ -4,9 +4,6 @@ import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, text
@@ -15,6 +12,11 @@ from recantor.db import Base, get_engine, get_sessionmaker
 from recantor.models import RecordingChunk, RecordingGap, RecordingSession
 from recantor.recording import get_audio_storage
 from recantor.settings import get_settings
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+pytest_plugins = ["meeting_intelligence_db"]
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -49,11 +51,15 @@ async def clean_recording_state(tmp_path: Path) -> AsyncIterator[None]:
     get_audio_storage.cache_clear()
     settings.audio_storage_path = previous_storage_path
 
-    async with get_engine().begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        # Application tables and the Alembic stamp have to disappear together.
-        # A later upgrade must not observe head after drop_all has removed the schema.
-        await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    from meeting_intelligence_db import cluster_owned
+
+    # The owned disposable cluster keeps the Alembic-migrated schema for the
+    # whole session. A hosted service database drops tables and the stamp
+    # together so the next module migrates instead of trusting a stale head.
+    if not cluster_owned():
+        async with get_engine().begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
+            await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
     await get_engine().dispose()
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()

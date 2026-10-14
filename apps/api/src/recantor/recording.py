@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import logging
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from uuid import UUID, uuid4
@@ -587,4 +588,23 @@ async def finalize_session(
             )
         ).all()
     )
+    if session.state == SessionState.COMPLETE.value:
+        _schedule_summary_finalize_notice(
+            session_id=session_id, audio_final_sequence=final_sequence
+        )
     return session, missing_after, gaps
+
+
+def _schedule_summary_finalize_notice(*, session_id: UUID, audio_final_sequence: int) -> None:
+    """Freeze the audio boundary already stored on the session. Do not query transcripts."""
+    try:
+        from recantor.meeting_essence.scheduling.triggers import schedule_finalized_notice
+
+        schedule_finalized_notice(
+            session_id=session_id, audio_final_sequence=int(audio_final_sequence)
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "unexpected summary finalize scheduling failure for session %s",
+            session_id,
+        )

@@ -149,7 +149,24 @@ async def commit_transcript_segment(
     # Queue only after the transaction commits. Redis delivery is an ephemeral wake-up hint,
     # and the bounded notifier never delays canonical/STT completion.
     _notify_realtime_best_effort(segment)
+    _schedule_summary_notice(segment)
     return segment, False
+
+
+def _schedule_summary_notice(segment: TranscriptSegment) -> None:
+    """Do not await summary I/O. The canonical scan recovers a dropped notice."""
+    try:
+        from recantor.meeting_essence.scheduling.triggers import schedule_publication_notice
+
+        schedule_publication_notice(
+            session_id=segment.session_id, publication_sequence=segment.sequence
+        )
+    except Exception:
+        logger.exception(
+            "unexpected summary scheduling hint failure for session %s sequence %s",
+            segment.session_id,
+            segment.sequence,
+        )
 
 
 async def read_transcript_segments(

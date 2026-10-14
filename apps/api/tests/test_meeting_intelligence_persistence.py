@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shutil
 import subprocess
 import sys
 from datetime import UTC, date, datetime, time, timedelta
@@ -15,8 +14,34 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import pytest
-import pytest_asyncio
 from alembic.config import Config
+from meeting_intelligence_db import (
+    SESSION_B,
+)
+from meeting_intelligence_db import (
+    database_url as _database_url,
+)
+from meeting_intelligence_db import (
+    ensure_segments as _ensure_segments,
+)
+from meeting_intelligence_db import (
+    pg_is_running as _pg_is_running,
+)
+from meeting_intelligence_db import (
+    require_owned_cluster as _require_owned_cluster,
+)
+from meeting_intelligence_db import (
+    shift_uuid as _shift_uuid,
+)
+from meeting_intelligence_db import (
+    shifted_specs as _shifted_specs,
+)
+from meeting_intelligence_db import (
+    start_pg as _start_pg,
+)
+from meeting_intelligence_db import (
+    stop_pg as _stop_pg,
+)
 from meeting_intelligence_fixtures import (
     FIXTURE_SESSION_ID,
     SEGMENT_SPECS,
@@ -80,134 +105,11 @@ from recantor.meeting_essence.source_reader import (
     CanonicalSegmentInput,
     InMemoryCanonicalSourceReader,
 )
-from recantor.models import RecordingSession, SessionKind, SessionState, TranscriptSegment
+from recantor.models import TranscriptSegment
 from recantor.settings import get_settings
 
 API_ROOT = Path(__file__).resolve().parents[1]
 WITNESS = Path(__file__).resolve().parent / "persistence_restart_witness.py"
-SESSION_B = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
-
-
-def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        pytest.fail("DATABASE_URL is required; this file has no hardcoded database default")
-    return url
-
-
-def _cluster_owned() -> bool:
-    return os.environ.get("RECANTOR_PG_OWNED") == "1"
-
-
-def _pg_data() -> Path:
-    override = os.environ.get("RECANTOR_PG_DATA")
-    if not override:
-        pytest.fail("RECANTOR_PG_DATA is required when RECANTOR_PG_OWNED=1")
-    return Path(override)
-
-
-def _pg_port() -> str:
-    port = os.environ.get("RECANTOR_PG_PORT")
-    if not port:
-        pytest.fail("RECANTOR_PG_PORT is required when RECANTOR_PG_OWNED=1")
-    return port
-
-
-def _pg_executable(name: str) -> Path:
-    suffix = ".exe" if os.name == "nt" else ""
-    root = os.environ.get("RECANTOR_PG_BIN")
-    if root:
-        candidate = Path(root) / f"{name}{suffix}"
-        if candidate.is_file():
-            return candidate
-    found = shutil.which(f"{name}{suffix}") or shutil.which(name)
-    if found is None:
-        pytest.fail(f"cannot find {name}; set RECANTOR_PG_BIN")
-    return Path(found)
-
-
-def _pg_log_path() -> Path:
-    override = os.environ.get("RECANTOR_PG_LOG")
-    if override:
-        return Path(override)
-    return _pg_data().parent / "postgresql-owned.log"
-
-
-def _pg_socket_dir() -> Path | None:
-    if os.name == "nt":
-        return None
-    override = os.environ.get("RECANTOR_PG_SOCKET_DIR")
-    path = Path(override) if override else _pg_data().parent / "pg-socket"
-    if " " in str(path):
-        pytest.fail(f"PostgreSQL socket directory must not contain spaces: {path}")
-    path.mkdir(parents=True, exist_ok=True)
-    path.chmod(0o700)
-    return path
-
-
-def _postgres_start_options() -> str:
-    options = (
-        f"-h 127.0.0.1 -p {_pg_port()} -c shared_buffers=32MB "
-        "-c max_connections=16 -c max_worker_processes=2"
-    )
-    socket_dir = _pg_socket_dir()
-    if socket_dir is not None:
-        options = f"{options} -k {socket_dir}"
-    return options
-
-
-def _read_server_log(path: Path) -> str:
-    if not path.is_file():
-        return f"server log was not created at {path}"
-    data = path.read_bytes()
-    if not data:
-        return f"server log at {path} is empty"
-    text_value = data.decode("utf-8", errors="replace")
-    if len(text_value) > 16000:
-        return text_value[-16000:]
-    return text_value
-
-
-def _pg_ctl(*args: str) -> subprocess.CompletedProcess[str]:
-    # Do not capture stdout/stderr. pg_ctl start detaches postgres, and an inherited
-    # pipe keeps the parent waiting after pg_ctl itself has exited.
-    return subprocess.run(
-        [str(_pg_executable("pg_ctl")), "-D", str(_pg_data()), *args],
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        timeout=90,
-    )
-
-
-def _pg_is_running() -> bool:
-    return _pg_ctl("status").returncode == 0
-
-
-def _start_pg() -> None:
-    if not _cluster_owned():
-        return
-    if _pg_is_running():
-        return
-    log_path = _pg_log_path()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    result = _pg_ctl(
-        "-l",
-        str(log_path),
-        "-o",
-        _postgres_start_options(),
-        "-w",
-        "-t",
-        "60",
-        "start",
-    )
-    if result.returncode != 0 or not _pg_is_running():
-        pytest.fail(
-            "failed to start the disposable PostgreSQL cluster this fixture owns\n"
-            f"pg_ctl exit {result.returncode}\n"
-            f"server log:\n{_read_server_log(log_path)}"
-        )
 
 
 def _release_database_caches() -> None:
@@ -224,106 +126,6 @@ async def _release_database_caches_async() -> None:
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()
     get_settings.cache_clear()
-
-
-def _stop_pg() -> None:
-    if not _cluster_owned():
-        return
-    if _pg_is_running():
-        _pg_ctl("stop", "-m", "fast")
-
-
-def _require_owned_cluster() -> None:
-    if not _cluster_owned():
-        pytest.skip(
-            "process and PostgreSQL restart proof runs on the disposable cluster "
-            "identified by RECANTOR_PG_OWNED=1"
-        )
-
-
-def _alembic_config() -> Config:
-    os.environ["DATABASE_URL"] = _database_url()
-    get_settings.cache_clear()
-    return Config(str(API_ROOT / "alembic.ini"))
-
-
-@pytest.fixture(scope="module")
-def synthetic_postgresql():
-    """Use DATABASE_URL as-is. Start and stop PostgreSQL only when this process owns it."""
-    url = _database_url()
-    owned = _cluster_owned()
-    if owned:
-        _start_pg()
-    try:
-        yield url
-    finally:
-        _release_database_caches()
-        if owned:
-            _stop_pg()
-            assert not _pg_is_running()
-
-
-@pytest.fixture(scope="module")
-def mi_db_migrated(synthetic_postgresql: str):
-    os.environ["DATABASE_URL"] = synthetic_postgresql
-    _release_database_caches()
-    command.upgrade(_alembic_config(), "head")
-    yield
-    _release_database_caches()
-
-
-@pytest_asyncio.fixture
-async def mi_db(mi_db_migrated: None, synthetic_postgresql: str, monkeypatch: pytest.MonkeyPatch):
-    del mi_db_migrated
-    monkeypatch.setenv("DATABASE_URL", synthetic_postgresql)
-    await _release_database_caches_async()
-    try:
-        async with get_sessionmaker()() as db:
-            await _ensure_session(db, FIXTURE_SESSION_ID)
-            await _ensure_session(db, SESSION_B)
-            await _ensure_segments(db, FIXTURE_SESSION_ID, SEGMENT_SPECS)
-            await _ensure_segments(db, SESSION_B, _shifted_specs())
-            await db.commit()
-        yield
-        async with get_sessionmaker()() as db:
-            repo = MeetingIntelligenceRepository(db)
-            await repo.delete_session_intelligence(FIXTURE_SESSION_ID)
-            await repo.delete_session_intelligence(SESSION_B)
-            await db.commit()
-    finally:
-        await _release_database_caches_async()
-
-
-async def _ensure_session(db, session_id: UUID) -> None:  # type: ignore[no-untyped-def]
-    if await db.get(RecordingSession, session_id) is None:
-        db.add(
-            RecordingSession(
-                id=session_id,
-                client_request_id=uuid4(),
-                kind=SessionKind.LIVE.value,
-                state=SessionState.COMPLETE.value,
-            )
-        )
-
-
-async def _ensure_segments(
-    db,  # type: ignore[no-untyped-def]
-    session_id: UUID,
-    specs: list[tuple[str, int, int, int, str]],
-) -> None:
-    for segment_id, sequence, start_ms, end_ms, segment_text in specs:
-        if await db.get(TranscriptSegment, UUID(segment_id)) is None:
-            db.add(
-                TranscriptSegment(
-                    id=UUID(segment_id),
-                    session_id=session_id,
-                    sequence=sequence,
-                    producer_key=f"synthetic-{segment_id}",
-                    start_ms=start_ms,
-                    end_ms=end_ms,
-                    text=segment_text,
-                )
-            )
 
 
 def _reader_from_specs(
@@ -345,17 +147,6 @@ def _reader_from_specs(
 
 def _coverage() -> SourceCoverageFlags:
     return SourceCoverageFlags(transcript_publication_complete=True)
-
-
-def _shift_uuid(value: str) -> str:
-    return value.replace("11111111", "12121212")
-
-
-def _shifted_specs() -> list[tuple[str, int, int, int, str]]:
-    return [
-        (_shift_uuid(segment_id), sequence, start_ms, end_ms, text)
-        for segment_id, sequence, start_ms, end_ms, text in SEGMENT_SPECS
-    ]
 
 
 def _bundle_for_session_b():
@@ -499,8 +290,19 @@ async def test_migration_0009_to_head_roundtrip(synthetic_postgresql: str) -> No
                     )
                 )
             }
-        assert revision == "0011"
+            frozen = await connection.scalar(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'mi_summary_session_states' "
+                    "AND column_name = 'frozen_transcript_sequence'"
+                )
+            )
+        assert revision == "0016"
+        assert frozen == 1
         assert "mi_job_request_aliases" in names
+        assert "mi_summary_request_reservations" in names
+        assert "mi_summary_metrics" in names
+        assert "mi_summary_scan_cursor" in names
         assert "mi_validated_extractions" in names
         assert "mi_stage_output_cache" not in names
         await get_engine().dispose()
@@ -522,7 +324,15 @@ async def test_migration_0009_to_head_roundtrip(synthetic_postgresql: str) -> No
         command.upgrade(config, "head")
         async with get_engine().connect() as connection:
             revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
-        assert revision == "0011"
+            frozen = await connection.scalar(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'mi_summary_session_states' "
+                    "AND column_name = 'frozen_transcript_sequence'"
+                )
+            )
+        assert revision == "0016"
+        assert frozen == 1
     finally:
         if previous is None:
             os.environ.pop("DATABASE_URL", None)
@@ -859,8 +669,8 @@ async def test_missing_point_stays_failed_on_cache_hit(mi_db: None) -> None:
             client_request_id=request_id,
         )
     assert second.served_from_completed_cache is False
-    assert second.cache_hits > 0
     assert second.extract_provider_calls == 0
+    assert second.result.checkpoint.extract_complete is True
     assert second.result.processing_status == ProcessingJobStatus.PARTIAL
     assert second.result.checkpoint.backward_semantic_check_status.value == "failed"
 

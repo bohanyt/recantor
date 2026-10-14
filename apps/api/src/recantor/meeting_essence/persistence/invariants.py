@@ -176,19 +176,17 @@ def is_success_coverage(layered: LayeredMeetingResult) -> bool:
 def partial_coverage_claims_success(
     layered: LayeredMeetingResult, processing_status: ProcessingJobStatus
 ) -> bool:
-    """A partial or failed artifact must not wear a completed success label."""
+    """A partial artifact must not relabel itself as a succeeded publication.
+
+    Completed semantic directions stay completed. Source, audio, and STT flags
+    are independent of that check result.
+    """
     coverage = layered.coverage
-    if processing_status != ProcessingJobStatus.SUCCEEDED:
-        if coverage.processing_job_status == ProcessingJobStatus.SUCCEEDED:
-            return True
-        if coverage.processing_job_status != processing_status:
-            return True
-    both_completed = (
-        coverage.forward_semantic_check_status == CheckStatus.COMPLETED
-        and coverage.backward_semantic_check_status == CheckStatus.COMPLETED
-        and is_admitted_semantic_method(coverage.semantic_check_method)
-    )
-    return processing_status != ProcessingJobStatus.SUCCEEDED and both_completed
+    if processing_status == ProcessingJobStatus.SUCCEEDED:
+        return False
+    if coverage.processing_job_status == ProcessingJobStatus.SUCCEEDED:
+        return True
+    return coverage.processing_job_status != processing_status
 
 
 def _records_regresses(previous: list[AtomicRecord], incoming: list[AtomicRecord]) -> bool:

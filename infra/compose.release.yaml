@@ -196,6 +196,39 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  summary-worker:
+    image: *api-image
+    command:
+      [
+        "celery", "-A", "recantor.meeting_essence.scheduling.tasks:celery_app", "worker",
+        "-Q", "${MEETING_ESSENCE_QUEUE_NAME:-summary-low}",
+        "--concurrency=1", "--prefetch-multiplier=1", "--loglevel=INFO",
+      ]
+    environment: &summary-worker-environment
+      RECANTOR_ENV: release
+      DATABASE_URL: postgresql+psycopg://recantor:recantor@postgres:5432/recantor
+      REDIS_URL: redis://redis:6379/0
+      MEETING_ESSENCE_QUEUE_NAME: "${MEETING_ESSENCE_QUEUE_NAME:-summary-low}"
+      MEETING_ESSENCE_RECONCILE_INTERVAL_SECONDS: "${MEETING_ESSENCE_RECONCILE_INTERVAL_SECONDS:-30}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  summary-reconciler:
+    image: *api-image
+    command: ["python", "-m", "recantor.meeting_essence.scheduling.reconciler"]
+    environment:
+      <<: *summary-worker-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   media-worker:
     image: *api-image
     command:

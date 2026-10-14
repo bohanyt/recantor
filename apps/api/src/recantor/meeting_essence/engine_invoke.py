@@ -31,6 +31,12 @@ class InvokeConfig:
     max_provider_call_seconds: float
 
 
+def _quantum_left(deadline: float | None) -> float | None:
+    if deadline is None:
+        return None
+    return deadline - time.monotonic()
+
+
 def _remaining(deadline: float | None, limits_cap: float) -> float | None:
     if deadline is None:
         return limits_cap
@@ -67,14 +73,18 @@ async def invoke_stage(
     attempts: list[dict[str, str | None]] = []
     last_category = ProviderErrorCategory.UNKNOWN
     last_message = "provider call failed"
+    quantum_expired = False
     serialized = serialized_utf8_byte_length(request)
     for attempt_index in range(config.max_attempts_per_stage):
-        timeout = _remaining(config.deadline_monotonic, config.max_provider_call_seconds)
-        if timeout is None:
-            last_category = ProviderErrorCategory.TIMEOUT
-            last_message = "provider call exceeded deadline"
-            attempts.append({"category": last_category.value, "observed_model": None})
+        quantum_left = _quantum_left(config.deadline_monotonic)
+        if quantum_left is not None and quantum_left <= 0:
+            quantum_expired = True
+            last_message = "engine wall clock budget hit"
+            attempts.append({"category": "wall_clock_exhausted", "observed_model": None})
             break
+        call_cap = config.max_provider_call_seconds
+        bounded_by_quantum = quantum_left is not None and quantum_left <= call_cap
+        timeout = call_cap if quantum_left is None else min(call_cap, quantum_left)
         task = asyncio.create_task(
             provider.run_stage(
                 operation=operation,
@@ -90,12 +100,20 @@ async def invoke_stage(
                 task.cancel()
             raise
         except TimeoutError:
+            provider_raised = (
+                task.done() and not task.cancelled() and isinstance(task.exception(), TimeoutError)
+            )
             if not task.done():
                 task.cancel()
             cleanup = _remaining(config.deadline_monotonic, 0.05)
-            if cleanup is not None:
+            if cleanup is not None and not bounded_by_quantum and not provider_raised:
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=cleanup)
+            if bounded_by_quantum and not provider_raised:
+                quantum_expired = True
+                last_message = "engine wall clock budget hit"
+                attempts.append({"category": "wall_clock_exhausted", "observed_model": None})
+                break
             last_category = ProviderErrorCategory.TIMEOUT
             last_message = "provider call exceeded deadline"
             attempts.append({"category": last_category.value, "observed_model": None})
@@ -137,7 +155,6 @@ async def invoke_stage(
         if last_category not in {
             ProviderErrorCategory.TIMEOUT,
             ProviderErrorCategory.RATE_LIMIT,
-            ProviderErrorCategory.UNAVAILABLE,
         }:
             break
         backoff_budget = _remaining(
@@ -154,13 +171,21 @@ async def invoke_stage(
             wire_audit=audit,
             requested_model=requested_model,
             error=last_message,
-            error_category=last_category.value,
+            error_category="wall_clock_exhausted" if quantum_expired else last_category.value,
             attempt_count=len(attempts),
             attempts=attempts,
             serialized_utf8_bytes=serialized,
         )
     )
-    checkpoint.stage_traces = trace_stage_calls
+    checkpoint.stage_traces = list(trace_stage_calls)
+    if quantum_expired:
+        checkpoint.last_error_category = None
+        checkpoint.last_error_message = None
+        raise StageInvocationError(
+            ProviderErrorCategory.TIMEOUT,
+            "engine wall clock budget hit",
+            quantum_expired=True,
+        )
     checkpoint.last_error_category = last_category.value
     checkpoint.last_error_message = last_message
-    raise StageInvocationError(last_category, last_message)
+    raise StageInvocationError(last_category, last_message, quantum_expired=False)

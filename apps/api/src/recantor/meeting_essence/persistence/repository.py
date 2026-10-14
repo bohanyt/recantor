@@ -31,6 +31,7 @@ from recantor.meeting_essence.identity import (
     segment_content_hash,
 )
 from recantor.meeting_essence.persistence.checkpoint_store import (
+    CheckpointSerializationError,
     deserialize_checkpoint,
     serialize_checkpoint,
 )
@@ -925,6 +926,7 @@ class MeetingIntelligenceRepository:
                 prior_body = prior.body_json
             running.status = MIAttemptStatus.SUPERSEDED.value
             running.finished_at = _utcnow()
+        continue_partial = job.status == MIJobStatus.PARTIAL.value
         generation = job.active_generation + 1
         result = await self._db.execute(
             update(MIIntelligenceJob)
@@ -955,6 +957,8 @@ class MeetingIntelligenceRepository:
         )
         self._db.add(attempt)
         await self._db.flush()
+        if prior_body is None and continue_partial:
+            prior_body = await self._partial_checkpoint_body(job=job, session_id=session_id)
         if prior_body is not None:
             copied = deserialize_checkpoint(prior_body)
             self._db.add(
@@ -1039,6 +1043,80 @@ class MeetingIntelligenceRepository:
         checkpoint = deserialize_checkpoint(row.body_json)
         await self._assert_checkpoint_bindings(checkpoint, job=job, attempt=attempt)
         return checkpoint
+
+    async def _partial_checkpoint_body(
+        self, *, job: MIIntelligenceJob, session_id: UUID
+    ) -> str | None:
+        prior_row = await self._db.scalar(
+            select(MIAttemptCheckpoint)
+            .where(
+                MIAttemptCheckpoint.job_id == job.id,
+                MIAttemptCheckpoint.session_id == session_id,
+            )
+            .order_by(MIAttemptCheckpoint.generation.desc())
+            .limit(1)
+        )
+        if prior_row is None:
+            return None
+        try:
+            checkpoint = deserialize_checkpoint(prior_row.body_json)
+        except CheckpointSerializationError:
+            return None
+        if checkpoint.snapshot_content_hash != job.source_content_hash:
+            return None
+        if checkpoint.limits_fingerprint != job.limits_fingerprint:
+            return None
+        if checkpoint.requested_model != job.requested_model:
+            return None
+        if checkpoint.requested_reasoning_effort != job.requested_reasoning_effort:
+            return None
+        return prior_row.body_json
+
+    async def load_latest_checkpoint_for_job_session(
+        self,
+        *,
+        session_id: UUID,
+        source_content_hash: str | None = None,
+        limits_fingerprint: str | None = None,
+        requested_model: str | None = None,
+        requested_reasoning_effort: str | None = None,
+    ) -> EngineCheckpoint | None:
+        filters = [
+            MIIntelligenceJob.session_id == session_id,
+            MIIntelligenceJob.status.in_(
+                [
+                    MIJobStatus.PARTIAL.value,
+                    MIJobStatus.RUNNING.value,
+                ]
+            ),
+        ]
+        if source_content_hash is not None:
+            filters.append(MIIntelligenceJob.source_content_hash == source_content_hash)
+        if limits_fingerprint is not None:
+            filters.append(MIIntelligenceJob.limits_fingerprint == limits_fingerprint)
+        if requested_model is not None:
+            filters.append(MIIntelligenceJob.requested_model == requested_model)
+        if requested_reasoning_effort is not None:
+            filters.append(
+                MIIntelligenceJob.requested_reasoning_effort == requested_reasoning_effort
+            )
+        job = await self._db.scalar(
+            select(MIIntelligenceJob)
+            .where(*filters)
+            .order_by(MIIntelligenceJob.updated_at.desc())
+            .limit(1)
+        )
+        if job is None:
+            return None
+        attempt = await self._db.scalar(
+            select(MIJobAttempt)
+            .where(MIJobAttempt.job_id == job.id, MIJobAttempt.session_id == session_id)
+            .order_by(MIJobAttempt.generation.desc())
+            .limit(1)
+        )
+        if attempt is None:
+            return None
+        return await self.load_checkpoint(attempt_id=attempt.id, session_id=session_id)
 
     async def _running_attempt(
         self, *, attempt_id: UUID, job_id: UUID, session_id: UUID, generation: int
