@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 38352033388
+snapshot_seq: 38706720587
 
-collected_at: 2026-10-13T05:33:58.380466Z
+collected_at: 2026-10-15T08:35:19.747535Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -623,26 +623,31 @@ CONTROL_TOWER_READY
 
 SECTION active_work_frontier
 <<<UNTRUSTED_GITHUB_DATA source=open-issues-and-prs>>>
+ISSUE #74 state=open updated=2026-10-15T08:35:07Z title=69E — Structured provider adapter and session-bound intelligence API
+PR #81 state=open updated=2026-10-15T08:35:05Z title=feat(meeting-essence): add versioned provider and session intelligence API
+PR #80 state=open updated=2026-10-15T01:43:38Z title=Add fair meeting-summary jobs and shared invocation limits
+PR #79 state=open updated=2026-10-14T18:26:57Z title=Persist meeting essence evidence and fenced recovery (#72)
+PR #78 state=open updated=2026-10-14T14:10:39Z title=feat: bounded meeting essence engine with source-aware checks (#71)
 ISSUE #71 state=open updated=2026-10-13T05:33:49Z title=69B — Bounded transcript engine: snapshot, extract, reconcile, verify, render
 ISSUE #70 state=open updated=2026-10-13T05:30:07Z title=69A — Versioned meeting SOP, prompts, and evidence/result contracts
 PR #77 state=open updated=2026-10-13T05:28:43Z title=feat: add versioned meeting essence contracts and SOP
 ISSUE #69 state=open updated=2026-10-13T05:05:13Z title=Meeting essence v1: reusable SOP, granular summaries, and long-transcript pipeline
 ISSUE #75 state=open updated=2026-10-13T00:57:55Z title=69F — Concise meeting results with topic detail and source navigation
-ISSUE #74 state=open updated=2026-10-13T00:57:54Z title=69E — Structured provider adapter and session-bound intelligence API
 ISSUE #73 state=open updated=2026-10-13T00:57:53Z title=69D — Fair summary jobs, host-wide invocation limits, and live updates
 ISSUE #72 state=open updated=2026-10-13T00:57:51Z title=69C — Durable evidence ledger, resumable summaries, and cache invalidation
 ISSUE #76 state=open updated=2026-10-13T00:56:35Z title=69G — Adversarial corpus, semantic quality gates, and latency benchmark
 ISSUE #67 state=open updated=2026-10-12T14:19:32Z title=Personal dev acceptance: Groq transcript → existing Codex account
 PR #68 state=open updated=2026-10-12T14:19:30Z title=feat: add dev Codex bridge with fail-closed Windows execution
-PR #66 state=open updated=2026-10-05T07:38:59Z title=docs: record future local MCP agent integration
-PR #50 state=open updated=2026-10-05T07:38:59Z title=feat: add development-only Codex subscription LLM bridge
-ISSUE #47 state=open updated=2026-09-21T06:18:12Z title=Development-only Codex subscription LLM bridge for transcript-derived meeting intelligence experiments
 
 OPEN_PRS
+PR #81 draft=True updated=2026-10-15T08:35:05Z base=feat/issue-73-summary-jobs head=feat/issue-74-provider-api title=feat(meeting-essence): add versioned provider and session intelligence API
+PR #80 draft=True updated=2026-10-15T01:43:38Z base=feat/issue-72-meeting-ledger head=feat/issue-73-summary-jobs title=Add fair meeting-summary jobs and shared invocation limits
+PR #79 draft=True updated=2026-10-14T18:26:57Z base=feat/issue-71-meeting-engine head=feat/issue-72-meeting-ledger title=Persist meeting essence evidence and fenced recovery (#72)
+PR #78 draft=True updated=2026-10-14T14:10:39Z base=feat/issue-70-meeting-contracts head=feat/issue-71-meeting-engine title=feat: bounded meeting essence engine with source-aware checks (#71)
 PR #77 draft=True updated=2026-10-13T05:28:43Z base=main head=feat/issue-70-meeting-contracts title=feat: add versioned meeting essence contracts and SOP
 PR #68 draft=True updated=2026-10-12T14:19:30Z base=main head=docs/issue-67-personal-groq-codex-test title=feat: add dev Codex bridge with fail-closed Windows execution
 PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-mcp-agent title=docs: record future local MCP agent integration
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=38352033388 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=38706720587 sections=6
