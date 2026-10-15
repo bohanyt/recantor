@@ -468,6 +468,7 @@ async def test_completed_broker_tree_does_not_block_next_crash_session(
     mi_db, tmp_path, monkeypatch
 ):
     """Real worker child/PG, including an earlier completed spawning invocation."""
+    from summary_broker_provider import invocation_witness
     from test_summary_broker_lifecycle import (
         _checkpoint_page,
         _identity_from_saved,
@@ -606,14 +607,22 @@ asyncio.run(main())
             assert str(root.pid) in lease.owned_runtime_json
             assert process_liveness(root) == process_liveness(grandchild) == Liveness.ALIVE
             assert process_liveness(runtime) == Liveness.ALIVE
+            counter_path = tmp_path / "invocation-counter.json"
+            witness = invocation_witness(counter_path)
+            assert witness["present"] is True
+            assert int(witness["live"]) == int(witness["peak"]) == 1
             _kill_pid_only(runtime.pid)
             worker.wait(timeout=5)
             assert process_liveness(root) == process_liveness(grandchild) == Liveness.ALIVE
+            assert int(invocation_witness(counter_path)["live"]) == 1
             permit = HostInvocationPermit()
             assert await permit.try_acquire(entrypoint="before-proven-stop") is None
             assert await permit.recover_proven_dead() is False
             assert await asyncio.to_thread(terminate_process_tree, root) is True
             assert process_liveness(root) == process_liveness(grandchild) == Liveness.DEAD
+            witness = invocation_witness(counter_path)
+            assert int(witness["live"]) == 0
+            assert int(witness["peak"]) == 1
             assert await permit.recover_proven_dead() is True
             handle = await permit.acquire(entrypoint="after-proven-stop")
             assert await permit.release(handle) is True

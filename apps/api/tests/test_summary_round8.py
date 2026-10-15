@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select, update
@@ -174,6 +177,63 @@ def test_missing_and_malformed_observer_files_fail_the_proof(tmp_path) -> None:
     assert witness["present"] is False
     assert witness["malformed"] is True
     assert broken.read_text(encoding="utf-8") == "{"
+
+
+@pytest.mark.parametrize("observation", ["note_stage_observation", "note_admitted_work"])
+def test_in_process_observation_ends_when_its_actual_owner_dies(tmp_path, observation) -> None:
+    from test_summary_broker_lifecycle import _identity_from_saved, _kill_pid_only
+
+    from recantor.meeting_essence.scheduling.process_liveness import Liveness, process_liveness
+
+    path = tmp_path / "counter.json"
+    ready = tmp_path / "ready.json"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(Path(__file__).resolve().parents[1] / "src"), str(Path(__file__).resolve().parent)]
+    )
+    code = """
+import json, sys, time
+from dataclasses import asdict
+from pathlib import Path
+import summary_broker_provider as observer
+from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+getattr(observer, sys.argv[3])(Path(sys.argv[1]))
+Path(sys.argv[2]).write_text(json.dumps(asdict(current_process_identity())))
+time.sleep(30)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code, str(path), str(ready), observation],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    owner = None
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.is_file() and time.monotonic() < deadline:
+            assert proc.poll() is None
+            time.sleep(0.05)
+        assert ready.is_file()
+        owner = _identity_from_saved(json.loads(ready.read_text(encoding="utf-8")))
+        assert process_liveness(owner) == Liveness.ALIVE
+        witness = invocation_witness(path)
+        assert int(witness["live"]) == int(witness["peak"]) == 1
+        _kill_pid_only(owner.pid)
+        proc.wait(timeout=5)
+        assert process_liveness(owner) == Liveness.DEAD
+        witness = invocation_witness(path)
+        assert int(witness["live"]) == 0
+        assert int(witness["peak"]) == int(witness["stage_calls"]) == 1
+        assert int(witness["admitted_work"]) == (observation == "note_admitted_work")
+    finally:
+        if owner is None and ready.is_file():
+            owner = _identity_from_saved(json.loads(ready.read_text(encoding="utf-8")))
+        if owner is not None and process_liveness(owner) == Liveness.ALIVE:
+            _kill_pid_only(owner.pid)
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=5)
 
 
 async def _stamp_tree_root(pid: int, root: int) -> None:

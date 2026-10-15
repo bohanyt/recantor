@@ -20,6 +20,7 @@ from recantor.meeting_essence.scheduling.models import (
     MISummaryDispatchStatus,
 )
 from recantor.meeting_essence.scheduling.tasks import ensure_summary_wake_capacity
+from recantor.meeting_essence.scheduling.triggers import note_transcript_publication
 from recantor.models import RecordingSession, SessionKind, SessionState, TranscriptSegment
 from recantor.settings import get_settings
 
@@ -72,6 +73,7 @@ async def _wait_status(
     import asyncio
 
     deadline = time.monotonic() + timeout
+    status = None
     while time.monotonic() < deadline:
         async with get_sessionmaker()() as db:
             status = await db.scalar(
@@ -82,7 +84,7 @@ async def _wait_status(
         await asyncio.sleep(0.2)
     detail = worker_log.read_text(encoding="utf-8")[-4000:] if worker_log else ""
     raise AssertionError(
-        f"dispatch for {session_id} did not reach {wanted}; "
+        f"dispatch for {session_id} did not reach {wanted}; actual status={status}; "
         f"parent permit reason={await _busy_permit_reason()}\n{detail}"
     )
 
@@ -95,6 +97,7 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
     _require_redis()
     monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
     monkeypatch.setenv("MEETING_ESSENCE_ENGINE_QUANTUM_SECONDS", "2")
+    monkeypatch.setenv("MEETING_ESSENCE_RECONCILE_INTERVAL_SECONDS", "1")
     monkeypatch.setenv("MEETING_ESSENCE_QUEUE_NAME", f"summary-life-{uuid4().hex[:8]}")
     get_settings.cache_clear()
     queue = get_settings().meeting_essence_queue_name
@@ -128,6 +131,8 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
                     text=text,
                 )
             )
+            await db.flush()
+            await note_transcript_publication(db, session_id=session_id, publication_sequence=1)
     control = tmp_path / "control.json"
     control.write_text(
         (
@@ -168,6 +173,9 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
     )
     await prepare_shared_broker_permit()
     worker_log = tmp_path / "worker.log"
+    # Wakes carry no session id. Earlier suite sessions may be ahead of these
+    # two; the normal reconciler must keep waking all durable pending work.
+    reconciler, reconciler_handle = _start_reconciler(env, tmp_path / "reconciler.log")
     worker: subprocess.Popen[str] | None = None
     worker_handle: object | None = None
     try:
@@ -218,6 +226,8 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
                     text="Batal.",
                 )
             )
+            await db.flush()
+            await note_transcript_publication(db, session_id=session_c, publication_sequence=1)
         # Rebuild control so the blocked provider still has a record for the new segment.
         control.write_text(
             (
@@ -249,6 +259,8 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
             await cancel_summary_dispatch(db, dispatch_id=dispatch_id, session_id=session_c)
         await _wait_status(session_c, {MISummaryDispatchStatus.CANCELLED.value}, 20)
     finally:
+        _stop_process(reconciler)
+        reconciler_handle.close()
         _stop_process(worker)
         if worker_handle is not None:
             worker_handle.close()

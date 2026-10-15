@@ -278,6 +278,9 @@ def note_stage_observation(path: Path, *, invocation_id: str | None = None) -> s
     no id, or an id that is not already live, is its own invocation. This never
     joins an unrelated live invocation and never refuses to count overlap.
     """
+    from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+
+    owner = _holder_payload(current_process_identity())
     with _counter_lock(path):
         current = _read_counter(path)
         current["stage_calls"] = int(current["stage_calls"]) + 1
@@ -285,13 +288,16 @@ def note_stage_observation(path: Path, *, invocation_id: str | None = None) -> s
         if invocation_id is not None:
             found = next((item for item in invocations if item["id"] == invocation_id), None)
             if found is None:
-                invocations.append({"id": invocation_id, "members": [], "active": True})
+                invocations.append(
+                    {"id": invocation_id, "members": [], "active": True, "stage_owner": owner}
+                )
             else:
                 found["active"] = True
+                found["stage_owner"] = owner
             _store(path, current, invocations)
             return invocation_id
         fresh = uuid4().hex
-        invocations.append({"id": fresh, "members": [], "active": True})
+        invocations.append({"id": fresh, "members": [], "active": True, "stage_owner": owner})
         _store(path, current, invocations)
         return fresh
 
@@ -316,13 +322,22 @@ def note_admitted_work(path: Path) -> str:
     one is still recorded and the peak includes both. The caller finishes the
     id when that work exits.
     """
+    from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+
     with _counter_lock(path):
         current = _read_counter(path)
         current["admitted_work"] = int(current["admitted_work"]) + 1
         current["stage_calls"] = int(current["stage_calls"]) + 1
         invocations = [item for item in current["invocations"] if _invocation_live(item)]
         invocation_id = uuid4().hex
-        invocations.append({"id": invocation_id, "members": [], "active": True})
+        invocations.append(
+            {
+                "id": invocation_id,
+                "members": [],
+                "active": True,
+                "stage_owner": _holder_payload(current_process_identity()),
+            }
+        )
         _store(path, current, invocations)
         return invocation_id
 
@@ -413,7 +428,11 @@ def _holder_alive(item: dict[str, object]) -> bool:
 
 def _invocation_live(item: dict[str, object]) -> bool:
     if item.get("active") is True:
-        return True
+        owner = item.get("stage_owner")
+        if not isinstance(owner, dict):
+            raise ObserverUnreadable("active stage owner is missing")
+        if _holder_alive(owner):
+            return True
     members = item.get("members")
     if not isinstance(members, list):
         return False

@@ -24,6 +24,7 @@ from recantor.main import app
 from recantor.meeting_essence.scheduling.host_authority import reset_for_tests
 from recantor.meeting_essence.scheduling.host_permit import HostInvocationPermit
 from recantor.meeting_essence.scheduling.jobs import (
+    SummaryExecutionStatus,
     SummaryRetryDenied,
     SummarySubmitStatus,
     cancel_summary_dispatch,
@@ -509,19 +510,37 @@ async def test_provider_build_failure_releases_the_permit(mi_db, monkeypatch) ->
 
     class _BadFactory(SummaryProviderFactory):
         adapter_id = "bad"
+        builds = 0
 
         def build(self):  # type: ignore[no-untyped-def]
+            self.builds += 1
             raise RuntimeError("build failed")
 
-    set_summary_provider_factory(_BadFactory())
+    factory = _BadFactory()
+    set_summary_provider_factory(factory)
     try:
         async with get_sessionmaker()() as db:
             await reconcile_summary_work(db)
             await db.commit()
-            with pytest.raises(RuntimeError, match="build failed"):
-                await execute_next_summary_job(db, entrypoint="pytest-build-fail")
+            result = await execute_next_summary_job(db, entrypoint="pytest-build-fail")
+            assert result.status == SummaryExecutionStatus.UNAVAILABLE
+            assert result.session_id == SESSION_A
+            dispatch = await db.get(MISummaryDispatch, result.dispatch_id)
+            assert dispatch.status == MISummaryDispatchStatus.CANCELLED.value
+            assert dispatch.claim_token is None and dispatch.claim_expires_at is None
+            assert dispatch.last_error_category == "config"
+            assert dispatch.last_error_code == "provider_construction_failed"
+            state = await db.get(MISummarySessionState, SESSION_A)
+            assert state.work_intent == "blocked"
+            for _ in range(3):
+                assert (
+                    await execute_next_summary_job(db)
+                ).status == SummaryExecutionStatus.NOT_CLAIMED
+        assert factory.builds == 1
         permit = HostInvocationPermit()
         assert await permit.read_active_witness() == 0
+        handle = await permit.acquire(entrypoint="pytest-after-build-fail")
+        assert await permit.release(handle) is True
     finally:
         set_summary_provider_factory(None)
 
