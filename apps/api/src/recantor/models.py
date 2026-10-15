@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 import recantor.meeting_essence.persistence.models  # noqa: F401
+import recantor.meeting_essence.scheduling.models  # noqa: F401
 from recantor.db import Base
 
 

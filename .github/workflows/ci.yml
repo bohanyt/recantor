@@ -398,7 +398,12 @@ jobs:
           config = json.loads(subprocess.check_output([*compose, "config", "--format", "json"]))
           services = config["services"]
 
-          for service_name in ("stt-worker", "stt-reconciler"):
+          for service_name in (
+              "stt-worker",
+              "stt-reconciler",
+              "summary-worker",
+              "summary-reconciler",
+          ):
               container_id = subprocess.check_output(
                   [*compose, "ps", "-q", service_name], text=True
               ).strip()
@@ -431,6 +436,17 @@ jobs:
           assert "--prefetch-multiplier=1" in worker_command, worker_command
           assert "-Q" in worker_command and queue_name in worker_command, worker_command
           assert worker.get("environment", {}).get("GROQ_API_KEY", "") == ""
+          summary = services["summary-worker"]
+          summary_queue = summary.get("environment", {}).get("MEETING_ESSENCE_QUEUE_NAME")
+          assert summary_queue == "summary-low", summary_queue
+          summary_command = summary["command"]
+          assert "--prefetch-multiplier=1" in summary_command, summary_command
+          assert "--concurrency=1" in summary_command, summary_command
+          assert "summary-low" in summary_command, summary_command
+          reconciler_command = services["summary-reconciler"]["command"]
+          assert "recantor.meeting_essence.scheduling.reconciler" in " ".join(
+              reconciler_command
+          ), reconciler_command
           PY
       - name: Verify Celery active queue and broker-backed scheduler execution
         run: |

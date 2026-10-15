@@ -463,8 +463,9 @@ async def test_hanging_provider_stops_at_job_deadline() -> None:
     assert provider.active == 0
     assert provider.cancel_acknowledged >= 1
     assert elapsed < 1.0
-    assert result.checkpoint.last_error_category == "timeout"
-    assert result.processing_status in {ProcessingJobStatus.FAILED, ProcessingJobStatus.PARTIAL}
+    assert result.checkpoint.last_error_category is None
+    assert any(item.code == "wall_clock_exhausted" for item in result.limitations)
+    assert result.processing_status == ProcessingJobStatus.PARTIAL
 
 
 @pytest.mark.asyncio

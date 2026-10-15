@@ -20,7 +20,10 @@ from recantor.meeting_essence.engine import (
     EngineRunTrace,
     MeetingEssenceEngine,
 )
-from recantor.meeting_essence.persistence.caching_provider import CachedMeetingEssenceProvider
+from recantor.meeting_essence.persistence.caching_provider import (
+    CachedMeetingEssenceProvider,
+    entered_call_counts,
+)
 from recantor.meeting_essence.persistence.fingerprints import (
     compute_run_fingerprint,
     extraction_reuse_key,
@@ -202,7 +205,7 @@ class MeetingIntelligenceLedgerService:
             job=job,
             attempt=attempt,
             provider_calls=0,
-            cache_hits=0,
+            cache_hits=1,
             extract_provider_calls=0,
             served_from_completed_cache=True,
         )
@@ -223,6 +226,7 @@ class MeetingIntelligenceLedgerService:
         resume_checkpoint: EngineCheckpoint | None = None,
         recover: bool = False,
         retry: bool = False,
+        on_attempt_started: object | None = None,
     ) -> IntelligenceRunOutcome:
         supplied = config or EngineRunConfig()
         caller_hook = supplied.on_checkpoint_committed
@@ -286,6 +290,8 @@ class MeetingIntelligenceLedgerService:
             await self._db.rollback()
             raise
         await self._db.commit()
+        if on_attempt_started is not None:
+            await on_attempt_started(job, attempt)  # type: ignore[operator]
         checkpoint = self._usable_resume(
             resume_checkpoint, manifest=manifest, session_id=session_id
         )
@@ -334,6 +340,7 @@ class MeetingIntelligenceLedgerService:
                 await caller_validated(operation, request, response)
 
         async def on_commit(saved: EngineCheckpoint) -> None:
+            await self._db.rollback()
             await self._repo.save_checkpoint(
                 attempt_id=attempt.id,
                 job_id=job.id,
@@ -388,13 +395,14 @@ class MeetingIntelligenceLedgerService:
         await self._db.commit()
         refreshed = await self._repo.get_job(job.id, session_id=session_id)
         finished = await self._repo.get_attempt(attempt.id, session_id=session_id)
+        provider_calls, extract_calls = entered_call_counts(cached_provider)
         return IntelligenceRunOutcome(
             result=result,
             job=refreshed,
             attempt=finished,
-            provider_calls=cached_provider.provider_calls,
+            provider_calls=provider_calls,
             cache_hits=cached_provider.cache_hits,
-            extract_provider_calls=cached_provider.extract_provider_calls,
+            extract_provider_calls=extract_calls,
             served_from_completed_cache=False,
         )
 

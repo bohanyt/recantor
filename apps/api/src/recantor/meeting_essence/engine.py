@@ -72,7 +72,7 @@ from recantor.meeting_essence.extract_validation import (
 from recantor.meeting_essence.progress import EngineCheckpoint, StageCallTrace
 from recantor.meeting_essence.prompt_loader import PromptBundle, load_prompt_bundle
 from recantor.meeting_essence.provider import MeetingEssenceProvider
-from recantor.meeting_essence.provider_errors import StageInvocationError
+from recantor.meeting_essence.provider_errors import ProviderErrorCategory, StageInvocationError
 from recantor.meeting_essence.render_builder import merge_rendered_pages
 from recantor.meeting_essence.semantic_check import evaluate_fixture_annotations
 from recantor.meeting_essence.source_reader import (
@@ -143,6 +143,43 @@ class EngineRunResult:
     trace: EngineRunTrace
     processing_status: ProcessingJobStatus
     limitations: list[CoverageLimitation] = field(default_factory=list)
+
+
+def _records_aligned(left: list[object], right: list[object]) -> bool:
+    def dumped(records: list[object]) -> dict[str, object]:
+        return {
+            str(record.record_id): record.model_dump(mode="json")  # type: ignore[attr-defined]
+            for record in records
+        }
+
+    left_map = dumped(left)
+    right_map = dumped(right)
+    return left_map == right_map and len(left_map) == len(left)
+
+
+def _partial_layered(checkpoint: EngineCheckpoint) -> LayeredMeetingResult | None:
+    """Publish a yield as partial. Completed semantic checks stay completed.
+
+    A render page that does not yet match the accepted ledger is withheld from
+    this publication. The checkpoint keeps that render so the next quantum can
+    finish it.
+    """
+    layered = checkpoint.layered_partial
+    if layered is None:
+        return None
+    if not _records_aligned(list(layered.atomic_records), list(checkpoint.atomic_records)):
+        return None
+    if layered.coverage.processing_job_status == ProcessingJobStatus.PARTIAL:
+        return layered
+    updated = layered.model_copy(
+        update={
+            "coverage": layered.coverage.model_copy(
+                update={"processing_job_status": ProcessingJobStatus.PARTIAL}
+            )
+        }
+    )
+    checkpoint.layered_partial = updated
+    return updated
 
 
 class MeetingEssenceEngine:
@@ -216,10 +253,11 @@ class MeetingEssenceEngine:
                 CoverageLimitation(code="source_coverage_gap", message=coverage_report.message)
             )
             checkpoint.processing_status = ProcessingJobStatus.PARTIAL
+            layered_partial = _partial_layered(checkpoint)
             await self._commit_checkpoint(checkpoint)
             return EngineRunResult(
                 manifest=manifest,
-                layered_result=checkpoint.layered_partial,
+                layered_result=layered_partial,
                 checkpoint=checkpoint,
                 trace=trace,
                 processing_status=ProcessingJobStatus.PARTIAL,
@@ -337,17 +375,26 @@ class MeetingEssenceEngine:
                     manifest, checkpoint, trace, limitations, layered, plan, started_monotonic
                 )
         except StageInvocationError as exc:
+            if exc.quantum_expired:
+                return await self._partial_result(manifest, checkpoint, trace, limitations)
             limitations.append(CoverageLimitation(code=exc.category.value, message=exc.message))
-            status = (
-                ProcessingJobStatus.PARTIAL
-                if checkpoint.atomic_records or checkpoint.layered_partial is not None
-                else ProcessingJobStatus.FAILED
-            )
-            checkpoint.processing_status = status
+            if exc.category == ProviderErrorCategory.TIMEOUT:
+                checkpoint.processing_status = ProcessingJobStatus.PARTIAL
+            else:
+                checkpoint.processing_status = (
+                    ProcessingJobStatus.PARTIAL
+                    if checkpoint.atomic_records or checkpoint.layered_partial is not None
+                    else ProcessingJobStatus.FAILED
+                )
+            checkpoint.last_error_category = exc.category.value
+            checkpoint.last_error_message = exc.message
             await self._commit_checkpoint(checkpoint)
-            return self._result(
-                manifest, checkpoint, trace, limitations, checkpoint.layered_partial
+            layered = (
+                None
+                if exc.category == ProviderErrorCategory.TIMEOUT
+                else checkpoint.layered_partial
             )
+            return self._result(manifest, checkpoint, trace, limitations, layered)
 
         result = self._finalize(
             manifest, checkpoint, trace, limitations, layered, plan, started_monotonic
@@ -436,8 +483,9 @@ class MeetingEssenceEngine:
         limitations.append(
             CoverageLimitation(code="wall_clock_exhausted", message="engine wall clock budget hit")
         )
+        layered = _partial_layered(checkpoint)
         await self._commit_checkpoint(checkpoint)
-        return self._result(manifest, checkpoint, trace, limitations, checkpoint.layered_partial)
+        return self._result(manifest, checkpoint, trace, limitations, layered)
 
     def _result(
         self,
@@ -994,11 +1042,7 @@ class MeetingEssenceEngine:
         receipts_done = (
             not checkpoint.pending_check_fingerprints and not checkpoint.failed_check_fingerprints
         )
-        if (
-            cursors_done
-            and receipts_done
-            and checkpoint.processing_status != ProcessingJobStatus.PARTIAL
-        ):
+        if cursors_done and receipts_done:
             checkpoint.check_complete = True
             await self._commit_checkpoint(checkpoint)
 
@@ -2141,6 +2185,8 @@ class MeetingEssenceEngine:
             )
         checkpoint.processing_status = processing
         checkpoint.touch()
+        if processing == ProcessingJobStatus.PARTIAL:
+            layered = _partial_layered(checkpoint)
         return self._result(manifest, checkpoint, trace, limitations, layered)
 
 

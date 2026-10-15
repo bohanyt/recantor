@@ -21,11 +21,13 @@ class ProviderErrorCategory(StrEnum):
     UNKNOWN = "unknown"
 
 
+# Timeout and rate limit back off inside one call. Unavailable, auth, config,
+# and containment do not: the scheduler records them as explicit non-retryable
+# stops so a missing helper or a provider outage cannot storm.
 _RETRYABLE = frozenset(
     {
         ProviderErrorCategory.TIMEOUT,
         ProviderErrorCategory.RATE_LIMIT,
-        ProviderErrorCategory.UNAVAILABLE,
     }
 )
 
@@ -55,10 +57,17 @@ class SanitizedProviderError:
 class StageInvocationError(Exception):
     """Sanitized stage failure. The message is a stable category string, never provider text."""
 
-    def __init__(self, category: ProviderErrorCategory, message: str) -> None:
+    def __init__(
+        self,
+        category: ProviderErrorCategory,
+        message: str,
+        *,
+        quantum_expired: bool = False,
+    ) -> None:
         super().__init__(message)
         self.category = category
         self.message = message
+        self.quantum_expired = quantum_expired
 
 
 def _classify_text(lowered: str) -> ProviderErrorCategory | None:
