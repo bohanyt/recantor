@@ -48,6 +48,10 @@ from recantor.meeting_essence.deterministic_provider import (
 from recantor.meeting_essence.engine import EngineRunConfig, MeetingEssenceEngine, engine_trace_json
 from recantor.meeting_essence.engine_support import merge_check_status
 from recantor.meeting_essence.identity import compute_record_identity, segment_content_hash
+from recantor.meeting_essence.persistence.checkpoint_store import (
+    deserialize_checkpoint,
+    serialize_checkpoint,
+)
 from recantor.meeting_essence.progress import EngineCheckpoint
 from recantor.meeting_essence.prompt_loader import load_prompt_bundle
 from recantor.meeting_essence.semantic_check import (
@@ -505,6 +509,149 @@ async def test_provider_errors_are_sanitized_and_not_retried_blindly() -> None:
     assert authed.checkpoint.last_error_category == "auth"
     assert "sk-LIVESECRET" not in auth_blob
     assert authed.trace.stage_calls[0].attempt_count == 1
+
+
+def _continuation_source():
+    spec = SEGMENT_SPECS[0]
+    segment_id, _, start_ms, end_ms, _ = spec
+    records = [
+        _record(
+            topic="Boundary",
+            kind=RecordKind.FINDING,
+            status=RecordContentStatus.FINDING,
+            claim=f"Butir {index}.",
+            segment_id=segment_id,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+        for index in range(5)
+    ]
+    return [spec], records
+
+
+@pytest.mark.asyncio
+async def test_extract_deadline_before_invocation_does_not_complete_page(monkeypatch) -> None:
+    specs, records = _continuation_source()
+    provider = DeterministicMeetingEssenceProvider(
+        extraction_records=records,
+        extract_by_segment={UUID(specs[0][0]): records},
+    )
+    engine = MeetingEssenceEngine(provider=provider)
+    expired = False
+    fit = engine._fit_extract_page
+
+    def _fit_then_expire(*args, **kwargs):
+        nonlocal expired
+        fitted = fit(*args, **kwargs)
+        expired = True
+        return fitted
+
+    monkeypatch.setattr(engine, "_fit_extract_page", _fit_then_expire)
+    monkeypatch.setattr(engine, "_deadline_passed", lambda _: expired)
+    first = await engine.run_from_reader(
+        _reader_from_specs(specs),
+        session_id=FIXTURE_SESSION_ID,
+        publication_boundary_sequence=1,
+        coverage=SourceCoverageFlags(transcript_publication_complete=True),
+    )
+    assert provider.call_count == 0
+    assert not first.checkpoint.extract_complete
+    assert first.checkpoint.extract_fragment_cursor == 0
+    assert first.checkpoint.completed_fragment_indices == ()
+    resumed = await _run(
+        provider, _reader_from_specs(specs), boundary=1, checkpoint=first.checkpoint
+    )
+    assert resumed.checkpoint.extract_complete
+    assert {record.record_id for record in resumed.checkpoint.atomic_records} == {
+        record.record_id for record in records
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_at_deadline", [True, False])
+async def test_extract_full_cardinality_continuation_survives_turn(
+    monkeypatch, stop_at_deadline: bool
+) -> None:
+    specs, records = _continuation_source()
+    provider = DeterministicMeetingEssenceProvider(
+        extraction_records=records,
+        extract_by_segment={UUID(specs[0][0]): records},
+    )
+    limits = EngineLimits(
+        max_records_per_extract_response=2,
+        max_extract_continuations=8 if stop_at_deadline else 1,
+    )
+    checkpoint = None
+    for accepted_count in (2, 4, 5):
+        expired = [False]
+
+        async def _after_accept(saved, deadline=expired):
+            if saved.atomic_records and (
+                stop_at_deadline or len(saved.atomic_records) == len(records)
+            ):
+                deadline[0] = True
+
+        engine = MeetingEssenceEngine(
+            provider=provider,
+            config=EngineRunConfig(limits=limits, on_checkpoint_committed=_after_accept),
+        )
+        monkeypatch.setattr(engine, "_deadline_passed", lambda _, deadline=expired: deadline[0])
+        result = await engine.run_from_reader(
+            _reader_from_specs(specs),
+            session_id=FIXTURE_SESSION_ID,
+            publication_boundary_sequence=1,
+            coverage=SourceCoverageFlags(transcript_publication_complete=True),
+            checkpoint=checkpoint,
+        )
+        checkpoint = result.checkpoint
+        assert len(checkpoint.atomic_records) == accepted_count
+        assert checkpoint.extract_fragment_cursor == (1 if accepted_count == 5 else 0)
+        assert checkpoint.completed_fragment_indices == ((0,) if accepted_count == 5 else ())
+        checkpoint = deserialize_checkpoint(serialize_checkpoint(checkpoint))
+        assert checkpoint is not None
+    assert checkpoint.extract_complete
+    assert provider.call_count == 3
+    assert {record.record_id for record in checkpoint.atomic_records} == {
+        record.record_id for record in records
+    }
+
+
+@pytest.mark.asyncio
+async def test_exhausted_extract_checkpoint_resumes_without_replaying_page() -> None:
+    specs, records = _continuation_source()
+    provider = DeterministicMeetingEssenceProvider(
+        extraction_records=records,
+        extract_by_segment={UUID(specs[0][0]): records},
+    )
+    saved_body = None
+
+    class StoppedAfterCommit(Exception):
+        pass
+
+    async def _stop_after_commit(saved):
+        nonlocal saved_body
+        if saved.atomic_records:
+            saved_body = serialize_checkpoint(saved)
+            raise StoppedAfterCommit
+
+    with pytest.raises(StoppedAfterCommit):
+        await _run(
+            provider,
+            _reader_from_specs(specs),
+            boundary=1,
+            config=EngineRunConfig(on_checkpoint_committed=_stop_after_commit),
+        )
+    assert saved_body is not None
+    checkpoint = deserialize_checkpoint(saved_body)
+    assert checkpoint is not None
+    assert checkpoint.extract_fragment_cursor == 1
+    assert checkpoint.completed_fragment_indices == (0,)
+    resumed = await _run(provider, _reader_from_specs(specs), boundary=1, checkpoint=checkpoint)
+    assert resumed.checkpoint.extract_complete
+    assert not any(call.operation == StageOperation.EXTRACT for call in resumed.trace.stage_calls)
+    assert {record.record_id for record in resumed.checkpoint.atomic_records} == {
+        record.record_id for record in records
+    }
 
 
 @pytest.mark.asyncio

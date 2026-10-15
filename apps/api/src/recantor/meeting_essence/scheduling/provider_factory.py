@@ -54,18 +54,34 @@ _factory: SummaryProviderFactory = SummaryProviderFactory()
 
 _env_spec: str | None = None
 _env_factory: SummaryProviderFactory | None = None
+_auto_signature: tuple[str, str] | None = None
+
+
+def _meeting_essence_signature() -> tuple[str, str]:
+    kind = os.environ.get("RECANTOR_MEETING_ESSENCE_PROVIDER", "").strip()
+    fixture = os.environ.get("RECANTOR_MEETING_ESSENCE_FIXTURE", "").strip()
+    return kind, fixture
 
 
 def get_summary_provider_factory() -> SummaryProviderFactory:
     """Return the in-process factory, or the factory named by the worker environment.
 
     ``RECANTOR_SUMMARY_PROVIDER_FACTORY`` is ``module:callable`` for a separate
-    Celery process. Unset means the explicit unconfigured adapter. This is not
-    a second launcher.
+    Celery process. ``RECANTOR_MEETING_ESSENCE_PROVIDER`` is the same contract
+    the API process uses, so a worker does not need a second launcher. Unset
+    means the explicit unconfigured adapter.
     """
-    global _env_factory, _env_spec
+    global _env_factory, _env_spec, _auto_signature
     spec = os.environ.get("RECANTOR_SUMMARY_PROVIDER_FACTORY")
     if not spec:
+        signature = _meeting_essence_signature()
+        if signature != _auto_signature:
+            from recantor.meeting_essence.provider_adapters.factory import (
+                configure_summary_provider_factory,
+            )
+
+            configure_summary_provider_factory()
+            _auto_signature = signature
         return _factory
     if spec != _env_spec or _env_factory is None:
         module_name, separator, attr = spec.partition(":")
@@ -79,5 +95,6 @@ def get_summary_provider_factory() -> SummaryProviderFactory:
 
 
 def set_summary_provider_factory(factory: SummaryProviderFactory | None) -> None:
-    global _factory
+    global _factory, _auto_signature
     _factory = factory or SummaryProviderFactory()
+    _auto_signature = _meeting_essence_signature()

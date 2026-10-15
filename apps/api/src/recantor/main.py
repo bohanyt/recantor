@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from recantor.meeting_essence.provider_adapters.factory import configure_summary_provider_factory
 from recantor.routes.health import router as health_router
 from recantor.routes.v1 import router as v1_router
 from recantor.settings import get_settings
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(v1_router)
+    configure_summary_provider_factory()
     return app
 
 

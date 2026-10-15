@@ -215,6 +215,11 @@ async def _open_count(db: AsyncSession) -> int:
     return int(counted or 0)
 
 
+async def outstanding_summary_dispatch_count(db: AsyncSession) -> int:
+    """Open dispatches the offline fixture worker must still drain."""
+    return await _open_count(db)
+
+
 async def _activate_or_defer(
     db: AsyncSession,
     dispatch: MISummaryDispatch,

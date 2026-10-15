@@ -341,7 +341,7 @@ class HostInvocationPermit:
         """
         async with self._sessionmaker() as db, db.begin():
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
-            row = await self._lock_nowait(db)
+            row = await self._lock_nowait(db, wait=True)
             if row is None or row.holder_token != handle.token:
                 return False
             if int(row.holder_generation) != handle.generation:
@@ -399,7 +399,7 @@ class HostInvocationPermit:
         identities = [item.as_identity() for item in persisted]
         async with self._sessionmaker() as db, db.begin():
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
-            row = await self._lock_nowait(db)
+            row = await self._lock_nowait(db, wait=True)
             if row is None or row.holder_token != handle.token:
                 return False
             if int(row.holder_generation) != handle.generation:
@@ -417,7 +417,7 @@ class HostInvocationPermit:
         """Keep the slot and the OS lock. An unproven inner task must not free either."""
         async with self._sessionmaker() as db, db.begin():
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
-            row = await self._lock_nowait(db)
+            row = await self._lock_nowait(db, wait=True)
             if row is None or row.holder_token != handle.token:
                 return False
             self._mark_quarantine(row, reason)
@@ -447,7 +447,7 @@ class HostInvocationPermit:
         """
         async with self._sessionmaker() as db, db.begin():
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
-            row = await self._lock_nowait(db)
+            row = await self._lock_nowait(db, wait=True)
             if row is None or row.holder_token != handle.token:
                 self._release_os(handle.token)
                 _forget_handle(handle.token)
@@ -656,11 +656,15 @@ class HostInvocationPermit:
     async def _load(self, db: AsyncSession) -> MIHostInvocationLease | None:
         return await db.scalar(select(MIHostInvocationLease).where(MIHostInvocationLease.id == 1))
 
-    async def _lock_nowait(self, db: AsyncSession) -> MIHostInvocationLease | None:
+    async def _lock_nowait(
+        self, db: AsyncSession, *, wait: bool = False
+    ) -> MIHostInvocationLease | None:
+        # Cleanup may overlap another cancellation's short transaction. Wait only
+        # up to the caller's SET LOCAL lock_timeout; admission still uses NOWAIT.
         row = await db.scalar(
             select(MIHostInvocationLease)
             .where(MIHostInvocationLease.id == 1)
-            .with_for_update(nowait=True)
+            .with_for_update(nowait=not wait)
         )
         if row is not None:
             return row
@@ -669,7 +673,7 @@ class HostInvocationPermit:
         return await db.scalar(
             select(MIHostInvocationLease)
             .where(MIHostInvocationLease.id == 1)
-            .with_for_update(nowait=True)
+            .with_for_update(nowait=not wait)
         )
 
 

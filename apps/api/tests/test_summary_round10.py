@@ -11,6 +11,12 @@ import time
 from pathlib import Path
 
 import pytest
+from meeting_intelligence_db import (
+    FIXTURE_SESSION_ID,
+    SEGMENT_SPECS,
+    ensure_segments,
+    ensure_session,
+)
 from test_summary_broker_lifecycle import prepare_shared_broker_permit
 
 from recantor.db import get_sessionmaker
@@ -25,6 +31,7 @@ from recantor.meeting_essence.scheduling.process_liveness import (
     process_is_alive,
     process_liveness,
 )
+from recantor.settings import get_settings
 
 
 async def _lease_view() -> tuple[object, ...]:
@@ -102,6 +109,66 @@ async def test_finished_permit_is_free_for_the_shared_broker_setup(mi_db) -> Non
     assert await permit.read_active_witness() == 0
     await prepare_shared_broker_permit()
     assert await permit.read_active_witness() == 0
+
+
+@pytest.mark.asyncio
+async def test_mi_db_seed_paths_leave_active_permit_unchanged(mi_db) -> None:
+    """Session seed helpers must not SQL-reset a live shared permit row."""
+    del mi_db
+    get_settings.cache_clear()
+    active = 0
+    stop = asyncio.Event()
+    began = asyncio.Event()
+
+    async def _stage() -> None:
+        nonlocal active
+        active += 1
+        began.set()
+        try:
+            while not stop.is_set():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await asyncio.sleep(0.01)
+        finally:
+            active -= 1
+
+    permit = HostInvocationPermit()
+    handle = await permit.acquire(entrypoint="round10-mi-db-seed")
+    await permit.mark_admitted(handle, spawns_process_tree=False)
+    task = asyncio.create_task(_stage())
+    await began.wait()
+    unknown = {
+        "pid": 424243,
+        "created_ms": 1,
+        "start_ticks": 1,
+        "namespace": "linux:other-boot:pid:[10]",
+        "owned_pgid": None,
+        "owned_sid": None,
+        "tree_root": None,
+    }
+    async with get_sessionmaker()() as db, db.begin():
+        row = await db.get(MIHostInvocationLease, 1)
+        assert row is not None and row.holder_token == handle.token
+        row.owned_runtime_json = json.dumps([unknown])
+    before = await _lease_view()
+    assert await permit.try_acquire(entrypoint="round10-mi-db-second") is None
+    async with get_sessionmaker()() as db:
+        await ensure_session(db, FIXTURE_SESSION_ID)
+        await ensure_segments(db, FIXTURE_SESSION_ID, SEGMENT_SPECS)
+        await db.commit()
+    assert await _lease_view() == before
+    assert active == 1
+    assert await permit.try_acquire(entrypoint="round10-mi-db-second-again") is None
+    stop.set()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await asyncio.wait_for(task, 1)
+    async with get_sessionmaker()() as db, db.begin():
+        row = await db.get(MIHostInvocationLease, 1)
+        if row is not None and row.holder_token == handle.token:
+            row.owned_runtime_json = "[]"
+    await permit.release(handle)
+    recovered = await permit.try_acquire(entrypoint="round10-mi-db-finished")
+    assert recovered is not None
+    assert await permit.release(recovered) is True
 
 
 @pytest.mark.asyncio
