@@ -864,7 +864,23 @@ async def execute_next_summary_job(
     bound: PermitBoundMeetingEssenceProvider | None = None
     started = utcnow()
     try:
-        inner = provider if provider is not None else get_summary_provider_factory().build()
+        try:
+            inner = provider if provider is not None else get_summary_provider_factory().build()
+        except Exception:
+            # Construction has not admitted provider work. Block this configuration
+            # instead of leaving an expiring claim to rebuild it on every wake.
+            await _block_unconfigured(
+                db,
+                claim,
+                claim.session_id,
+                code="provider_construction_failed",
+                message="summary provider could not be constructed",
+            )
+            return SummaryExecutionResult(
+                status=SummaryExecutionStatus.UNAVAILABLE,
+                dispatch_id=claim.dispatch_id,
+                session_id=claim.session_id,
+            )
         # Count the call only once admission has started the real provider.
         bound = PermitBoundMeetingEssenceProvider(
             inner=EnteredProviderCalls(inner),
@@ -1254,7 +1270,14 @@ def _terminal_values(
     )
 
 
-async def _block_unconfigured(db: AsyncSession, claim: _DispatchClaim, session_id: UUID) -> None:
+async def _block_unconfigured(
+    db: AsyncSession,
+    claim: _DispatchClaim,
+    session_id: UUID,
+    *,
+    code: str = "provider_unconfigured",
+    message: str = "summary provider is not configured",
+) -> None:
     await _fenced(
         db,
         claim,
@@ -1263,8 +1286,8 @@ async def _block_unconfigured(db: AsyncSession, claim: _DispatchClaim, session_i
             "claim_token": None,
             "claim_expires_at": None,
             "last_error_category": ProviderErrorCategory.CONFIG.value,
-            "last_error_code": "provider_unconfigured",
-            "last_error_message": "summary provider is not configured",
+            "last_error_code": code,
+            "last_error_message": message,
         },
     )
     state = await db.get(MISummarySessionState, session_id)

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -399,6 +401,230 @@ async def test_unconfigured_provider_is_unavailable(mi_db, monkeypatch: pytest.M
         result = await execute_next_summary_job(db, entrypoint="pytest-unconfigured")
     assert result.status == SummaryExecutionStatus.UNAVAILABLE
     assert get_summary_provider_factory().adapter_id == "unconfigured"
+
+
+@pytest.mark.asyncio
+async def test_factory_failure_blocks_without_orphan_claim_or_permit(mi_db, tmp_path, monkeypatch):
+    from summary_broker_provider import BrokerFactory
+
+    del mi_db
+    segment = (await _seed_text(SESSION_A, ["Invalid fixture."]))[0]
+    control = tmp_path / "control.json"
+    control.write_text(
+        json.dumps(
+            {
+                "log_path": str(tmp_path / "calls.log"),
+                "records": [
+                    {
+                        "record_id": "a-1",
+                        "segment_id": str(segment),
+                        "claim": "Invalid fixture.",
+                        "start_ms": 1000,
+                        "end_ms": 1800,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RECANTOR_SUMMARY_CONTROL", str(control))
+    monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
+    get_settings.cache_clear()
+
+    class BrokenFactory(BrokerFactory):
+        builds = 0
+
+        def build(self):
+            self.builds += 1
+            return super().build()
+
+    factory = BrokenFactory()
+    set_summary_provider_factory(factory)
+    async with get_sessionmaker()() as db:
+        result = await execute_next_summary_job(db, entrypoint="pytest-invalid-factory")
+    assert result.status == SummaryExecutionStatus.UNAVAILABLE
+    assert result.session_id == SESSION_A
+    async with get_sessionmaker()() as db:
+        dispatch = await db.get(MISummaryDispatch, result.dispatch_id)
+        assert dispatch.status == MISummaryDispatchStatus.CANCELLED.value
+        assert dispatch.claim_token is None and dispatch.claim_expires_at is None
+        assert dispatch.attempt_count == 1
+        assert dispatch.last_error_category == "config"
+        assert dispatch.last_error_code == "provider_construction_failed"
+        state = await db.get(MISummarySessionState, SESSION_A)
+        assert state.work_intent == "blocked"
+        for _ in range(3):
+            assert (await execute_next_summary_job(db)).status == SummaryExecutionStatus.NOT_CLAIMED
+    assert factory.builds == 1
+    assert not (tmp_path / "calls.log").exists()
+    permit = HostInvocationPermit()
+    assert await permit.blocking_reason() is None
+    handle = await permit.acquire(entrypoint="pytest-after-invalid-factory")
+    assert await permit.release(handle) is True
+
+
+@pytest.mark.asyncio
+async def test_completed_broker_tree_does_not_block_next_crash_session(
+    mi_db, tmp_path, monkeypatch
+):
+    """Real worker child/PG, including an earlier completed spawning invocation."""
+    from test_summary_broker_lifecycle import (
+        _checkpoint_page,
+        _identity_from_saved,
+        _kill_pid_only,
+        _reap_saved_identities,
+        _saved_identities,
+        _stop_process,
+        prepare_shared_broker_permit,
+    )
+
+    from recantor.meeting_essence.scheduling.process_liveness import (
+        Liveness,
+        process_liveness,
+        terminate_process_tree,
+    )
+
+    del mi_db
+    monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("MEETING_ESSENCE_ENGINE_QUANTUM_SECONDS", "60")
+    get_settings.cache_clear()
+    records = []
+    for session_id, count in ((SESSION_A, 1), (SESSION_B, 13)):
+        segments = await _seed_text(session_id, [f"Butir {i}." for i in range(count)])
+        records.extend(
+            {
+                "record_id": f"{session_id.hex[:4]}-{i}",
+                "segment_id": str(segment),
+                "claim": f"Butir {i}.",
+                "start_ms": (i + 1) * 1000,
+                "end_ms": (i + 1) * 1000 + 800,
+            }
+            for i, segment in enumerate(segments)
+        )
+        async with get_sessionmaker()() as db, db.begin():
+            await note_transcript_publication(db, session_id=session_id, publication_sequence=count)
+            await submit_summary_work(db, session_id=session_id, client_request_id=uuid4())
+    control = tmp_path / "control.json"
+    log_path = tmp_path / "calls.log"
+    control.write_text(
+        json.dumps(
+            dict(
+                log_path=str(log_path),
+                records=records,
+                spawn_tree=True,
+                block=True,
+                block_after_extracts=1,
+            )
+        ),
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["RECANTOR_SUMMARY_CONTROL"] = str(control)
+    env["RECANTOR_SUMMARY_PROVIDER_FACTORY"] = "summary_broker_provider:factory"
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(Path(__file__).resolve().parents[1] / "src"), str(Path(__file__).resolve().parent)]
+    )
+    completed = tmp_path / "completed.json"
+    runtime_path = tmp_path / "worker-identity.json"
+    code = """
+import asyncio, json, os, sys
+from dataclasses import asdict
+from pathlib import Path
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+from recantor.db import get_sessionmaker
+from recantor.meeting_essence.scheduling import tasks
+from recantor.meeting_essence.scheduling.jobs import execute_next_summary_job
+from recantor.meeting_essence.scheduling.host_permit import HostInvocationPermit
+from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+Path(sys.argv[3]).write_text(json.dumps(asdict(current_process_identity())))
+async def main():
+    async with get_sessionmaker()() as db:
+        first = await execute_next_summary_job(db, entrypoint='broker-lifecycle-regression')
+        root = json.loads(Path(sys.argv[1]).read_text())
+        Path(sys.argv[2]).write_text(json.dumps(dict(
+            session=str(first.session_id), status=first.status.value, root=root)))
+        # Bounded cleanup may settle asynchronously, just as between broker wakes.
+        while await HostInvocationPermit().blocks_new_invocation():
+            await asyncio.sleep(0.05)
+        await execute_next_summary_job(db, entrypoint='broker-lifecycle-regression')
+asyncio.run(main())
+"""
+    await prepare_shared_broker_permit()
+    worker_log = tmp_path / "worker.log"
+    root = None
+    grandchild = None
+    worker = None
+    runtime = None
+    try:
+        with worker_log.open("w", encoding="utf-8") as output:
+            worker = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    code,
+                    str(tmp_path / "owned-identity.json"),
+                    str(completed),
+                    str(runtime_path),
+                ],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+            )
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                assert worker.poll() is None, worker_log.read_text(encoding="utf-8")
+                saved = _saved_identities(log_path)
+                roots = [item for item in saved if item.get("role") == "root"]
+                children = [item for item in saved if item.get("role") == "grandchild"]
+                async with get_sessionmaker()() as db:
+                    checkpoint = await db.scalar(
+                        select(MIAttemptCheckpoint.body_json).where(
+                            MIAttemptCheckpoint.session_id == SESSION_B
+                        )
+                    )
+                    lease = await db.get(MIHostInvocationLease, 1)
+                if completed.is_file() and roots and children and _checkpoint_page(checkpoint) >= 1:
+                    root = _identity_from_saved(roots[0])
+                    grandchild = _identity_from_saved(children[0])
+                    break
+                await asyncio.sleep(0.05)
+            assert root is not None and grandchild is not None, worker_log.read_text(
+                encoding="utf-8"
+            )
+            first = json.loads(completed.read_text(encoding="utf-8"))
+            assert first["session"] == str(SESSION_A)
+            assert first["status"] == "succeeded"
+            assert process_liveness(_identity_from_saved(first["root"])) == Liveness.DEAD
+            # Windows venv python.exe is a launcher; the lease belongs to the
+            # runtime that reports its original identity, not necessarily Popen.pid.
+            runtime = _identity_from_saved(json.loads(runtime_path.read_text(encoding="utf-8")))
+            assert lease.holder_pid == runtime.pid
+            assert lease.holder_entrypoint == "broker-lifecycle-regression"
+            assert root.pid not in {worker.pid, runtime.pid, os.getpid()}
+            assert str(root.pid) in lease.owned_runtime_json
+            assert process_liveness(root) == process_liveness(grandchild) == Liveness.ALIVE
+            assert process_liveness(runtime) == Liveness.ALIVE
+            _kill_pid_only(runtime.pid)
+            worker.wait(timeout=5)
+            assert process_liveness(root) == process_liveness(grandchild) == Liveness.ALIVE
+            permit = HostInvocationPermit()
+            assert await permit.try_acquire(entrypoint="before-proven-stop") is None
+            assert await permit.recover_proven_dead() is False
+            assert await asyncio.to_thread(terminate_process_tree, root) is True
+            assert process_liveness(root) == process_liveness(grandchild) == Liveness.DEAD
+            assert await permit.recover_proven_dead() is True
+            handle = await permit.acquire(entrypoint="after-proven-stop")
+            assert await permit.release(handle) is True
+    finally:
+        if runtime is None and runtime_path.is_file():
+            runtime = _identity_from_saved(json.loads(runtime_path.read_text(encoding="utf-8")))
+        if runtime is not None and process_liveness(runtime) == Liveness.ALIVE:
+            _kill_pid_only(runtime.pid)
+        _stop_process(worker)
+        _reap_saved_identities(log_path)
+        await HostInvocationPermit().recover_proven_dead()
 
 
 @pytest.mark.asyncio

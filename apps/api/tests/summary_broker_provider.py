@@ -118,6 +118,30 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
         self._owned = [identity]
         return list(self._owned)
 
+    async def aclose(self) -> None:
+        """A completed turn must stop its prepared tree, just like a live adapter.
+
+        The crash proof kills the worker while its stage is blocked, so this
+        closer never runs there. Normal completion must not strand an earlier
+        one-page session's child and prevent the crash session from starting.
+        Keep the closer pending if bounded wrapper cleanup cancels its wait.
+        """
+        from recantor.meeting_essence.scheduling.process_liveness import terminate_process_tree
+
+        def stop() -> None:
+            for identity, proc in self._popens:
+                if not terminate_process_tree(identity):
+                    raise RuntimeError("broker fixture owned tree stop was not proven")
+                proc.wait(timeout=5)
+
+        cleanup = asyncio.create_task(asyncio.to_thread(stop))
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                continue
+        cleanup.result()
+
     def _remember(self, payload: dict[str, object]) -> None:
         self._saved.append(payload)
         self._identities_path.write_text(json.dumps(self._saved), encoding="utf-8")

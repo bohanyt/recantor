@@ -24,6 +24,29 @@ from recantor.models import RecordingSession, SessionKind, SessionState, Transcr
 from recantor.settings import get_settings
 
 
+@pytest.mark.parametrize("record_id", ["a-01", "b-01", "c-01", "a-1"])
+def test_broker_factory_validates_record_ids(record_id, tmp_path, monkeypatch) -> None:
+    from pydantic import ValidationError
+    from summary_broker_provider import factory
+
+    control = tmp_path / "control.json"
+    control.write_text(
+        '{"log_path": '
+        + _json(str(tmp_path / "calls.log"))
+        + ', "records": ['
+        + _record(record_id, uuid4(), "Bukti.")
+        + "]}",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RECANTOR_SUMMARY_CONTROL", str(control))
+    if len(record_id) < 4:
+        with pytest.raises(ValidationError) as rejected:
+            factory().build()
+        assert rejected.value.errors()[0]["type"] == "string_too_short"
+    else:
+        assert factory().build().extraction_records[0].record_id == record_id
+
+
 def _require_redis() -> None:
     from redis import Redis
     from redis.exceptions import RedisError
@@ -111,9 +134,9 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
             '{"sleep_seconds": 0.05, "block": false, "log_path": '
             + _json(str(log_path))
             + ', "records": ['
-            + _record("a-1", segment_a, "Satu.")
+            + _record("a-01", segment_a, "Satu.")
             + ","
-            + _record("b-1", segment_b, "Dua.")
+            + _record("b-01", segment_b, "Dua.")
             + "]}"
         ),
         encoding="utf-8",
@@ -201,7 +224,7 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
                 '{"sleep_seconds": 0, "block": true, "log_path": '
                 + _json(str(log_path))
                 + ', "records": ['
-                + _record("c-1", segment_c, "Batal.")
+                + _record("c-01", segment_c, "Batal.")
                 + "]}"
             ),
             encoding="utf-8",
