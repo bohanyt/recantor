@@ -1,7 +1,7 @@
 import asyncio
 import shutil
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
@@ -63,6 +63,40 @@ async def clean_recording_state(tmp_path: Path) -> AsyncIterator[None]:
     await get_engine().dispose()
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _release_settled_host_permits() -> Iterator[None]:
+    """Release handles this process still holds after the test's own work has finished.
+
+    ``release`` leaves the slot busy when the stage, closer, or owned tree is
+    not proven dead. This does not rewrite an unknown or still-live lease.
+    """
+    yield
+    from recantor.meeting_essence.scheduling.host_permit import open_permit_handles
+
+    if not open_permit_handles():
+        return
+
+    async def _settle() -> None:
+        from recantor.meeting_essence.scheduling.host_permit import (
+            HostInvocationPermit,
+            open_permit_handles,
+        )
+
+        # A matching token can still be an in-process stage or closer. release()
+        # would treat that as idle. Leave it. A token that no longer matches is
+        # a leftover OS lock after the test already dropped the row.
+        for permit, handle in open_permit_handles():
+            async with permit._sessionmaker() as db:
+                row = await permit._load(db)
+            if row is not None and row.holder_token == handle.token:
+                continue
+            await permit.release(handle)
+        if open_permit_handles():
+            await HostInvocationPermit().recover_proven_dead()
+
+    asyncio.run(_settle())
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:

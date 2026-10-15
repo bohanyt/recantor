@@ -55,10 +55,26 @@ from recantor.meeting_essence.scheduling.process_liveness import (
 from recantor.settings import get_settings
 
 _DNS_TIMEOUT_SECONDS = 0.25
+# Handles this process acquired and has not yet cleared. Tests release these
+# after their own work settles; recovery still requires a proven-dead tree.
+_open_handles: dict[str, tuple[HostInvocationPermit, PermitHandle]] = {}
 
 
 class HostInvocationBusy(RuntimeError):
     """The shared host permit is held, quarantined, or unreachable."""
+
+
+def open_permit_handles() -> tuple[tuple[HostInvocationPermit, PermitHandle], ...]:
+    """Handles acquired in this process whose slot has not been cleared."""
+    return tuple(_open_handles.values())
+
+
+def _remember_handle(permit: HostInvocationPermit, handle: PermitHandle) -> None:
+    _open_handles[handle.token] = (permit, handle)
+
+
+def _forget_handle(token: str) -> None:
+    _open_handles.pop(token, None)
 
 
 @dataclass(frozen=True)
@@ -229,13 +245,15 @@ class HostInvocationPermit:
                 host_authority.write_owned([], containment_open=False)
                 self._held_os[token] = held_os
                 held_os = None
-                return PermitHandle(
+                handle = PermitHandle(
                     token=token,
                     identity=holder,
                     entrypoint=normalized,
                     acquired_at=now,
                     generation=generation,
                 )
+                _remember_handle(self, handle)
+                return handle
         except DBAPIError:
             return None
         finally:
@@ -431,6 +449,8 @@ class HostInvocationPermit:
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
             row = await self._lock_nowait(db)
             if row is None or row.holder_token != handle.token:
+                self._release_os(handle.token)
+                _forget_handle(handle.token)
                 return False
             owned, containment_open = _runtime_state(row.owned_runtime_json)
             if not self._termination_proven(row, handle):
@@ -455,6 +475,8 @@ class HostInvocationPermit:
             await db.execute(text("SET LOCAL lock_timeout = '200ms'"))
             row = await self._lock_nowait(db)
             if row is None or row.holder_token != handle.token:
+                self._release_os(handle.token)
+                _forget_handle(handle.token)
                 return False
             if not _namespace_is_local(row.holder_namespace):
                 return False
@@ -585,6 +607,7 @@ class HostInvocationPermit:
         row.invocation_admitted = False
         row.spawns_process_tree = False
         row.updated_at = datetime.now(tz=UTC)
+        _open_handles.clear()
 
     def _release_os(self, token: str) -> None:
         held = self._held_os.pop(token, None)

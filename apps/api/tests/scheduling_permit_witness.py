@@ -32,12 +32,15 @@ async def _hold(database_url: str, hold_seconds: float, token_out: str) -> None:
     get_sessionmaker.cache_clear()
     permit = HostInvocationPermit()
     handle = await permit.acquire(entrypoint="witness-subprocess")
-    with open(token_out, "w", encoding="utf-8") as fh:
-        fh.write(handle.token)
-    deadline = time.monotonic() + hold_seconds
-    while time.monotonic() < deadline:
-        await permit.renew(handle, lease_seconds=5)
-        await asyncio.sleep(0.05)
+    try:
+        with open(token_out, "w", encoding="utf-8") as fh:
+            fh.write(handle.token)
+        deadline = time.monotonic() + hold_seconds
+        while time.monotonic() < deadline:
+            await permit.renew(handle, lease_seconds=5)
+            await asyncio.sleep(0.05)
+    finally:
+        await permit.release(handle)
 
 
 def main() -> None:

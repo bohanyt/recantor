@@ -495,14 +495,15 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
     backup = identity_file.read_text(encoding="utf-8") if identity_file.is_file() else None
     alias = "recantor-pg-alias"
     wrong = "recantor-pg-wrong"
+    added_hosts: list[str] = []
     try:
-        if not _map_alias(alias, str(observed).split("%", 1)[0]):
+        if not _map_alias(alias, str(observed).split("%", 1)[0], added_hosts):
             if os.environ.get("CI") and sys.platform == "linux":
                 pytest.fail("Linux CI could not resolve the PostgreSQL DNS alias")
             permit = HostInvocationPermit()
             assert await permit.authority_reachable() is True
             return
-        _map_alias(wrong, "203.0.113.55")
+        _map_alias(wrong, "203.0.113.55", added_hosts)
         url = make_url(get_settings().database_url).set(host=alias)
         monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
         get_settings.cache_clear()
@@ -543,6 +544,7 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
                 prompt_bundle=None,  # type: ignore[arg-type]
             )
     finally:
+        _remove_exact_host_lines(added_hosts)
         get_settings.cache_clear()
         if backup is None:
             if identity_file.is_file():
@@ -849,15 +851,48 @@ async def _free_lease() -> None:
         )
 
 
-def _map_alias(name: str, ip: str) -> bool:
-    if _resolves_to(name, ip):
+def test_inet_cidr_text_is_the_host_address() -> None:
+    assert _inet_host("172.18.0.2/32") == "172.18.0.2"
+    assert _inet_host("::1/128") == "::1"
+    assert _inet_host("127.0.0.1/32%0") == "127.0.0.1"
+    assert _resolves_to("localhost", "127.0.0.1/32")
+    assert not _resolves_to("localhost", "203.0.113.55/32")
+
+
+def test_hosts_cleanup_removes_only_the_added_line() -> None:
+    original = (
+        "127.0.0.1 localhost\n"
+        "10.1.2.3 recantor-pg-alias\n"
+        "10.1.2.3 recantor-pg-alias\n"
+        "203.0.113.55 recantor-pg-wrong\n"
+    )
+    cleaned = _without_exact_lines(
+        original, ["10.1.2.3 recantor-pg-alias", "203.0.113.55 recantor-pg-wrong"]
+    )
+    assert cleaned == ("127.0.0.1 localhost\n10.1.2.3 recantor-pg-alias\n")
+
+
+def _inet_host(value: str) -> str:
+    """Host from ``inet`` text. PostgreSQL includes ``/32`` or ``/128``."""
+    text = str(value).split("%", 1)[0].strip()
+    slash = text.find("/")
+    if slash > 0:
+        text = text[:slash]
+    return text
+
+
+def _map_alias(name: str, ip: str, added: list[str] | None = None) -> bool:
+    host = _inet_host(ip)
+    if not host:
+        return False
+    if _resolves_to(name, host):
         return True
     if not os.environ.get("CI") or sys.platform == "win32":
         return False
-    line = f"{ip} {name}\n"
+    line = f"{host} {name}"
     completed = subprocess.run(
         ["sudo", "tee", "-a", "/etc/hosts"],
-        input=line,
+        input=line + "\n",
         text=True,
         check=False,
         stdout=subprocess.DEVNULL,
@@ -865,7 +900,54 @@ def _map_alias(name: str, ip: str) -> bool:
     )
     if completed.returncode != 0:
         pytest.fail(completed.stderr)
-    return _resolves_to(name, ip)
+    if added is not None:
+        added.append(line)
+    return _resolves_to(name, host)
+
+
+def _without_exact_lines(text: str, lines: list[str]) -> str:
+    """Drop one occurrence of each exact hosts line. Leave every other line."""
+    pending = list(lines)
+    kept: list[str] = []
+    for raw in text.splitlines(keepends=True):
+        stripped = raw.rstrip("\r\n")
+        if stripped in pending:
+            pending.remove(stripped)
+            continue
+        kept.append(raw if raw.endswith(("\n", "\r\n")) else raw + "\n")
+    return "".join(kept)
+
+
+def _remove_exact_host_lines(lines: list[str]) -> None:
+    """Remove only the hosts lines this test appended. Other lines stay."""
+    if not lines or sys.platform == "win32":
+        return
+    script = (
+        "import pathlib, sys\n"
+        "path = pathlib.Path('/etc/hosts')\n"
+        "pending = [line for line in sys.stdin.read().splitlines() if line]\n"
+        "text = path.read_text(encoding='utf-8')\n"
+        "kept = []\n"
+        "for raw in text.splitlines(keepends=True):\n"
+        "    stripped = raw.rstrip('\\r\\n')\n"
+        "    if stripped in pending:\n"
+        "        pending.remove(stripped)\n"
+        "        continue\n"
+        "    kept.append(raw if raw.endswith(('\\n', '\\r\\n')) else raw + '\\n')\n"
+        "tmp = path.parent / 'hosts.recantor-tmp'\n"
+        "tmp.write_text(''.join(kept), encoding='utf-8')\n"
+        "tmp.replace(path)\n"
+    )
+    completed = subprocess.run(
+        ["sudo", "python3", "-c", script],
+        input="\n".join(lines) + "\n",
+        text=True,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        pytest.fail(completed.stderr or "could not remove the ephemeral hosts lines")
 
 
 def _resolves_to(name: str, ip: str) -> bool:
@@ -873,5 +955,5 @@ def _resolves_to(name: str, ip: str) -> bool:
         infos = socket.getaddrinfo(name, None, type=socket.SOCK_STREAM)
     except OSError:
         return False
-    wanted = ip.split("%", 1)[0]
-    return any(str(item[4][0]).split("%", 1)[0] == wanted for item in infos)
+    wanted = _inet_host(ip)
+    return any(_inet_host(str(item[4][0])) == wanted for item in infos)

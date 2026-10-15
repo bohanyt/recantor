@@ -19,6 +19,7 @@ from recantor.meeting_essence.budget import EngineLimits
 from recantor.meeting_essence.checkpoint_binding import limits_fingerprint
 from recantor.meeting_essence.contracts import ProcessingJobStatus
 from recantor.meeting_essence.engine import EngineRunConfig
+from recantor.meeting_essence.persistence.caching_provider import EnteredProviderCalls
 from recantor.meeting_essence.persistence.repository import (
     AttemptBusyError,
     AttemptFenceError,
@@ -859,8 +860,9 @@ async def execute_next_summary_job(
     started = utcnow()
     try:
         inner = provider if provider is not None else get_summary_provider_factory().build()
+        # Count the call only once admission has started the real provider.
         bound = PermitBoundMeetingEssenceProvider(
-            inner=inner,
+            inner=EnteredProviderCalls(inner),
             permit=permit,
             entrypoint=entrypoint,
             shared_handle=handle,

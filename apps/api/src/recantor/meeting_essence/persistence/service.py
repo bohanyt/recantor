@@ -20,7 +20,10 @@ from recantor.meeting_essence.engine import (
     EngineRunTrace,
     MeetingEssenceEngine,
 )
-from recantor.meeting_essence.persistence.caching_provider import CachedMeetingEssenceProvider
+from recantor.meeting_essence.persistence.caching_provider import (
+    CachedMeetingEssenceProvider,
+    entered_call_counts,
+)
 from recantor.meeting_essence.persistence.fingerprints import (
     compute_run_fingerprint,
     extraction_reuse_key,
@@ -392,13 +395,14 @@ class MeetingIntelligenceLedgerService:
         await self._db.commit()
         refreshed = await self._repo.get_job(job.id, session_id=session_id)
         finished = await self._repo.get_attempt(attempt.id, session_id=session_id)
+        provider_calls, extract_calls = entered_call_counts(cached_provider)
         return IntelligenceRunOutcome(
             result=result,
             job=refreshed,
             attempt=finished,
-            provider_calls=cached_provider.provider_calls,
+            provider_calls=provider_calls,
             cache_hits=cached_provider.cache_hits,
-            extract_provider_calls=cached_provider.extract_provider_calls,
+            extract_provider_calls=extract_calls,
             served_from_completed_cache=False,
         )
 

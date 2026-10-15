@@ -137,6 +137,7 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
             os.path.dirname(__file__),
         ]
     )
+    await prepare_shared_broker_permit()
     worker_log = tmp_path / "worker.log"
     worker: subprocess.Popen[str] | None = None
     worker_handle: object | None = None
@@ -384,9 +385,7 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
         encoding="utf-8",
     )
     env["RECANTOR_SUMMARY_CONTROL"] = str(control)
-    authority = tmp_path / "authority"
-    monkeypatch.setenv("RECANTOR_HOST_AUTHORITY_DIR", str(authority))
-    env["RECANTOR_HOST_AUTHORITY_DIR"] = str(authority)
+    await prepare_shared_broker_permit()
     reconciler_log = tmp_path / "reconciler.log"
     worker_log = tmp_path / "crash-worker.log"
     reconciler, reconciler_handle = _start_reconciler(env, reconciler_log)
@@ -724,6 +723,79 @@ def _start_reconciler(env: dict[str, str], log_path: Path) -> tuple[subprocess.P
         stdin=subprocess.DEVNULL,
     )
     return proc, handle
+
+
+async def prepare_shared_broker_permit() -> None:
+    """Use the real shared permit. Recover only a proven-dead holder.
+
+    A private authority directory or a direct lease reset is not cleanup. An
+    unknown owned identity, an occupied owned group, or this process's still
+    running stage or closer stays busy and this setup fails.
+    """
+    from sqlalchemy import text
+
+    from recantor.meeting_essence.scheduling.host_permit import HostInvocationPermit
+
+    permit = HostInvocationPermit()
+    async with get_sessionmaker()() as db:
+        matched = await permit._matches_configured_authority(db)
+        observed = await db.scalar(text("SELECT inet_server_addr()::text"))
+    if not matched:
+        raise AssertionError(
+            f"broker authority does not match this database: inet_server_addr={observed!r}"
+        )
+    await permit.recover_proven_dead()
+    if await permit.blocks_new_invocation():
+        raise AssertionError(f"shared host permit is busy: {await _busy_permit_reason()}")
+
+
+async def _busy_permit_reason() -> str:
+    """Read why the shared permit blocks. Does not change the lease or sidecar."""
+    from recantor.meeting_essence.scheduling import host_authority
+    from recantor.meeting_essence.scheduling.host_permit import _runtime_state
+    from recantor.meeting_essence.scheduling.models import MIHostInvocationLease
+    from recantor.meeting_essence.scheduling.process_liveness import (
+        Liveness,
+        owned_group_occupied,
+        process_liveness,
+    )
+
+    snapshot = host_authority.read_owned()
+    if not snapshot.readable:
+        return "sidecar is unreadable"
+    if snapshot.containment_open:
+        return "sidecar containment is open"
+    async with get_sessionmaker()() as db:
+        row = await db.get(MIHostInvocationLease, 1)
+    if row is None or not row.holder_token:
+        return "sidecar or authority blocks without a lease holder"
+    owned, containment_open = _runtime_state(row.owned_runtime_json)
+    if containment_open:
+        return "lease containment is open"
+    for item in owned:
+        liveness = process_liveness(item.as_identity())
+        if liveness != Liveness.DEAD:
+            return f"owned pid {item.pid} is {liveness.value}"
+        if owned_group_occupied(item.as_identity()):
+            return f"owned group for pid {item.pid} is still occupied"
+    holder = process_liveness(_caller_identity(row))
+    if holder != Liveness.DEAD:
+        return f"holder pid {row.holder_pid} is {holder.value} entrypoint={row.holder_entrypoint}"
+    return f"holder state {row.holder_state} active={row.active_invocations}"
+
+
+def _caller_identity(row: object):
+    from recantor.meeting_essence.scheduling.process_liveness import ProcessIdentity
+
+    created = getattr(row, "holder_pid_created_ms", None)
+    ticks = getattr(row, "holder_start_ticks", None)
+    namespace = getattr(row, "holder_namespace", None)
+    return ProcessIdentity(
+        pid=int(getattr(row, "holder_pid", 0) or 0),
+        created_ms=None if created is None else int(created),
+        start_ticks=None if ticks is None else int(ticks),
+        namespace=None if namespace is None else str(namespace),
+    )
 
 
 def _json(value: str) -> str:
