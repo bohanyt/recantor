@@ -17,6 +17,13 @@ import contextlib
 from recantor.meeting_essence.contracts import MeetingIntelligenceJobMetadata, StageOperation
 from recantor.meeting_essence.prompt_loader import PromptBundle
 from recantor.meeting_essence.provider import MeetingEssenceProvider
+from recantor.meeting_essence.provider_adapters.spawn_gate import (
+    PermitPreResumeGate,
+    reset_held_permit,
+    reset_pre_resume_gate,
+    set_held_permit,
+    set_pre_resume_gate,
+)
 from recantor.meeting_essence.scheduling.host_permit import (
     HostInvocationBusy,
     HostInvocationPermit,
@@ -97,15 +104,24 @@ class PermitBoundMeetingEssenceProvider:
             await self._permit.terminate_owned_tree(self._handle)
         await self._reap(stage)
 
-    async def prepare_owned_spawn(self, identities: list[ProcessIdentity]) -> bool:
-        """Register before executable work. A cancel kills only these pids."""
-        if self._cancel.is_set():
+    async def prepare_owned_spawn(
+        self,
+        identities: list[ProcessIdentity],
+        admission_closed: object | None = None,
+    ) -> bool:
+        """Register before executable work. Denial after a timeout does not admit late."""
+        closed = getattr(admission_closed, "is_set", None)
+
+        def _closed() -> bool:
+            return bool(closed is not None and closed())
+
+        if self._cancel.is_set() or _closed():
             await self._stop_identities(identities)
             return False
         if not identities:
-            return not self._cancel.is_set()
+            return not self._cancel.is_set() and not _closed()
         registered = await self.register_owned_processes(identities)
-        if not registered or self._cancel.is_set():
+        if not registered or self._cancel.is_set() or _closed():
             await self._stop_identities(identities)
             return False
         return True
@@ -135,6 +151,13 @@ class PermitBoundMeetingEssenceProvider:
         await self._permit.mark_admitted(self._handle, spawns_process_tree=self.spawns_process_tree)
         if self._cancel.is_set():
             raise HostInvocationBusy("summary invocation was cancelled")
+        gate = (
+            PermitPreResumeGate(self, asyncio.get_running_loop())
+            if self.spawns_process_tree
+            else None
+        )
+        gate_token = set_pre_resume_gate(gate)
+        held_token = set_held_permit(self._handle)
         stage = asyncio.create_task(
             self._inner.run_stage(
                 operation=operation,
@@ -153,17 +176,32 @@ class PermitBoundMeetingEssenceProvider:
                 {stage, waiter}, return_when=asyncio.FIRST_COMPLETED
             )
             if stage in done and not stage.cancelled():
+                self._task_unproven = False
+                if not waiter.done():
+                    waiter.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await waiter
                 return stage.result()
+            if gate is not None:
+                gate.close()
             stage.cancel()
             if self._handle is not None:
                 await self._permit.terminate_owned_tree(self._handle)
             await self._reap(stage)
             raise HostInvocationBusy("summary invocation was cancelled")
         finally:
+            if gate is not None:
+                gate.close()
+            reset_pre_resume_gate(gate_token)
+            reset_held_permit(held_token)
             if not waiter.done():
                 waiter.cancel()
             await self._reap(waiter)
-            if not stage.done():
+            if stage.done() and not stage.cancelled():
+                self._task_unproven = False
+                self._stage = None
+                self._waiter = None
+            elif not stage.done():
                 stage.cancel()
 
     async def aclose(self) -> bool:
@@ -205,10 +243,12 @@ class PermitBoundMeetingEssenceProvider:
         try:
             closer = getattr(self._inner, "aclose", None)
             if closer is not None:
-                closer_task = asyncio.create_task(closer())
-                self._closer_task = closer_task
-                self._closer_unproven = True
-                closer_task.add_done_callback(self._on_closer_exit)
+                closer_task = self._closer_task
+                if closer_task is None:
+                    closer_task = asyncio.create_task(closer())
+                    self._closer_task = closer_task
+                    self._closer_unproven = True
+                    closer_task.add_done_callback(self._on_closer_exit)
                 try:
                     await asyncio.wait({closer_task}, timeout=_CLOSE_BOUND_SECONDS)
                 except asyncio.CancelledError:
@@ -243,26 +283,31 @@ class PermitBoundMeetingEssenceProvider:
                 self._closer_task is not None and not self._closer_task.done()
             )
             reason = "closer-not-proven-dead" if closer_open else "inner-task-not-proven-dead"
-            await self._permit.quarantine_unproven(handle, reason)
-            self._handle = None
             self._arm_release_when_done(handle)
+            await self._permit.quarantine_unproven(handle, reason)
             return False
-        self._handle = None
-        return await self._permit.release(handle)
+        released = await self._permit.release(handle)
+        if released and self._handle is handle:
+            self._handle = None
+        return released
 
     def _arm_release_when_done(self, handle: PermitHandle) -> None:
+        if self._reaper is not None and not self._reaper.done():
+            return
         stage = self._stage
         closer = self._closer_task
+        waiter = self._waiter
 
         async def _release_after_task() -> None:
-            for task in (stage, closer):
+            for task in (stage, closer, waiter):
                 if task is None:
                     continue
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
-            if any(task is not None and not task.done() for task in (stage, closer)):
+            if any(task is not None and not task.done() for task in (stage, closer, waiter)):
                 return
-            await self._permit.release(handle)
+            if self._handle is handle and await self._permit.release(handle):
+                self._handle = None
 
         self._reaper = asyncio.create_task(_release_after_task())
 

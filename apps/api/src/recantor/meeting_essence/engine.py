@@ -593,17 +593,16 @@ class MeetingEssenceEngine:
             )
             if fitted_page is None:
                 fragment = fragments[page_start]
-                checkpoint.unprocessed_segment_ids.append(fragment.segment_id)
+                if fragment.segment_id not in checkpoint.unprocessed_segment_ids:
+                    checkpoint.unprocessed_segment_ids.append(fragment.segment_id)
                 checkpoint.processing_status = ProcessingJobStatus.PARTIAL
-                page_start += 1
-                checkpoint.extract_fragment_cursor = page_start
                 limitations.append(
                     CoverageLimitation(
                         code="fragment_exceeds_budget",
                         message="a source fragment does not fit the wire budget",
                     )
                 )
-                continue
+                return
             request, audit, page_fragments, context, slots = fitted_page
             known = {record.record_id: record for record in checkpoint.atomic_records}
             continuations = 0
@@ -625,7 +624,14 @@ class MeetingEssenceEngine:
                     unicode_codepoints=sum(len(fragment.text) for fragment in page_fragments),
                 )
                 if refit is None:
-                    break
+                    checkpoint.processing_status = ProcessingJobStatus.PARTIAL
+                    limitations.append(
+                        CoverageLimitation(
+                            code="extract_continuation_exceeds_budget",
+                            message="unfinished extract page does not fit the wire budget",
+                        )
+                    )
+                    return
                 request, audit = refit
                 self._commit_source_page(plan, checkpoint)
                 self._record_sample(
@@ -675,7 +681,7 @@ class MeetingEssenceEngine:
                             else "extract_rejected",
                         )
                     )
-                    break
+                    return
                 fresh = [
                     record for record in response.extracted_records if record.record_id not in known
                 ]
@@ -685,10 +691,35 @@ class MeetingEssenceEngine:
                     )
                     for record in fresh:
                         known[record.record_id] = record
+                exhausted = len(response.extracted_records) < slots
+                if exhausted:
+                    # Save acceptance and exhaustion together. A turn/restart after
+                    # this checkpoint must not replay the exhausted page with a
+                    # different omitted-record set (and hence a different cache key).
+                    checkpoint.inspected_segment_ids = track_inspected_segments(
+                        checkpoint.inspected_segment_ids, page_fragments + context
+                    )
+                    checkpoint.completed_fragment_indices = (
+                        *checkpoint.completed_fragment_indices,
+                        *range(page_start, page_start + len(page_fragments)),
+                    )
+                    checkpoint.extract_page_index += 1
+                    page_start += len(page_fragments)
+                    checkpoint.extract_fragment_cursor = page_start
+                    checkpoint.processed_fragment_count = page_start
                 await self._note_validated_stage(StageOperation.EXTRACT, request, response)
                 await self._commit_checkpoint(checkpoint)
-                if len(response.extracted_records) < slots or not fresh:
+                if exhausted:
                     break
+                if not fresh:
+                    checkpoint.processing_status = ProcessingJobStatus.PARTIAL
+                    limitations.append(
+                        CoverageLimitation(
+                            code="extract_no_progress",
+                            message="full extract response did not advance the continuation",
+                        )
+                    )
+                    return
                 continuations += 1
             else:
                 checkpoint.processing_status = ProcessingJobStatus.PARTIAL
@@ -698,18 +729,7 @@ class MeetingEssenceEngine:
                         message="extract continuation stopped before the fragment was exhausted",
                     )
                 )
-            checkpoint.inspected_segment_ids = track_inspected_segments(
-                checkpoint.inspected_segment_ids, page_fragments + context
-            )
-            checkpoint.completed_fragment_indices = (
-                *checkpoint.completed_fragment_indices,
-                *range(page_start, page_start + len(page_fragments)),
-            )
-            checkpoint.extract_page_index += 1
-            page_start += len(page_fragments)
-            checkpoint.extract_fragment_cursor = page_start
-            checkpoint.processed_fragment_count = page_start
-            await self._commit_checkpoint(checkpoint)
+                return
         if not checkpoint.unprocessed_segment_ids and page_start >= len(fragments):
             checkpoint.extract_complete = True
         elif page_start >= len(fragments):

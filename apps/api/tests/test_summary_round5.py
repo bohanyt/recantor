@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.engine.url import make_url
 
-from recantor.db import get_sessionmaker
+from recantor.db import get_engine, get_sessionmaker
 from recantor.meeting_essence.contracts import ProcessingJobStatus, StageOperation
 from recantor.meeting_essence.engine import EngineRunResult, EngineRunTrace
 from recantor.meeting_essence.identity import finalize_snapshot_manifest, segment_content_hash
@@ -493,9 +493,12 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
     assert observed
     identity_file = host_authority.identity_path()
     backup = identity_file.read_text(encoding="utf-8") if identity_file.is_file() else None
-    alias = "recantor-pg-alias"
-    wrong = "recantor-pg-wrong"
+    original_url = os.environ["DATABASE_URL"]
+    # Windows cannot add hosts entries here; localhost is a real loopback alias.
+    alias = "localhost" if sys.platform == "win32" else "recantor-pg-alias"
+    wrong = "recantor-missing.invalid" if sys.platform == "win32" else "recantor-pg-wrong"
     added_hosts: list[str] = []
+    wrappers: list[PermitBoundMeetingEssenceProvider] = []
     try:
         if not _map_alias(alias, str(observed).split("%", 1)[0], added_hosts):
             if os.environ.get("CI") and sys.platform == "linux":
@@ -521,6 +524,7 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
         wrapper = PermitBoundMeetingEssenceProvider(
             inner=_Inner(), permit=permit, entrypoint="round5-dns-alias"
         )
+        wrappers.append(wrapper)
         ran = await wrapper.run_stage(
             operation=None,  # type: ignore[arg-type]
             request=None,  # type: ignore[arg-type]
@@ -537,6 +541,7 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
             refused_wrapper = PermitBoundMeetingEssenceProvider(
                 inner=_Inner(), permit=refused, entrypoint="round5-wrong-alias"
             )
+            wrappers.append(refused_wrapper)
             await refused_wrapper.run_stage(
                 operation=None,  # type: ignore[arg-type]
                 request=None,  # type: ignore[arg-type]
@@ -544,14 +549,36 @@ async def test_dns_alias_matches_the_server_and_a_wrong_alias_does_not(mi_db, mo
                 prompt_bundle=None,  # type: ignore[arg-type]
             )
     finally:
-        _remove_exact_host_lines(added_hosts)
+        alias_engine = get_engine() if get_engine.cache_info().currsize else None
+        monkeypatch.setenv("DATABASE_URL", original_url)
         get_settings.cache_clear()
-        if backup is None:
-            if identity_file.is_file():
-                identity_file.unlink()
-        else:
-            identity_file.write_text(backup, encoding="utf-8")
-        await _free_lease()
+        try:
+            if alias_engine is not None:
+                await alias_engine.dispose()
+            get_sessionmaker.cache_clear()
+            get_engine.cache_clear()
+            for bound in wrappers:
+                assert await bound.aclose() is True
+        finally:
+            # A failed stage may release through its captured sessionmaker above.
+            # Dispose that engine again before removing aliases it could still use.
+            try:
+                if alias_engine is not None:
+                    await alias_engine.dispose()
+            finally:
+                get_sessionmaker.cache_clear()
+                get_engine.cache_clear()
+                try:
+                    if backup is None:
+                        if identity_file.is_file():
+                            identity_file.unlink()
+                    else:
+                        identity_file.write_text(backup, encoding="utf-8")
+                finally:
+                    _remove_exact_host_lines(added_hosts)
+    assert get_settings().database_url == original_url
+    assert await HostInvocationPermit().authority_reachable() is True
+    assert await HostInvocationPermit().blocks_new_invocation() is False
 
 
 @pytest.mark.asyncio

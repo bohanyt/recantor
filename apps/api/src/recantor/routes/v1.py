@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from recantor.routes.meeting_essence import router as meeting_essence_router
 from recantor.routes.realtime_audio import router as realtime_audio_router
 from recantor.routes.recording import router as recording_router
 from recantor.routes.stt_jobs import router as stt_jobs_router
@@ -15,6 +16,7 @@ router.include_router(utterance_router)
 router.include_router(stt_jobs_router)
 router.include_router(realtime_audio_router)
 router.include_router(uploads_router)
+router.include_router(meeting_essence_router)
 
 
 @router.get("/meta", response_model=ApiMetaResponse, operation_id="getApiMeta")

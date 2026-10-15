@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -14,14 +15,41 @@ import pytest
 from sqlalchemy import func, select
 
 from recantor.db import get_sessionmaker
+from recantor.meeting_essence.persistence.checkpoint_store import deserialize_checkpoint
+from recantor.meeting_essence.persistence.models import MIArtifactVersion, MIAttemptCheckpoint
+from recantor.meeting_essence.persistence.repository import MeetingIntelligenceRepository
 from recantor.meeting_essence.scheduling.jobs import reconcile_summary_work
 from recantor.meeting_essence.scheduling.models import (
     MISummaryDispatch,
     MISummaryDispatchStatus,
 )
 from recantor.meeting_essence.scheduling.tasks import ensure_summary_wake_capacity
+from recantor.meeting_essence.scheduling.triggers import note_transcript_publication
 from recantor.models import RecordingSession, SessionKind, SessionState, TranscriptSegment
 from recantor.settings import get_settings
+
+
+@pytest.mark.parametrize("record_id", ["a-01", "b-01", "c-01", "a-1"])
+def test_broker_factory_validates_record_ids(record_id, tmp_path, monkeypatch) -> None:
+    from pydantic import ValidationError
+    from summary_broker_provider import factory
+
+    control = tmp_path / "control.json"
+    control.write_text(
+        '{"log_path": '
+        + _json(str(tmp_path / "calls.log"))
+        + ', "records": ['
+        + _record(record_id, uuid4(), "Bukti.", session_id=uuid4())
+        + "]}",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RECANTOR_SUMMARY_CONTROL", str(control))
+    if len(record_id) < 4:
+        with pytest.raises(ValidationError) as rejected:
+            factory().build()
+        assert rejected.value.errors()[0]["type"] == "string_too_short"
+    else:
+        assert factory().build().extraction_records[0].record_id == record_id
 
 
 def _require_redis() -> None:
@@ -43,10 +71,159 @@ def _require_redis() -> None:
         client.close()
 
 
-async def _wait_status(session_id, wanted: set[str], timeout: float) -> str:
+@pytest.mark.asyncio
+async def test_initial_broker_fixture_completes_and_reuses_without_redis(
+    mi_db, tmp_path, monkeypatch
+) -> None:
+    from recantor.meeting_essence.scheduling.jobs import (
+        SummaryExecutionStatus,
+        execute_next_summary_job,
+        submit_summary_work,
+    )
+
+    del mi_db
+    monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
+    control = tmp_path / "control.json"
+    log_path = tmp_path / "calls.log"
+    a, b, sa, sb = await _seed_initial_broker_sessions()
+    _write_initial_broker_control(control, log_path, a, b, sa, sb)
+    monkeypatch.setenv("RECANTOR_SUMMARY_CONTROL", str(control))
+    monkeypatch.setenv("RECANTOR_SUMMARY_PROVIDER_FACTORY", "summary_broker_provider:factory")
+    get_settings.cache_clear()
+    expected = {a: {"a-01"}, b: {"b-01"}}
+    artifacts = {}
+    for sid in expected:
+        async with get_sessionmaker()() as db, db.begin():
+            await submit_summary_work(db, session_id=sid, client_request_id=uuid4())
+    for _ in range(40):
+        async with get_sessionmaker()() as db:
+            outcome = await execute_next_summary_job(db, entrypoint="offline-broker-fixture")
+        sid = outcome.session_id
+        if sid not in expected:
+            await asyncio.sleep(0.05)
+            continue
+        assert sid in expected and sid not in artifacts
+        assert outcome.status == SummaryExecutionStatus.SUCCEEDED, await _completion_diagnostic(sid)
+        artifacts[sid] = await _assert_completed_artifact(sid, expected[sid])
+        if len(artifacts) == len(expected):
+            break
+    assert artifacts.keys() == expected.keys()
+    for sid, record_id in ((a, "a-01"), (b, "b-01")):
+        calls = [
+            line
+            for line in log_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith(str(sid))
+        ]
+        async with get_sessionmaker()() as db, db.begin():
+            await submit_summary_work(db, session_id=sid, client_request_id=uuid4())
+        for _ in range(40):
+            async with get_sessionmaker()() as db:
+                cached = await execute_next_summary_job(db, entrypoint="offline-broker-cache")
+            if cached.session_id == sid:
+                break
+            await asyncio.sleep(0.05)
+        assert cached.session_id == sid
+        assert cached.status == SummaryExecutionStatus.SUCCEEDED
+        assert cached.metrics.served_from_cache is True
+        assert cached.metrics.provider_calls == 0
+        assert await _assert_completed_artifact(sid, {record_id}) == artifacts[sid]
+        assert [
+            line
+            for line in log_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith(str(sid))
+        ] == calls
+
+
+async def _completion_diagnostic(session_id) -> str:
+    async with get_sessionmaker()() as db:
+        dispatch = await db.scalar(
+            select(MISummaryDispatch)
+            .where(MISummaryDispatch.session_id == session_id)
+            .order_by(MISummaryDispatch.created_at.desc())
+            .limit(1)
+        )
+        artifact = await db.scalar(
+            select(MIArtifactVersion)
+            .where(MIArtifactVersion.session_id == session_id)
+            .order_by(MIArtifactVersion.created_at.desc())
+            .limit(1)
+        )
+        return json.dumps(
+            {
+                "dispatch": None
+                if dispatch is None
+                else {
+                    key: getattr(dispatch, key)
+                    for key in ("status", "disposition", "failure_count", "last_error_code")
+                },
+                "artifact": None
+                if artifact is None
+                else {
+                    "status": artifact.processing_status,
+                    "limitation_codes": [
+                        item["code"] for item in json.loads(artifact.limitations_json)
+                    ],
+                    "record_count": len(json.loads(artifact.records_ledger_json)),
+                },
+            },
+            sort_keys=True,
+        )
+
+
+async def _assert_completed_artifact(session_id, record_ids: set[str]):
+    async with get_sessionmaker()() as db:
+        artifact = await db.scalar(
+            select(MIArtifactVersion).where(
+                MIArtifactVersion.session_id == session_id, MIArtifactVersion.is_current.is_(True)
+            )
+        )
+        assert artifact is not None, await _completion_diagnostic(session_id)
+        assert artifact.processing_status == "succeeded"
+        assert artifact.is_stale is False
+        assert json.loads(artifact.limitations_json) == []
+        records = await MeetingIntelligenceRepository(db).load_ledger_records(
+            artifact_id=artifact.id, session_id=session_id
+        )
+        assert {record.record_id for record in records} == record_ids
+        assert len(records) == len(record_ids)
+        for record in records:
+            for evidence in record.evidence:
+                segment = await db.get(TranscriptSegment, evidence.segment_id)
+                assert segment.session_id == session_id
+                assert (evidence.start_ms, evidence.end_ms) == (segment.start_ms, segment.end_ms)
+        layered = json.loads(artifact.layered_result_json)
+        coverage = layered["coverage"]
+        for field in (
+            "structural_check_status",
+            "forward_semantic_check_status",
+            "backward_semantic_check_status",
+        ):
+            assert coverage[field] == "completed"
+        assert coverage["source_segments_enumerated"] == len(record_ids)
+        assert coverage["source_segments_referenced"] == len(record_ids)
+        body = await db.scalar(
+            select(MIAttemptCheckpoint.body_json).where(
+                MIAttemptCheckpoint.attempt_id == artifact.attempt_id
+            )
+        )
+        checkpoint = deserialize_checkpoint(body)
+        assert checkpoint.processing_status.value == "succeeded"
+        assert checkpoint.extract_complete and checkpoint.check_complete
+        assert checkpoint.reconcile_complete and checkpoint.render_complete
+        assert not checkpoint.failed_check_fingerprints
+        assert not checkpoint.pending_check_fingerprints
+        assert checkpoint.acked_check_fingerprints
+        assert {record.record_id for record in checkpoint.atomic_records} == record_ids
+        return artifact.id
+
+
+async def _wait_status(
+    session_id, wanted: set[str], timeout: float, worker_log: Path | None = None
+) -> str:
     import asyncio
 
     deadline = time.monotonic() + timeout
+    status = None
     while time.monotonic() < deadline:
         async with get_sessionmaker()() as db:
             status = await db.scalar(
@@ -55,7 +232,12 @@ async def _wait_status(session_id, wanted: set[str], timeout: float) -> str:
         if status in wanted:
             return str(status)
         await asyncio.sleep(0.2)
-    raise AssertionError(f"dispatch for {session_id} did not reach {wanted}")
+    detail = worker_log.read_text(encoding="utf-8")[-4000:] if worker_log else ""
+    raise AssertionError(
+        f"dispatch for {session_id} did not reach {wanted}; actual status={status}; "
+        f"durable outcome={await _completion_diagnostic(session_id)}; "
+        f"parent permit reason={await _busy_permit_reason()}\n{detail}"
+    )
 
 
 @pytest.mark.asyncio
@@ -66,52 +248,15 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
     _require_redis()
     monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
     monkeypatch.setenv("MEETING_ESSENCE_ENGINE_QUANTUM_SECONDS", "2")
+    monkeypatch.setenv("MEETING_ESSENCE_RECONCILE_INTERVAL_SECONDS", "1")
     monkeypatch.setenv("MEETING_ESSENCE_QUEUE_NAME", f"summary-life-{uuid4().hex[:8]}")
     get_settings.cache_clear()
     queue = get_settings().meeting_essence_queue_name
     log_path = tmp_path / "calls.log"
     log_path.write_text("", encoding="utf-8")
-    session_a = uuid4()
-    session_b = uuid4()
-    segment_a = uuid4()
-    segment_b = uuid4()
-    async with get_sessionmaker()() as db, db.begin():
-        for session_id, segment_id, text in (
-            (session_a, segment_a, "Sesi satu."),
-            (session_b, segment_b, "Sesi dua."),
-        ):
-            db.add(
-                RecordingSession(
-                    id=session_id,
-                    client_request_id=uuid4(),
-                    kind=SessionKind.LIVE.value,
-                    state=SessionState.RECORDING.value,
-                )
-            )
-            db.add(
-                TranscriptSegment(
-                    id=segment_id,
-                    session_id=session_id,
-                    sequence=1,
-                    producer_key=f"broker-{segment_id}",
-                    start_ms=0,
-                    end_ms=500,
-                    text=text,
-                )
-            )
+    session_a, session_b, segment_a, segment_b = await _seed_initial_broker_sessions()
     control = tmp_path / "control.json"
-    control.write_text(
-        (
-            '{"sleep_seconds": 0.05, "block": false, "log_path": '
-            + _json(str(log_path))
-            + ', "records": ['
-            + _record("a-1", segment_a, "Satu.")
-            + ","
-            + _record("b-1", segment_b, "Dua.")
-            + "]}"
-        ),
-        encoding="utf-8",
-    )
+    _write_initial_broker_control(control, log_path, session_a, session_b, segment_a, segment_b)
     from redis import Redis
 
     client = Redis.from_url(
@@ -139,14 +284,19 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
     )
     await prepare_shared_broker_permit()
     worker_log = tmp_path / "worker.log"
+    # Wakes carry no session id. Earlier suite sessions may be ahead of these
+    # two; the normal reconciler must keep waking all durable pending work.
+    reconciler, reconciler_handle = _start_reconciler(env, tmp_path / "reconciler.log")
     worker: subprocess.Popen[str] | None = None
     worker_handle: object | None = None
     try:
         worker, worker_handle = _start_worker(env, queue, worker_log)
         _wait_ready(worker_log)
         ensure_summary_wake_capacity(2)
-        await _wait_status(session_a, {MISummaryDispatchStatus.COMPLETED.value}, 40)
-        await _wait_status(session_b, {MISummaryDispatchStatus.COMPLETED.value}, 40)
+        await _wait_status(session_a, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
+        await _wait_status(session_b, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
+        await _assert_completed_artifact(session_a, {"a-01"})
+        await _assert_completed_artifact(session_b, {"b-01"})
         lines = log_path.read_text(encoding="utf-8")
         assert str(session_a) in lines and str(session_b) in lines
         async with get_sessionmaker()() as db:
@@ -189,13 +339,15 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
                     text="Batal.",
                 )
             )
+            await db.flush()
+            await note_transcript_publication(db, session_id=session_c, publication_sequence=1)
         # Rebuild control so the blocked provider still has a record for the new segment.
         control.write_text(
             (
                 '{"sleep_seconds": 0, "block": true, "log_path": '
                 + _json(str(log_path))
                 + ', "records": ['
-                + _record("c-1", segment_c, "Batal.")
+                + _record("c-01", segment_c, "Batal.", session_id=session_c)
                 + "]}"
             ),
             encoding="utf-8",
@@ -220,6 +372,8 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
             await cancel_summary_dispatch(db, dispatch_id=dispatch_id, session_id=session_c)
         await _wait_status(session_c, {MISummaryDispatchStatus.CANCELLED.value}, 20)
     finally:
+        _stop_process(reconciler)
+        reconciler_handle.close()
         _stop_process(worker)
         if worker_handle is not None:
             worker_handle.close()
@@ -291,51 +445,8 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
     queue = get_settings().meeting_essence_queue_name
     log_path = tmp_path / "calls.log"
     log_path.write_text("", encoding="utf-8")
-    session_id = uuid4()
-    other_id = uuid4()
-    segment_ids = [uuid4() for _ in range(13)]
+    session_id, other_id, segment_ids, other_segment = await _seed_crash_broker_sessions()
     segment_id = segment_ids[0]
-    other_segment = uuid4()
-    async with get_sessionmaker()() as db, db.begin():
-        db.add(
-            RecordingSession(
-                id=session_id,
-                client_request_id=uuid4(),
-                kind=SessionKind.LIVE.value,
-                state=SessionState.RECORDING.value,
-            )
-        )
-        db.add(
-            RecordingSession(
-                id=other_id,
-                client_request_id=uuid4(),
-                kind=SessionKind.LIVE.value,
-                state=SessionState.RECORDING.value,
-            )
-        )
-        for index, seg in enumerate(segment_ids):
-            db.add(
-                TranscriptSegment(
-                    id=seg,
-                    session_id=session_id,
-                    sequence=index + 1,
-                    producer_key=f"crash-{seg}",
-                    start_ms=index,
-                    end_ms=index + 1,
-                    text=f"Halaman {index}.",
-                )
-            )
-        db.add(
-            TranscriptSegment(
-                id=other_segment,
-                session_id=other_id,
-                sequence=1,
-                producer_key=f"crash-{other_segment}",
-                start_ms=0,
-                end_ms=400,
-                text="Sesi lain.",
-            )
-        )
     env = os.environ.copy()
     env["MEETING_ESSENCE_DEBOUNCE_SECONDS"] = "0"
     env["MEETING_ESSENCE_RECONCILE_INTERVAL_SECONDS"] = "1"
@@ -351,25 +462,7 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
         ]
     )
     control = tmp_path / "control.json"
-    crash_records = [
-        {
-            "record_id": f"crash-{index}",
-            "segment_id": str(seg),
-            "claim": f"Halaman {index}.",
-            "start_ms": index,
-            "end_ms": index + 1,
-        }
-        for index, seg in enumerate(segment_ids)
-    ]
-    crash_records.append(
-        {
-            "record_id": "other-1",
-            "segment_id": str(other_segment),
-            "claim": "Lain.",
-            "start_ms": 0,
-            "end_ms": 400,
-        }
-    )
+    crash_records = _crash_broker_records(session_id, other_id, segment_ids, other_segment)
     control.write_text(
         json.dumps(
             {
@@ -463,7 +556,10 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
                 registered = True
                 break
             time.sleep(0.1)
-        assert registered is True, worker_log.read_text(encoding="utf-8")[-2000:]
+        assert registered is True, (
+            f"parent permit reason={await _busy_permit_reason()}\n"
+            + worker_log.read_text(encoding="utf-8")[-4000:]
+        )
         assert stored is not None and grandchild is not None
         _stop_process(worker)
         worker = None
@@ -511,6 +607,7 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
         resumed["block"] = False
         resumed["spawn_tree"] = False
         resumed["fail_once"] = True
+        resumed["fail_session_id"] = str(session_id)
         resumed["block_after_extracts"] = 0
         control.write_text(json.dumps(resumed), encoding="utf-8")
         if worker_handle is not None:
@@ -518,8 +615,10 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
         worker, worker_handle = _start_worker(env, queue, worker_log)
         _wait_ready(worker_log)
         ensure_summary_wake_capacity(1)
-        await _wait_status(session_id, {MISummaryDispatchStatus.COMPLETED.value}, 40)
-        await _wait_status(other_id, {MISummaryDispatchStatus.COMPLETED.value}, 40)
+        await _wait_status(session_id, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
+        await _wait_status(other_id, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
+        await _assert_completed_artifact(session_id, {f"crash-{index}" for index in range(13)})
+        await _assert_completed_artifact(other_id, {"other-1"})
         lines = log_path.read_text(encoding="utf-8")
         assert str(other_segment) in lines
         first_extracts = [
@@ -802,13 +901,136 @@ def _json(value: str) -> str:
     return '"' + value.replace("\\", "\\\\") + '"'
 
 
-def _record(record_id: str, segment_id, claim: str) -> str:
-    return (
-        '{"record_id": "'
-        + record_id
-        + '", "segment_id": "'
-        + str(segment_id)
-        + '", "claim": "'
-        + claim
-        + '", "start_ms": 0, "end_ms": 400}'
+def _record(record_id: str, segment_id, claim: str, *, session_id, end_ms=400) -> str:
+    return json.dumps(
+        dict(
+            record_id=record_id,
+            session_id=str(session_id),
+            segment_id=str(segment_id),
+            claim=claim,
+            start_ms=0,
+            end_ms=end_ms,
+        )
     )
+
+
+async def _seed_initial_broker_sessions():
+    session_a = uuid4()
+    session_b = uuid4()
+    segment_a = uuid4()
+    segment_b = uuid4()
+    async with get_sessionmaker()() as db, db.begin():
+        for session_id, segment_id, text in (
+            (session_a, segment_a, "Sesi satu."),
+            (session_b, segment_b, "Sesi dua."),
+        ):
+            db.add(
+                RecordingSession(
+                    id=session_id,
+                    client_request_id=uuid4(),
+                    kind=SessionKind.LIVE.value,
+                    state=SessionState.RECORDING.value,
+                )
+            )
+            db.add(
+                TranscriptSegment(
+                    id=segment_id,
+                    session_id=session_id,
+                    sequence=1,
+                    producer_key=f"broker-{segment_id}",
+                    start_ms=0,
+                    end_ms=500,
+                    text=text,
+                )
+            )
+            await db.flush()
+            await note_transcript_publication(db, session_id=session_id, publication_sequence=1)
+    return session_a, session_b, segment_a, segment_b
+
+
+def _write_initial_broker_control(control, log_path, session_a, session_b, segment_a, segment_b):
+    control.write_text(
+        (
+            '{"sleep_seconds": 0.05, "block": false, "log_path": '
+            + _json(str(log_path))
+            + ', "records": ['
+            + _record("a-01", segment_a, "Sesi satu.", session_id=session_a, end_ms=500)
+            + ","
+            + _record("b-01", segment_b, "Sesi dua.", session_id=session_b, end_ms=500)
+            + "]}"
+        ),
+        encoding="utf-8",
+    )
+
+
+async def _seed_crash_broker_sessions():
+    session_id = uuid4()
+    other_id = uuid4()
+    segment_ids = [uuid4() for _ in range(13)]
+    other_segment = uuid4()
+    async with get_sessionmaker()() as db, db.begin():
+        db.add(
+            RecordingSession(
+                id=session_id,
+                client_request_id=uuid4(),
+                kind=SessionKind.LIVE.value,
+                state=SessionState.RECORDING.value,
+            )
+        )
+        db.add(
+            RecordingSession(
+                id=other_id,
+                client_request_id=uuid4(),
+                kind=SessionKind.LIVE.value,
+                state=SessionState.RECORDING.value,
+            )
+        )
+        for index, seg in enumerate(segment_ids):
+            db.add(
+                TranscriptSegment(
+                    id=seg,
+                    session_id=session_id,
+                    sequence=index + 1,
+                    producer_key=f"crash-{seg}",
+                    start_ms=index,
+                    end_ms=index + 1,
+                    text=f"Halaman {index}.",
+                )
+            )
+        db.add(
+            TranscriptSegment(
+                id=other_segment,
+                session_id=other_id,
+                sequence=1,
+                producer_key=f"crash-{other_segment}",
+                start_ms=0,
+                end_ms=400,
+                text="Sesi lain.",
+            )
+        )
+    return session_id, other_id, segment_ids, other_segment
+
+
+def _crash_broker_records(session_id, other_id, segment_ids, other_segment):
+    crash_records = [
+        {
+            "record_id": f"crash-{index}",
+            "session_id": str(session_id),
+            "segment_id": str(seg),
+            "claim": f"Halaman {index}.",
+            "start_ms": index,
+            "end_ms": index + 1,
+        }
+        for index, seg in enumerate(segment_ids)
+    ]
+    crash_records.append(
+        {
+            "record_id": "other-1",
+            "session_id": str(other_id),
+            "segment_id": str(other_segment),
+            "claim": "Sesi lain.",
+            "start_ms": 0,
+            "end_ms": 400,
+        }
+    )
+    return crash_records

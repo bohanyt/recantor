@@ -9,11 +9,13 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from recantor.db import get_sessionmaker
+from recantor.meeting_essence.provider_adapters.factory import configure_summary_provider_factory
 from recantor.meeting_essence.scheduling import jobs
 from recantor.settings import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+configure_summary_provider_factory()
 
 celery_app = Celery("recantor-summary", broker=settings.redis_url)
 celery_app.conf.update(

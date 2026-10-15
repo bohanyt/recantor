@@ -39,7 +39,9 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             evaluation_records=list(records),
             extract_by_segment=mapping,
         )
-        self._all_records = list(records)
+        self._records_by_session: dict[str, list[AtomicRecord]] = {}
+        for item, record in zip(control["records"], records, strict=True):
+            self._records_by_session.setdefault(str(item["session_id"]), []).append(record)
         self._sleep = float(control.get("sleep_seconds", 0))
         self._block = bool(control.get("block", False))
         self._log = Path(control["log_path"])
@@ -47,6 +49,7 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
         self.spawns_process_tree = self._spawn
         self._owned: list[object] = []
         self._fail_once = bool(control.get("fail_once", False))
+        self._fail_session_id = control.get("fail_session_id")
         self._block_after = int(control.get("block_after_extracts", 0))
         self._extracts = 0
         self._identity_path = self._log.with_name("owned-identity.json")
@@ -118,6 +121,30 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
         self._owned = [identity]
         return list(self._owned)
 
+    async def aclose(self) -> None:
+        """A completed turn must stop its prepared tree, just like a live adapter.
+
+        The crash proof kills the worker while its stage is blocked, so this
+        closer never runs there. Normal completion must not strand an earlier
+        one-page session's child and prevent the crash session from starting.
+        Keep the closer pending if bounded wrapper cleanup cancels its wait.
+        """
+        from recantor.meeting_essence.scheduling.process_liveness import terminate_process_tree
+
+        def stop() -> None:
+            for identity, proc in self._popens:
+                if not terminate_process_tree(identity):
+                    raise RuntimeError("broker fixture owned tree stop was not proven")
+                proc.wait(timeout=5)
+
+        cleanup = asyncio.create_task(asyncio.to_thread(stop))
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                continue
+        cleanup.result()
+
     def _remember(self, payload: dict[str, object]) -> None:
         self._saved.append(payload)
         self._identities_path.write_text(json.dumps(self._saved), encoding="utf-8")
@@ -161,6 +188,11 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             self._gate.write_text("open", encoding="utf-8")
 
     async def run_stage(self, **kwargs: object):  # type: ignore[no-untyped-def]
+        # Page-local source fragments are not the whole session's annotations.
+        # Keep all independently supplied annotations for the job through finalization.
+        self.evaluation_records = list(
+            self._records_by_session.get(str(kwargs["job"].session_id), ())
+        )
         self._open_gate()
         await self._capture_grandchild()
         return await self._run_stage(**kwargs)
@@ -183,7 +215,11 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             page = ",".join(str(fragment.segment_id) for fragment in request.segment_fragments)
         with self._log.open("a", encoding="utf-8") as handle:
             handle.write(f"{job.session_id} {operation.value} {page}\n")
-        if self._fail_once and operation == StageOperation.EXTRACT:
+        if (
+            self._fail_once
+            and operation == StageOperation.EXTRACT
+            and (self._fail_session_id is None or self._fail_session_id == str(job.session_id))
+        ):
             counter = self._log.with_name("fail-count.txt")
             count = int(counter.read_text(encoding="utf-8")) if counter.is_file() else 0
             counter.write_text(str(count + 1), encoding="utf-8")
@@ -196,14 +232,6 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
                     await asyncio.sleep(0.05)
         if self._sleep:
             await asyncio.sleep(self._sleep)
-        if operation == StageOperation.CHECK:
-            fragments = getattr(request, "source_fragments", ()) or ()
-            visible = {fragment.segment_id for fragment in fragments}
-            self.evaluation_records = [
-                record
-                for record in self._all_records
-                if any(evidence.segment_id in visible for evidence in record.evidence)
-            ]
         return await super().run_stage(**kwargs)  # type: ignore[arg-type]
 
 
@@ -254,6 +282,9 @@ def note_stage_observation(path: Path, *, invocation_id: str | None = None) -> s
     no id, or an id that is not already live, is its own invocation. This never
     joins an unrelated live invocation and never refuses to count overlap.
     """
+    from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+
+    owner = _holder_payload(current_process_identity())
     with _counter_lock(path):
         current = _read_counter(path)
         current["stage_calls"] = int(current["stage_calls"]) + 1
@@ -261,13 +292,16 @@ def note_stage_observation(path: Path, *, invocation_id: str | None = None) -> s
         if invocation_id is not None:
             found = next((item for item in invocations if item["id"] == invocation_id), None)
             if found is None:
-                invocations.append({"id": invocation_id, "members": [], "active": True})
+                invocations.append(
+                    {"id": invocation_id, "members": [], "active": True, "stage_owner": owner}
+                )
             else:
                 found["active"] = True
+                found["stage_owner"] = owner
             _store(path, current, invocations)
             return invocation_id
         fresh = uuid4().hex
-        invocations.append({"id": fresh, "members": [], "active": True})
+        invocations.append({"id": fresh, "members": [], "active": True, "stage_owner": owner})
         _store(path, current, invocations)
         return fresh
 
@@ -292,13 +326,22 @@ def note_admitted_work(path: Path) -> str:
     one is still recorded and the peak includes both. The caller finishes the
     id when that work exits.
     """
+    from recantor.meeting_essence.scheduling.process_liveness import current_process_identity
+
     with _counter_lock(path):
         current = _read_counter(path)
         current["admitted_work"] = int(current["admitted_work"]) + 1
         current["stage_calls"] = int(current["stage_calls"]) + 1
         invocations = [item for item in current["invocations"] if _invocation_live(item)]
         invocation_id = uuid4().hex
-        invocations.append({"id": invocation_id, "members": [], "active": True})
+        invocations.append(
+            {
+                "id": invocation_id,
+                "members": [],
+                "active": True,
+                "stage_owner": _holder_payload(current_process_identity()),
+            }
+        )
         _store(path, current, invocations)
         return invocation_id
 
@@ -389,7 +432,11 @@ def _holder_alive(item: dict[str, object]) -> bool:
 
 def _invocation_live(item: dict[str, object]) -> bool:
     if item.get("active") is True:
-        return True
+        owner = item.get("stage_owner")
+        if not isinstance(owner, dict):
+            raise ObserverUnreadable("active stage owner is missing")
+        if _holder_alive(owner):
+            return True
     members = item.get("members")
     if not isinstance(members, list):
         return False

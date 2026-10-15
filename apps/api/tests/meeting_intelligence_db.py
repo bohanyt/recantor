@@ -17,6 +17,8 @@ from sqlalchemy.engine.url import make_url
 from alembic import command
 from recantor.db import get_engine, get_sessionmaker
 from recantor.meeting_essence.persistence.repository import MeetingIntelligenceRepository
+from recantor.meeting_essence.scheduling.host_authority import reset_for_tests
+from recantor.meeting_essence.scheduling.host_permit import HostInvocationPermit
 from recantor.models import RecordingSession, SessionKind, SessionState, TranscriptSegment
 from recantor.settings import get_settings
 
@@ -245,12 +247,20 @@ def mi_db_migrated(synthetic_postgresql: str):
 
 
 @pytest.fixture
-async def mi_db(mi_db_migrated: None, synthetic_postgresql: str, monkeypatch: pytest.MonkeyPatch):
+async def mi_db(
+    mi_db_migrated: None,
+    synthetic_postgresql: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
     del mi_db_migrated
     monkeypatch.setenv("DATABASE_URL", synthetic_postgresql)
+    monkeypatch.setenv("RECANTOR_HOST_AUTHORITY_DIR", str(tmp_path / "host-authority"))
     get_settings.cache_clear()
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()
+    reset_for_tests()
+    await HostInvocationPermit().recover_proven_dead()
     async with get_sessionmaker()() as db:
         await ensure_session(db, FIXTURE_SESSION_ID)
         await ensure_session(db, SESSION_B)
@@ -267,6 +277,7 @@ async def mi_db(mi_db_migrated: None, synthetic_postgresql: str, monkeypatch: py
         await repo.delete_session_intelligence(FIXTURE_SESSION_ID)
         await repo.delete_session_intelligence(SESSION_B)
         await db.commit()
+    await HostInvocationPermit().recover_proven_dead()
     await get_engine().dispose()
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()

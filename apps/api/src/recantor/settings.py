@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     meeting_essence_configuration_retry_seconds: float = Field(default=300.0, ge=1.0, le=86400.0)
     meeting_essence_requested_model: str = ""
     meeting_essence_requested_reasoning_effort: str = ""
+    meeting_essence_codex_binary: str = "codex"
+    meeting_essence_dev_api_enabled: bool = False
     meeting_essence_reconcile_interval_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     meeting_essence_broker_socket_timeout_seconds: float = Field(default=0.2, ge=0.05, le=5.0)
     log_level: str = "INFO"
