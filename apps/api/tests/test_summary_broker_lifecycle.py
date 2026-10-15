@@ -43,7 +43,9 @@ def _require_redis() -> None:
         client.close()
 
 
-async def _wait_status(session_id, wanted: set[str], timeout: float) -> str:
+async def _wait_status(
+    session_id, wanted: set[str], timeout: float, worker_log: Path | None = None
+) -> str:
     import asyncio
 
     deadline = time.monotonic() + timeout
@@ -55,7 +57,11 @@ async def _wait_status(session_id, wanted: set[str], timeout: float) -> str:
         if status in wanted:
             return str(status)
         await asyncio.sleep(0.2)
-    raise AssertionError(f"dispatch for {session_id} did not reach {wanted}")
+    detail = worker_log.read_text(encoding="utf-8")[-4000:] if worker_log else ""
+    raise AssertionError(
+        f"dispatch for {session_id} did not reach {wanted}; "
+        f"parent permit reason={await _busy_permit_reason()}\n{detail}"
+    )
 
 
 @pytest.mark.asyncio
@@ -145,8 +151,8 @@ async def test_redis_worker_reconcile_restart_cancel_and_isolation(
         worker, worker_handle = _start_worker(env, queue, worker_log)
         _wait_ready(worker_log)
         ensure_summary_wake_capacity(2)
-        await _wait_status(session_a, {MISummaryDispatchStatus.COMPLETED.value}, 40)
-        await _wait_status(session_b, {MISummaryDispatchStatus.COMPLETED.value}, 40)
+        await _wait_status(session_a, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
+        await _wait_status(session_b, {MISummaryDispatchStatus.COMPLETED.value}, 40, worker_log)
         lines = log_path.read_text(encoding="utf-8")
         assert str(session_a) in lines and str(session_b) in lines
         async with get_sessionmaker()() as db:
@@ -463,7 +469,10 @@ async def test_reconciler_crash_and_proven_dead_resume(mi_db, tmp_path: Path, mo
                 registered = True
                 break
             time.sleep(0.1)
-        assert registered is True, worker_log.read_text(encoding="utf-8")[-2000:]
+        assert registered is True, (
+            f"parent permit reason={await _busy_permit_reason()}\n"
+            + worker_log.read_text(encoding="utf-8")[-4000:]
+        )
         assert stored is not None and grandchild is not None
         _stop_process(worker)
         worker = None

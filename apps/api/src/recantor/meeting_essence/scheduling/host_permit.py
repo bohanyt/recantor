@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import socket
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -55,6 +56,7 @@ from recantor.meeting_essence.scheduling.process_liveness import (
 from recantor.settings import get_settings
 
 _DNS_TIMEOUT_SECONDS = 0.25
+logger = logging.getLogger(__name__)
 # Handles this process acquired and has not yet cleared. Tests release these
 # after their own work settles; recovery still requires a proven-dead tree.
 _open_handles: dict[str, tuple[HostInvocationPermit, PermitHandle]] = {}
@@ -134,15 +136,38 @@ class HostInvocationPermit:
             return False
 
     async def blocks_new_invocation(self) -> bool:
-        if host_authority.owned_blocks_acquire(host_authority.read_owned()):
-            return True
+        reason = await self.blocking_reason()
+        if reason is not None:
+            logger.info("host invocation blocked reason=%s", reason)
+        return reason is not None
+
+    async def blocking_reason(self) -> str | None:
+        """Bounded reason codes only: no DSNs, paths, tokens, or account data."""
+        snapshot = host_authority.read_owned()
+        if not snapshot.readable:
+            return "sidecar-unreadable"
+        if snapshot.containment_open:
+            return "sidecar-containment-open"
+        local = local_process_namespace()
+        for item in snapshot.identities:
+            if not local or not item.namespace or item.namespace != local:
+                return "sidecar-namespace-unverified"
+            if process_liveness(item) != Liveness.DEAD:
+                return "sidecar-process-not-dead"
+            if owned_group_occupied(item):
+                return "sidecar-owned-group-occupied"
         async with self._sessionmaker() as db, db.begin():
-            if not await self._matches_configured_authority(db):
-                return True
+            reason = await self._authority_mismatch_reason(db)
+            if reason is not None:
+                return reason
             row = await self._load(db)
             if row is None or not row.holder_token:
-                return False
-            return row.holder_state in {"held", "quarantine"} or int(row.active_invocations) > 0
+                return None
+            if row.holder_state in {"held", "quarantine"} or int(row.active_invocations) > 0:
+                if not _namespace_is_local(row.holder_namespace):
+                    return "lease-namespace-unverified"
+                return "lease-quarantined" if row.holder_state == "quarantine" else "lease-active"
+            return None
 
     async def recover_proven_dead(self) -> bool:
         """Clear a crashed slot only after the caller and owned tree are proven dead."""
@@ -201,6 +226,7 @@ class HostInvocationPermit:
                 return None
             held_os = host_authority.try_hold()
             if held_os is None:
+                logger.info("host invocation blocked reason=os-lock-unavailable")
                 return None
             if host_authority.owned_blocks_acquire(host_authority.read_owned()):
                 return None
@@ -615,21 +641,27 @@ class HostInvocationPermit:
             held.release()
 
     async def _matches_configured_authority(self, db: AsyncSession) -> bool:
+        reason = await self._authority_mismatch_reason(db)
+        if reason is not None:
+            logger.info("host authority rejected reason=%s", reason)
+        return reason is None
+
+    async def _authority_mismatch_reason(self, db: AsyncSession) -> str | None:
         expected = make_url(get_settings().database_url)
         database, server_host, port, system_identifier = await _server_observation(db)
         if not expected.database or database != expected.database:
-            return False
+            return "authority-database-mismatch"
         if port is None:
-            return False
+            return "authority-server-port-unavailable"
         if expected.port and int(port) != int(expected.port):
-            return False
+            return "authority-port-mismatch"
         peer = await _connected_endpoint(db)
         endpoint_matches = await _endpoint_matches(expected.host, server_host, port=int(port))
         peer_matches = _host_matches(expected.host, peer) or _port_published_loopback(
             expected.host, peer
         )
         if not endpoint_matches and not peer_matches:
-            return False
+            return "authority-configured-endpoint-unverified"
         identity = ClusterAuthority(
             database=str(database),
             host=_canonical_host(expected.host),
@@ -641,17 +673,17 @@ class HostInvocationPermit:
         try:
             stored = host_authority.read_cluster_authority()
         except OSError:
-            return False
+            return "authority-sidecar-unreadable"
         if stored is None:
             host_authority.write_cluster_authority(identity)
-            return True
+            return None
         if stored.system_identifier != identity.system_identifier or stored.port != identity.port:
-            return False
+            return "authority-cluster-mismatch"
         if not _stored_endpoint_compatible(stored, identity):
-            return False
+            return "authority-stored-endpoint-mismatch"
         if stored.database != identity.database or not stored.observed_host:
             host_authority.write_cluster_authority(identity)
-        return True
+        return None
 
     async def _load(self, db: AsyncSession) -> MIHostInvocationLease | None:
         return await db.scalar(select(MIHostInvocationLease).where(MIHostInvocationLease.id == 1))
