@@ -39,7 +39,9 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             evaluation_records=list(records),
             extract_by_segment=mapping,
         )
-        self._all_records = list(records)
+        self._records_by_session: dict[str, list[AtomicRecord]] = {}
+        for item, record in zip(control["records"], records, strict=True):
+            self._records_by_session.setdefault(str(item["session_id"]), []).append(record)
         self._sleep = float(control.get("sleep_seconds", 0))
         self._block = bool(control.get("block", False))
         self._log = Path(control["log_path"])
@@ -47,6 +49,7 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
         self.spawns_process_tree = self._spawn
         self._owned: list[object] = []
         self._fail_once = bool(control.get("fail_once", False))
+        self._fail_session_id = control.get("fail_session_id")
         self._block_after = int(control.get("block_after_extracts", 0))
         self._extracts = 0
         self._identity_path = self._log.with_name("owned-identity.json")
@@ -185,6 +188,11 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             self._gate.write_text("open", encoding="utf-8")
 
     async def run_stage(self, **kwargs: object):  # type: ignore[no-untyped-def]
+        # Page-local source fragments are not the whole session's annotations.
+        # Keep all independently supplied annotations for the job through finalization.
+        self.evaluation_records = list(
+            self._records_by_session.get(str(kwargs["job"].session_id), ())
+        )
         self._open_gate()
         await self._capture_grandchild()
         return await self._run_stage(**kwargs)
@@ -207,7 +215,11 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
             page = ",".join(str(fragment.segment_id) for fragment in request.segment_fragments)
         with self._log.open("a", encoding="utf-8") as handle:
             handle.write(f"{job.session_id} {operation.value} {page}\n")
-        if self._fail_once and operation == StageOperation.EXTRACT:
+        if (
+            self._fail_once
+            and operation == StageOperation.EXTRACT
+            and (self._fail_session_id is None or self._fail_session_id == str(job.session_id))
+        ):
             counter = self._log.with_name("fail-count.txt")
             count = int(counter.read_text(encoding="utf-8")) if counter.is_file() else 0
             counter.write_text(str(count + 1), encoding="utf-8")
@@ -220,14 +232,6 @@ class BrokerScriptProvider(DeterministicMeetingEssenceProvider):
                     await asyncio.sleep(0.05)
         if self._sleep:
             await asyncio.sleep(self._sleep)
-        if operation == StageOperation.CHECK:
-            fragments = getattr(request, "source_fragments", ()) or ()
-            visible = {fragment.segment_id for fragment in fragments}
-            self.evaluation_records = [
-                record
-                for record in self._all_records
-                if any(evidence.segment_id in visible for evidence in record.evidence)
-            ]
         return await super().run_stage(**kwargs)  # type: ignore[arg-type]
 
 

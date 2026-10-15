@@ -470,11 +470,15 @@ async def test_completed_broker_tree_does_not_block_next_crash_session(
     """Real worker child/PG, including an earlier completed spawning invocation."""
     from summary_broker_provider import invocation_witness
     from test_summary_broker_lifecycle import (
+        _assert_completed_artifact,
         _checkpoint_page,
+        _completion_diagnostic,
+        _crash_broker_records,
         _identity_from_saved,
         _kill_pid_only,
         _reap_saved_identities,
         _saved_identities,
+        _seed_crash_broker_sessions,
         _stop_process,
         prepare_shared_broker_permit,
     )
@@ -488,22 +492,24 @@ async def test_completed_broker_tree_does_not_block_next_crash_session(
     del mi_db
     monkeypatch.setenv("MEETING_ESSENCE_DEBOUNCE_SECONDS", "0")
     monkeypatch.setenv("MEETING_ESSENCE_ENGINE_QUANTUM_SECONDS", "60")
+    monkeypatch.setenv("MEETING_ESSENCE_DISPATCH_LEASE_SECONDS", "5")
+    monkeypatch.setenv("MEETING_ESSENCE_RETRY_BASE_SECONDS", "0.1")
     get_settings.cache_clear()
-    records = []
-    for session_id, count in ((SESSION_A, 1), (SESSION_B, 13)):
-        segments = await _seed_text(session_id, [f"Butir {i}." for i in range(count)])
-        records.extend(
-            {
-                "record_id": f"{session_id.hex[:4]}-{i}",
-                "segment_id": str(segment),
-                "claim": f"Butir {i}.",
-                "start_ms": (i + 1) * 1000,
-                "end_ms": (i + 1) * 1000 + 800,
-            }
-            for i, segment in enumerate(segments)
-        )
+    segments = await _seed_text(SESSION_A, ["Butir 0."])
+    records = [
+        {
+            "record_id": "aaaa-0",
+            "session_id": str(SESSION_A),
+            "segment_id": str(segments[0]),
+            "claim": "Butir 0.",
+            "start_ms": 1000,
+            "end_ms": 1800,
+        }
+    ]
+    session_b, other_id, segment_ids, other_segment = await _seed_crash_broker_sessions()
+    records.extend(_crash_broker_records(session_b, other_id, segment_ids, other_segment))
+    for session_id in (SESSION_A, session_b, other_id):
         async with get_sessionmaker()() as db, db.begin():
-            await note_transcript_publication(db, session_id=session_id, publication_sequence=count)
             await submit_summary_work(db, session_id=session_id, client_request_id=uuid4())
     control = tmp_path / "control.json"
     log_path = tmp_path / "calls.log"
@@ -582,7 +588,7 @@ asyncio.run(main())
                 async with get_sessionmaker()() as db:
                     checkpoint = await db.scalar(
                         select(MIAttemptCheckpoint.body_json).where(
-                            MIAttemptCheckpoint.session_id == SESSION_B
+                            MIAttemptCheckpoint.session_id == session_b
                         )
                     )
                     lease = await db.get(MIHostInvocationLease, 1)
@@ -626,6 +632,67 @@ asyncio.run(main())
             assert await permit.recover_proven_dead() is True
             handle = await permit.acquire(entrypoint="after-proven-stop")
             assert await permit.release(handle) is True
+            # Resume the exact 13-record broker fixture through the configured
+            # factory, after normal lease expiry. Do not reset its accepted page.
+            resumed = json.loads(control.read_text(encoding="utf-8"))
+            resumed.update(block=False, spawn_tree=False, fail_once=True, block_after_extracts=0)
+            resumed["fail_session_id"] = str(session_b)
+            control.write_text(json.dumps(resumed), encoding="utf-8")
+            monkeypatch.setenv("RECANTOR_SUMMARY_CONTROL", str(control))
+            monkeypatch.setenv(
+                "RECANTOR_SUMMARY_PROVIDER_FACTORY", "summary_broker_provider:factory"
+            )
+            deadline = time.monotonic() + 30
+            completed_sessions = set()
+            while time.monotonic() < deadline and completed_sessions != {session_b, other_id}:
+                async with get_sessionmaker()() as db:
+                    outcome = await execute_next_summary_job(db, entrypoint="offline-crash-resume")
+                assert outcome.status not in {
+                    SummaryExecutionStatus.PARKED,
+                    SummaryExecutionStatus.FAILED,
+                    SummaryExecutionStatus.UNAVAILABLE,
+                    SummaryExecutionStatus.QUARANTINED,
+                }, await _completion_diagnostic(outcome.session_id)
+                if outcome.status == SummaryExecutionStatus.SUCCEEDED:
+                    completed_sessions.add(outcome.session_id)
+                await asyncio.sleep(0.1)
+            assert completed_sessions == {session_b, other_id}, await _completion_diagnostic(
+                session_b
+            )
+            artifact_id = await _assert_completed_artifact(
+                session_b, {f"crash-{i}" for i in range(13)}
+            )
+            await _assert_completed_artifact(other_id, {"other-1"})
+            lines = log_path.read_text(encoding="utf-8").splitlines()
+            first_extracts = [
+                line for line in lines if " extract " in line and str(segment_ids[0]) in line
+            ]
+            assert len(first_extracts) == 1
+            assert int((tmp_path / "fail-count.txt").read_text(encoding="utf-8")) >= 3
+            async with get_sessionmaker()() as db:
+                failure_count = await db.scalar(
+                    select(MISummaryDispatch.failure_count).where(
+                        MISummaryDispatch.session_id == session_b
+                    )
+                )
+            assert failure_count >= 1
+            witness = invocation_witness(counter_path)
+            assert int(witness["live"]) == 0
+            assert int(witness["peak"]) == 1
+            # A new request must reuse the same complete artifact without stages.
+            calls = log_path.read_text(encoding="utf-8")
+            async with get_sessionmaker()() as db, db.begin():
+                await submit_summary_work(db, session_id=session_b, client_request_id=uuid4())
+            async with get_sessionmaker()() as db:
+                cached = await execute_next_summary_job(db, entrypoint="offline-crash-cache")
+            assert cached.status == SummaryExecutionStatus.SUCCEEDED
+            assert cached.metrics.served_from_cache is True
+            assert cached.metrics.provider_calls == 0
+            assert (
+                await _assert_completed_artifact(session_b, {f"crash-{i}" for i in range(13)})
+                == artifact_id
+            )
+            assert log_path.read_text(encoding="utf-8") == calls
     finally:
         if runtime is None and runtime_path.is_file():
             runtime = _identity_from_saved(json.loads(runtime_path.read_text(encoding="utf-8")))
