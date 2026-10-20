@@ -4,9 +4,9 @@ kind: CURRENT
 
 repository: bohanyt/recantor
 
-snapshot_seq: 39370724577
+snapshot_seq: 39370728983
 
-collected_at: 2026-10-20T04:39:35.658317Z
+collected_at: 2026-10-20T04:39:47.806895Z
 
 consistency: LIVE_REPO_SNAPSHOT
 
@@ -650,4 +650,4 @@ PR #66 draft=True updated=2026-10-05T07:38:59Z base=main head=docs/future-local-
 PR #50 draft=True updated=2026-10-05T07:38:59Z base=integration/cloud-alpha-2026-09-11 head=agent-i/issue-47-codex-subscription-bridge title=feat: add development-only Codex subscription LLM bridge
 >>>UNTRUSTED_GITHUB_DATA
 
-END_OF_AGENT_CONTEXT kind=CURRENT seq=39370724577 sections=6
+END_OF_AGENT_CONTEXT kind=CURRENT seq=39370728983 sections=6
